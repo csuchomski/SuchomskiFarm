@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="cdaed888-0af3-45b1-8431-53adf6b9e248"></script>
+</head>
+<body>
+
+<x-dc>
+<helmet data-dc-atomics="">
+<style>
+  body{margin:0}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:oklch(0.88 0.006 95);border-radius:6px}
+  input,select,textarea,button{font-family:inherit}
+  a{color:oklch(0.5 0.13 150)}
+  a:hover{color:oklch(0.42 0.13 150)}
+</style>
+</helmet>
+<sc-if value="{{ isAuthLoading }}" hint-placeholder-val="{{ true }}">
+  <div style="display:flex;height:100vh;width:100%;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:oklch(0.52 0.012 95);font-size:14px">Loading your ledger…</div>
+</sc-if>
+<sc-if value="{{ isAuthDenied }}">
+  <div style="display:flex;height:100vh;width:100%;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:24px">
+    <div style="max-width:380px;text-align:center">
+      <div style="font-size:17px;font-weight:700;margin-bottom:8px">Access needed</div>
+      <div style="font-size:13.5px;color:oklch(0.52 0.012 95);line-height:1.5">{{ authError }}</div>
+    </div>
+  </div>
+</sc-if>
+<sc-if value="{{ isAuthReady }}">
+<div style="display:flex;height:100vh;width:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:oklch(0.985 0.004 95);color:oklch(0.24 0.01 95);overflow:hidden;font-variant-numeric:tabular-nums">
+
+  <div style="width:264px;flex:none;background:oklch(0.97 0.005 95);border-right:1px solid oklch(0.9 0.006 95);display:flex;flex-direction:column;padding:20px 14px;overflow-y:auto">
+    <div style="display:flex;align-items:center;gap:10px;padding:4px 8px 22px">
+      <div style="width:26px;height:26px;border-radius:7px;background:oklch(0.52 0.13 150);flex:none"></div>
+      <div style="font-weight:700;font-size:15px;letter-spacing:-0.01em">Ledger</div>
+    </div>
+
+    <div style="{{ navDashboardStyle }}" sc-camel-on-click="{{ goDashboard }}">Dashboard</div>
+    <div style="{{ navTransactionsStyle }}" sc-camel-on-click="{{ goTransactions }}">Transactions</div>
+    <div style="{{ navReportsStyle }}" sc-camel-on-click="{{ goReports }}">Reports</div>
+    <div style="{{ navAccountsStyle }}" sc-camel-on-click="{{ goAccounts }}">Accounts</div>
+
+    <div style="height:1px;background:oklch(0.9 0.006 95);margin:16px 4px 12px"></div>
+    <div style="font-size:11px;font-weight:600;color:oklch(0.52 0.012 95);text-transform:uppercase;letter-spacing:.04em;padding:0 8px 8px">Businesses</div>
+
+    <sc-if value="{{ noBusinesses }}"><div style="font-size:12px;color:oklch(0.52 0.012 95);padding:6px 8px 10px;line-height:1.5">No businesses yet. Add one below, or Refresh if you just added them in Supabase.</div></sc-if>
+    <sc-if value="{{ refreshError }}"><div style="font-size:11.5px;color:oklch(0.55 0.16 25);padding:0 8px 8px">{{ refreshError }}</div></sc-if>
+    <div style="padding:8px;font-size:12px;font-weight:600;color:oklch(0.5 0.13 150);cursor:pointer" sc-camel-on-click="{{ refreshData }}">↻ {{ refreshLabel }}</div>
+    <sc-if value="{{ diag }}"><div style="font-size:10.5px;color:oklch(0.55 0.012 95);padding:2px 8px 8px;line-height:1.5">{{ diag }}</div></sc-if>
+    <sc-for list="{{ businessList }}" as="biz" hint-placeholder-count="0">
+      <div style="{{ biz.rowStyle }}" sc-camel-on-click="{{ biz.onSelect }}">
+        <div style="width:9px;height:9px;border-radius:50%;background:{{ biz.dotColor }};flex:none"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13.5px;font-weight:{{ biz.fontWeight }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ biz.name }}</div>
+          <sc-if value="{{ biz.typeLabel }}"><div style="font-size:11px;color:oklch(0.52 0.012 95)">{{ biz.typeLabel }}</div></sc-if>
+        </div>
+      </div>
+    </sc-for>
+
+    <div style="padding:10px 8px 6px;margin-top:8px;border:1px dashed oklch(0.82 0.008 95);border-radius:8px;text-align:center;font-size:12.5px;font-weight:600;color:oklch(0.5 0.13 150);cursor:pointer" sc-camel-on-click="{{ openAddBusiness }}">+ Add business</div>
+
+    <div style="flex:1"></div>
+    <div style="margin-top:16px;padding:12px 10px;background:oklch(0.94 0.05 150);border-radius:9px;font-size:11.5px;line-height:1.5;color:oklch(0.32 0.06 150)">
+      <b>Tax tip:</b> Use Reports → Tax Summary at year-end — each business is broken out by its own Schedule.
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0">
+
+    <div style="padding:22px 32px;border-bottom:1px solid oklch(0.9 0.006 95);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:21px;font-weight:700;letter-spacing:-0.01em">{{ currentBizMeta.name }}</div>
+          <sc-if value="{{ currentBizMeta.scheduleShort }}"><div style="font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:100px;background:oklch(0.94 0.05 150);color:oklch(0.32 0.06 150)">{{ currentBizMeta.scheduleShort }}</div></sc-if>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="display:flex;background:oklch(0.95 0.005 95);border-radius:8px;padding:3px;gap:2px">
+          <div style="{{ modeYearStyle }}" sc-camel-on-click="{{ setModeYear }}">Year</div>
+          <div style="{{ modeQuarterStyle }}" sc-camel-on-click="{{ setModeQuarter }}">Quarter</div>
+        </div>
+        <sc-if value="{{ isQuarterMode }}">
+          <sc-raw-select value="{{ period.quarter }}" sc-camel-on-change="{{ handleQuarterChange }}" style="padding:7px 10px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);background:white;font-size:13px;font-weight:600">
+            <sc-for list="{{ quarterOptions }}" as="q" hint-placeholder-count="4">
+              <option value="{{ q.value }}">{{ q.label }}</option>
+            </sc-for>
+          </sc-raw-select>
+        </sc-if>
+        <sc-raw-select value="{{ period.year }}" sc-camel-on-change="{{ handleYearChange }}" style="padding:7px 10px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);background:white;font-size:13px;font-weight:600">
+          <sc-for list="{{ periodYearOptions }}" as="y" hint-placeholder-count="2">
+            <option value="{{ y }}">{{ y }}</option>
+          </sc-for>
+        </sc-raw-select>
+        <div style="padding:9px 16px;border-radius:8px;background:oklch(0.52 0.13 150);color:white;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap" sc-camel-on-click="{{ openAddTxn }}">+ Add transaction</div>
+      </div>
+    </div>
+
+    <div style="flex:1;overflow-y:auto;padding:28px 32px 60px">
+
+      <sc-if value="{{ isDashboard }}">
+        <div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px">
+            <div style="background:white;border:1px solid oklch(0.9 0.006 95);border-radius:12px;padding:18px 20px">
+              <div style="font-size:12px;color:oklch(0.52 0.012 95);font-weight:600;margin-bottom:6px">Income ({{ periodLabel }})</div>
+              <div style="font-size:24px;font-weight:700;color:oklch(0.52 0.13 150)">{{ kpiIncomeLabel }}</div>
+            </div>
+            <div style="background:white;border:1px solid oklch(0.9 0.006 95);border-radius:12px;padding:18px 20px">
+              <div style="font-size:12px;color:oklch(0.52 0.012 95);font-weight:600;margin-bottom:6px">Expenses ({{ periodLabel }})</div>
+              <div style="font-size:24px;font-weight:700;color:oklch(0.55 0.16 25)">{{ kpiExpenseLabel }}</div>
+            </div>
+            <div style="background:white;border:1px solid oklch(0.9 0.006 95);border-radius:12px;padding:18px 20px">
+              <div style="font-size:12px;color:oklch(0.52 0.012 95);font-weight:600;margin-bottom:6px">Net profit</div>
+              <div style="font-size:24px;font-weight:700;color:{{ kpiNetColor }}">{{ kpiNetLabel }}</div>
+            </div>
+            <div style="background:white;border:1px solid oklch(0.9 0.006 95);border-radius:12px;padding:18px 20px">
+              <div style="font-size:12px;color:oklch(0.52 0.012 95);font-weight:600;margin-bottom:6px">Cash on hand</div>
+              <div style="font-size:24px;font-weight:700">{{ kpiCashLabel }}</div>
+            </div>
+          </div>
+
+          <div style="background:white;border:1px solid oklch(0.9 0.006 95);border-radius:12px;padding:20px 22px;margin-top:18px">
+            <div style="font-size:13.5px;font-weight:700;margin-bottom:16px">Monthly cash flow — {{ period.year }}</div>
+            <div style="display:flex;gap:10px;align-items:flex-end;height:150px">
+              <sc-for list="{{ monthlyChart }}" as="m" hint-placeholder-count="12">
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end">
+                  <div style="display:flex;gap:2px;align-items:flex-end;height:120px">
+                    <div style="width:7px;background:oklch(0.52 0.13 150);border-radius:2px 2px 0 0;height:{{ m.incomeH }}%"></div>
+                    <div style="width:7px;background:oklch(0.55 0.16 25);border-radius:2px 2px 0 0;height:{{ m.expenseH }}%"></div>
+                  </div>
+                  <div style="font-size:10.5px;color:oklch(0.52 0.012 95)">{{ m.label }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex;gap:16px;margin-top:14px;font-size:12px;color:oklch(0.52 0.012 95)">
+              <div style="display:flex;align-items:center;gap:6px"><div style="width:9px;height:9px;border-radius:2px;background:oklch(0.52 0.13 150)"></div>Income</div>
+              <div style="display:flex;align-items:center;gap:6px"><div style="width:9px;height:9px;border-radius:2px;background:oklch(0.55 0.16 25)"></div>Expenses</div>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px">
+            <div style="background:white;border:1px solid oklch(0.9 0.006 95);border-radius:12px;padding:20px 22px">
+              <div style="font-size:13.5px;font-weight:700;margin-bottom:14px">Top expense categories</div>
+              <sc-if value="{{ hasTopExpenses }}" hint-placeholder-val="{{ true }}">
+                <sc-for list="{{ topExpenseCategories }}" as="c" hint-placeholder-count="5">
+                  <div style="margin-bottom:12px">
+                    <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>{{ c.category }}</span><span style="font-weight:600">{{ c.amountLabel }}</span></div>
+                    <div style="height:6px;background:oklch(0.95 0.005 95);border-radius:3px;overflow:hidden"><div style="height:100%;width:{{ c.pct }}%;background:oklch(0.55 0.16 25)"></div></div>
+                  </div>
+                </sc-for>
+              </sc-if>
+              <sc-if value="{{ noTopExpenses }}"><div style="font-size:12.5px;color:oklch(0.52 0.012 95)">No expenses recorded for this period.</div></sc-if>
+            </div>
+            <div style="background:white;border:1px solid oklch(0.9 0.006 95);border-radius:12px;padding:20px 22px">
+              <div style="font-size:13.5px;font-weight:700;margin-bottom:14px">Recent activity</div>
+              <sc-if value="{{ hasRecent }}" hint-placeholder-val="{{ true }}">
+                <sc-for list="{{ recentTxns }}" as="t" hint-placeholder-count="6">
+                  <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid oklch(0.95 0.005 95);font-size:12.5px">
+                    <div style="min-width:0">
+                      <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.category }}</div>
+                      <div style="color:oklch(0.52 0.012 95);font-size:11.5px">{{ t.dateLabel }}<sc-if value="{{ t.showBiz }}"> · {{ t.bizName }}</sc-if></div>
+                    </div>
+                    <div style="font-weight:700;color:{{ t.amountColor }};white-space:nowrap;padding-left:10px">{{ t.amountLabel }}</div>
+                  </div>
+                </sc-for>
+              </sc-if>
+              <sc-if value="{{ noRecent }}"><div style="font-size:12.5px;color:oklch(0.52 0.012 95)">No transactions yet.</div></sc-if>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isTransactions }}">
+        <div>
+          <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+            <input type="text" placeholder="Search category or note" value="{{ search }}" sc-camel-on-change="{{ handleSearchChange }}" style="flex:1;min-width:200px;padding:9px 12px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13px">
+            <sc-raw-select value="{{ filterType }}" sc-camel-on-change="{{ handleFilterTypeChange }}" style="padding:9px 12px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13px;background:white">
+              <option value="all">All types</option>
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+            </sc-raw-select>
+            <sc-raw-select value="{{ filterCategory }}" sc-camel-on-change="{{ handleFilterCategoryChange }}" style="padding:9px 12px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13px;background:white">
+              <option value="all">All categories</option>
+              <sc-for list="{{ categoryFilterOptions }}" as="c" hint-placeholder-count="6">
+                <option value="{{ c }}">{{ c }}</option>
+              </sc-for>
+            </sc-raw-select>
+          </div>
+
+          <div style="background:white;border:1px solid oklch(0.9 0.006 95);border-radius:12px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:100px {{ txnGridExtra }} 1fr 90px 120px 90px;gap:10px;padding:10px 18px;font-size:11px;font-weight:700;color:oklch(0.52 0.012 95);text-transform:uppercase;letter-spacing:.03em;background:oklch(0.97 0.005 95);border-bottom:1px solid oklch(0.9 0.006 95)">
+              <div>Date</div>
+              <sc-if value="{{ showBizColumn }}"><div>Business</div></sc-if>
+              <div>Category</div>
+              <div>Type</div>
+              <div style="text-align:right">Amount</div>
+              <div></div>
+            </div>
+            <sc-if value="{{ hasFilteredTxns }}" hint-placeholder-val="{{ true }}">
+              <sc-for list="{{ filteredTxnsList }}" as="t" hint-placeholder-count="8">
+                <div style="display:grid;grid-template-columns:100px {{ txnGridExtra }} 1fr 90px 120px 90px;gap:10px;padding:12px 18px;font-size:13px;border-bottom:1px solid oklch(0.96 0.005 95);align-items:center">
+                  <div style="color:oklch(0.52 0.012 95)">{{ t.dateLabel }}</div>
+                  <sc-if value="{{ t.showBiz }}"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.bizName }}</div></sc-if>
+                  <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.category }}<sc-if value="{{ t.subLabel }}"><div style="font-size:11px;color:oklch(0.52 0.012 95);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.subLabel }}</div></sc-if></div>
+                  <div><span style="font-size:11px;font-weight:600;padding:3px 8px;border-radius:100px;background:{{ t.typeBg }};color:{{ t.typeColor }}">{{ t.typeLabel }}</span></div>
+                  <div style="text-align:right;font-weight:700;color:{{ t.amountColor }}">{{ t.amountLabel }}</div>
+                  <div style="display:flex;gap:10px;justify-content:flex-end;font-size:12px">
+                    <span style="cursor:pointer;color:oklch(0.5 0.13 150)" sc-camel-on-click="{{ t.onEdit }}">Edit</span>
+                    <span style="cursor:pointer;color:oklch(0.55 0.16 25)" sc-camel-on-click="{{ t.onDelete }}">Delete</span>
+                  </div>
+                </div>
+              </sc-for>
+            </sc-if>
+            <sc-if value="{{ noFilteredTxns }}"><div style="padding:40px 18px;text-align:center;color:oklch(0.52 0.012 95);font-size:13px">No transactions match your filters.</div></sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isAccounts }}">
+        <div style="max-width:760px">
+          <div style="background:white;border:1px solid oklch(0.9 0.006 95);border-radius:12px;padding:22px 24px">
+            <div style="font-size:15px;font-weight:700;margin-bottom:6px">Accounts</div>
+            <div style="font-size:12.5px;color:oklch(0.52 0.012 95);line-height:1.55;margin-bottom:18px">Accounts are where money is received or paid from. Assign each to a business and set a one-time opening balance — after that, balances update automatically from transactions. “Shared” accounts appear on every business. To give Cash an opening balance, add an account named “Cash” assigned to a business.</div>
+            <div style="display:grid;grid-template-columns:1fr 190px 130px 24px;gap:10px;font-size:11px;font-weight:700;color:oklch(0.52 0.012 95);text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px"><div>Account name</div><div>Business</div><div>Opening balance</div><div></div></div>
+            <sc-for list="{{ acctDraftList }}" as="a" hint-placeholder-count="2">
+              <div style="display:grid;grid-template-columns:1fr 190px 130px 24px;gap:10px;align-items:center;margin-bottom:8px">
+                <input type="text" value="{{ a.name }}" sc-camel-on-change="{{ a.onName }}" style="box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13px;width:100%">
+                <sc-raw-select value="{{ a.businessId }}" sc-camel-on-change="{{ a.onBiz }}" style="box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13px;background:white;width:100%">
+                  <option value="">Shared</option>
+                  <sc-for list="{{ businesses }}" as="b" hint-placeholder-count="3"><option value="{{ b.id }}">{{ b.name }}</option></sc-for>
+                </sc-raw-select>
+                <input type="number" value="{{ a.opening }}" sc-camel-on-change="{{ a.onOpening }}" placeholder="0.00" style="box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13px;width:100%">
+                <span style="cursor:pointer;color:oklch(0.55 0.16 25);font-size:15px;text-align:center" sc-camel-on-click="{{ a.onDelete }}">×</span>
+              </div>
+            </sc-for>
+            <div style="display:grid;grid-template-columns:1fr 190px 130px 24px;gap:10px;align-items:center;margin-bottom:8px;padding-top:10px;border-top:1px dashed oklch(0.9 0.006 95)">
+              <input type="text" value="{{ newAcct.name }}" sc-camel-on-change="{{ handleNewAcctName }}" placeholder="New account name…" style="box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13px;width:100%">
+              <sc-raw-select value="{{ newAcct.businessId }}" sc-camel-on-change="{{ handleNewAcctBiz }}" style="box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13px;background:white;width:100%">
+                <option value="">Shared</option>
+                <sc-for list="{{ businesses }}" as="b" hint-placeholder-count="3"><option value="{{ b.id }}">{{ b.name }}</option></sc-for>
+              </sc-raw-select>
+              <input type="number" value="{{ newAcct.opening }}" sc-camel-on-change="{{ handleNewAcctOpening }}" placeholder="0.00" style="box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13px;width:100%">
+              <span></span>
+            </div>
+            <sc-if value="{{ acctError }}"><div style="font-size:12px;color:oklch(0.55 0.16 25);margin:10px 0;line-height:1.5">{{ acctError }}</div></sc-if>
+            <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;margin-top:16px">
+              <sc-if value="{{ acctSaved }}"><span style="font-size:12.5px;color:oklch(0.5 0.13 150);font-weight:600">Saved ✓</span></sc-if>
+              <div style="padding:9px 18px;border-radius:8px;background:oklch(0.52 0.13 150);color:white;font-size:13px;font-weight:600;cursor:pointer" sc-camel-on-click="{{ saveAccounts }}">Save all</div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isReports }}">
+        <div>
+          <div style="display:flex;gap:4px;background:oklch(0.95 0.005 95);border-radius:9px;padding:4px;margin-bottom:20px;width:fit-content">
+            <div style="{{ tabIncomeStyle }}" sc-camel-on-click="{{ setTabIncome }}">Income Statement</div>
+            <div style="{{ tabBalanceStyle }}" sc-camel-on-click="{{ setTabBalance }}">Balance Sheet</div>
+            <div style="{{ tabCashflowStyle }}" sc-camel-on-click="{{ setTabCashflow }}">Cash Flow</div>
+            <div style="{{ tabTaxStyle }}" sc-camel-on-click="{{ setTabTax }}">Tax Summary</div>
+          </div>
+
+          <sc-if value="{{ isTabIncome }}">
+            <sc-for list="{{ incomeStatementSections }}" as="s" hint-placeholder-count="1">
+              <div style="background:white;border:1px solid oklch(0.9 0.006 95);border-radius:12px;padding:22px 24px;margin-bottom:16px">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+                  <div style="font-size:15px;font-weight:700">{{ s.name }}</div>
+                  <div style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:100px;background:oklch(0.94 0.05 150);color:oklch(0.32 0.06 150)">{{ s.scheduleShort }}</div>
+                </div>
+                <div style="font-size:12px;font-weight:700;color:oklch(0.52 0.012 95);text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px">Income</div>
+                <sc-for list="{{ s.incomeRows }}" as="r" hint-placeholder-count="2">
+                  <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13.5px;border-bottom:1px solid oklch(0.96 0.005 95)"><span>{{ r.category }}</span><span style="font-weight:600">{{ r.amountLabel }}</span></div>
+                </sc-for>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13.5px;font-weight:700"><span>Total income</span><span>{{ s.incomeTotalLabel }}</span></div>
+                <div style="font-size:12px;font-weight:700;color:oklch(0.52 0.012 95);text-transform:uppercase;letter-spacing:.03em;margin:14px 0 8px">Expenses</div>
+                <sc-for list="{{ s.expenseRows }}" as="r" hint-placeholder-count="3">
+                  <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13.5px;border-bottom:1px solid oklch(0.96 0.005 95)"><span>{{ r.category }}</span><span style="font-weight:600">{{ r.amountLabel }}</span></div>
+                </sc-for>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13.5px;font-weight:700"><span>Total expenses</span><span>{{ s.expenseTotalLabel }}</span></div>
+                <div style="height:1px;background:oklch(0.9 0.006 95);margin:12px 0"></div>
+                <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:{{ s.netColor }}"><span>Net profit / loss</span><span>{{ s.netLabel }}</span></div>
+              </div>
+            </sc-for>
+          </sc-if>
+
+          <sc-if value="{{ isTabBalance }}">
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:12px">
+              <div style="padding:9px 16px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);background:white;font-size:13px;font-weight:600;cursor:pointer" sc-camel-on-click="{{ openManageAccounts }}">Accounts &amp; opening balances</div>
+              <div style="padding:9px 16px;border-radius:8px;background:oklch(0.52 0.13 150);color:white;font-size:13px;font-weight:600;cursor:pointer" sc-camel-on-click="{{ openAddAsset }}">+ Add asset / liability</div>
+            </div>
+            <sc-for list="{{ balanceSheetSections }}" as="s" hint-placeholder-count="1">
+              <div style="background:white;border:1px solid oklch(0.9 0.006 95);border-radius:12px;padding:22px 24px;margin-bottom:16px">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+                  <div style="font-size:15px;font-weight:700">{{ s.name }}</div>
+                  <div style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:100px;background:oklch(0.94 0.05 150);color:oklch(0.32 0.06 150)">{{ s.scheduleShort }}</div>
+                </div>
+                <div style="font-size:12px;font-weight:700;color:oklch(0.52 0.012 95);text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px">Cash &amp; accounts <span style="font-weight:600;text-transform:none;letter-spacing:0;color:oklch(0.5 0.13 150)">· auto from transactions</span></div>
+                <sc-for list="{{ s.cashRows }}" as="r" hint-placeholder-count="1">
+                  <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13.5px;border-bottom:1px solid oklch(0.96 0.005 95)"><span>{{ r.name }}</span><span style="font-weight:600">{{ r.valueLabel }}</span></div>
+                </sc-for>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13.5px;font-weight:700"><span>Total cash &amp; accounts</span><span>{{ s.cashTotalLabel }}</span></div>
+                <div style="font-size:12px;font-weight:700;color:oklch(0.52 0.012 95);text-transform:uppercase;letter-spacing:.03em;margin:14px 0 8px">Other assets</div>
+                <sc-for list="{{ s.assetRows }}" as="r" hint-placeholder-count="3">
+                  <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13.5px;border-bottom:1px solid oklch(0.96 0.005 95)">
+                    <span>{{ r.name }}</span>
+                    <span style="display:flex;align-items:center;gap:10px"><span style="font-weight:600">{{ r.valueLabel }}</span><span style="cursor:pointer;color:oklch(0.55 0.16 25);font-size:11.5px" sc-camel-on-click="{{ r.onDelete }}">Delete</span></span>
+                  </div>
+                </sc-for>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13.5px;font-weight:700"><span>Total assets</span><span>{{ s.assetTotalLabel }}</span></div>
+                <div style="font-size:12px;font-weight:700;color:oklch(0.52 0.012 95);text-transform:uppercase;letter-spacing:.03em;margin:14px 0 8px">Liabilities</div>
+                <sc-for list="{{ s.liabilityRows }}" as="r" hint-placeholder-count="2">
+                  <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13.5px;border-bottom:1px solid oklch(0.96 0.005 95)">
+                    <span>{{ r.name }}</span>
+                    <span style="display:flex;align-items:center;gap:10px"><span style="font-weight:600">{{ r.valueLabel }}</span><span style="cursor:pointer;color:oklch(0.55 0.16 25);font-size:11.5px" sc-camel-on-click="{{ r.onDelete }}">Delete</span></span>
+                  </div>
+                </sc-for>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13.5px;font-weight:700"><span>Total liabilities</span><span>{{ s.liabilityTotalLabel }}</span></div>
+                <div style="height:1px;background:oklch(0.9 0.006 95);margin:12px 0"></div>
+                <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700"><span>Equity</span><span>{{ s.equityLabel }}</span></div>
+              </div>
+            </sc-for>
+          </sc-if>
+
+          <sc-if value="{{ isTabCashflow }}">
+            <sc-for list="{{ cashFlowSections }}" as="s" hint-placeholder-count="1">
+              <div style="background:white;border:1px solid oklch(0.9 0.006 95);border-radius:12px;padding:22px 24px;margin-bottom:16px">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                  <div style="font-size:15px;font-weight:700">{{ s.name }}</div>
+                  <div style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:100px;background:oklch(0.94 0.05 150);color:oklch(0.32 0.06 150)">{{ s.scheduleShort }}</div>
+                </div>
+                <div style="font-size:12px;color:oklch(0.52 0.012 95);margin-bottom:14px">Starting cash (opening balances + prior activity): {{ s.startCashLabel }}</div>
+                <div style="display:grid;grid-template-columns:1fr 90px 90px 90px 100px;gap:10px;padding:8px 0;font-size:11px;font-weight:700;color:oklch(0.52 0.012 95);text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid oklch(0.9 0.006 95)">
+                  <div>Month</div><div style="text-align:right">Income</div><div style="text-align:right">Expenses</div><div style="text-align:right">Net</div><div style="text-align:right">Balance</div>
+                </div>
+                <sc-for list="{{ s.rows }}" as="m" hint-placeholder-count="3">
+                  <div style="display:grid;grid-template-columns:1fr 90px 90px 90px 100px;gap:10px;padding:9px 0;font-size:13px;border-bottom:1px solid oklch(0.96 0.005 95)">
+                    <div>{{ m.label }}</div>
+                    <div style="text-align:right;color:oklch(0.52 0.13 150)">{{ m.incomeLabel }}</div>
+                    <div style="text-align:right;color:oklch(0.55 0.16 25)">{{ m.expenseLabel }}</div>
+                    <div style="text-align:right;font-weight:600;color:{{ m.netColor }}">{{ m.netLabel }}</div>
+                    <div style="text-align:right;font-weight:700">{{ m.runningLabel }}</div>
+                  </div>
+                </sc-for>
+                <div style="display:flex;justify-content:space-between;padding:12px 0 0;font-size:14px;font-weight:700"><span>Net change / ending cash</span><span>{{ s.totalNetLabel }} → {{ s.endCashLabel }}</span></div>
+              </div>
+            </sc-for>
+          </sc-if>
+
+          <sc-if value="{{ isTabTax }}">
+            <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+              <div style="padding:9px 16px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);background:white;font-size:13px;font-weight:600;cursor:pointer" sc-camel-on-click="{{ printReport }}">Print / Export</div>
+            </div>
+            <sc-for list="{{ taxSections }}" as="s" hint-placeholder-count="1">
+              <div style="background:white;border:1px solid oklch(0.9 0.006 95);border-radius:12px;padding:22px 24px;margin-bottom:16px">
+                <div style="margin-bottom:16px">
+                  <div style="font-size:15px;font-weight:700">{{ s.name }}</div>
+                  <div style="font-size:13px;color:oklch(0.52 0.012 95);margin-top:2px">{{ s.scheduleFull }}</div>
+                </div>
+                <div style="font-size:12px;font-weight:700;color:oklch(0.52 0.012 95);text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px">Income</div>
+                <sc-for list="{{ s.incomeRows }}" as="r" hint-placeholder-count="2">
+                  <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13.5px;border-bottom:1px solid oklch(0.96 0.005 95)"><span>{{ r.category }}</span><span style="font-weight:600">{{ r.amountLabel }}</span></div>
+                </sc-for>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13.5px;font-weight:700"><span>Total income</span><span>{{ s.incomeTotalLabel }}</span></div>
+                <div style="font-size:12px;font-weight:700;color:oklch(0.52 0.012 95);text-transform:uppercase;letter-spacing:.03em;margin:14px 0 8px">Expenses</div>
+                <sc-for list="{{ s.expenseRows }}" as="r" hint-placeholder-count="4">
+                  <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13.5px;border-bottom:1px solid oklch(0.96 0.005 95)"><span>{{ r.category }}</span><span style="font-weight:600">{{ r.amountLabel }}</span></div>
+                </sc-for>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13.5px;font-weight:700"><span>Total expenses</span><span>{{ s.expenseTotalLabel }}</span></div>
+                <div style="height:1px;background:oklch(0.9 0.006 95);margin:12px 0"></div>
+                <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:{{ s.netColor }}"><span>{{ s.netLine }}</span><span>{{ s.netLabel }}</span></div>
+              </div>
+            </sc-for>
+          </sc-if>
+
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+
+  <sc-if value="{{ showAddBusiness }}">
+    <div style="position:fixed;inset:0;background:rgba(20,20,20,0.4);display:flex;align-items:center;justify-content:center;z-index:50" sc-camel-on-click="{{ closeModals }}">
+      <div style="background:white;border-radius:14px;padding:26px 28px;width:380px;max-width:90vw" sc-camel-on-click="{{ stopProp }}">
+        <div style="font-size:16px;font-weight:700;margin-bottom:18px">Add a business</div>
+        <div style="font-size:12px;font-weight:600;color:oklch(0.52 0.012 95);margin-bottom:6px">Name</div>
+        <input type="text" value="{{ newBizName }}" sc-camel-on-change="{{ handleNewBizName }}" placeholder="e.g. Sunrise Ridge Vineyard" style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13.5px;margin-bottom:16px">
+        <div style="font-size:12px;font-weight:600;color:oklch(0.52 0.012 95);margin-bottom:6px">Type</div>
+        <div style="display:flex;gap:8px;margin-bottom:22px">
+          <div style="{{ bizTypeFarmStyle }}" sc-camel-on-click="{{ setBizTypeFarm }}">Farm</div>
+          <div style="{{ bizTypeRentalStyle }}" sc-camel-on-click="{{ setBizTypeRental }}">Rental</div>
+          <div style="{{ bizTypeOtherStyle }}" sc-camel-on-click="{{ setBizTypeOther }}">Other</div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <div style="padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:oklch(0.52 0.012 95)" sc-camel-on-click="{{ closeModals }}">Cancel</div>
+          <div style="padding:9px 18px;border-radius:8px;background:oklch(0.52 0.13 150);color:white;font-size:13px;font-weight:600;cursor:pointer;opacity:{{ bizSaveOpacity }};pointer-events:{{ bizSavePE }}" sc-camel-on-click="{{ saveBusiness }}">Add business</div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showTxnModal }}">
+    <div style="position:fixed;inset:0;background:rgba(20,20,20,0.4);display:flex;align-items:center;justify-content:center;z-index:50" sc-camel-on-click="{{ closeModals }}">
+      <div style="background:white;border-radius:14px;padding:26px 28px;width:420px;max-width:90vw" sc-camel-on-click="{{ stopProp }}">
+        <div style="font-size:16px;font-weight:700;margin-bottom:18px">{{ txnModalTitle }}</div>
+
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <div style="{{ txnTypeIncomeStyle }}" sc-camel-on-click="{{ setTxnTypeIncome }}">Income</div>
+          <div style="{{ txnTypeExpenseStyle }}" sc-camel-on-click="{{ setTxnTypeExpense }}">Expense</div>
+        </div>
+
+        <div style="font-size:12px;font-weight:600;color:oklch(0.52 0.012 95);margin-bottom:6px">Business</div>
+        <sc-if value="{{ hasBusinesses }}" hint-placeholder-val="{{ true }}">
+          <sc-raw-select value="{{ txnForm.businessId }}" sc-camel-on-change="{{ handleTxnBizChange }}" style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13.5px;margin-bottom:14px;background:white">
+            <option value="">Select business…</option>
+            <sc-for list="{{ businesses }}" as="b" hint-placeholder-count="3">
+              <option value="{{ b.id }}">{{ b.name }}</option>
+            </sc-for>
+          </sc-raw-select>
+        </sc-if>
+        <sc-if value="{{ noBusinesses }}"><div style="font-size:12.5px;color:oklch(0.55 0.16 25);margin-bottom:14px">Add a business from the sidebar first.</div></sc-if>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:oklch(0.52 0.012 95);margin-bottom:6px">Date</div>
+            <input type="date" value="{{ txnForm.date }}" sc-camel-on-change="{{ handleTxnDate }}" style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13.5px">
+          </div>
+          <div>
+            <div style="font-size:12px;font-weight:600;color:oklch(0.52 0.012 95);margin-bottom:6px">Amount</div>
+            <input type="number" value="{{ txnForm.amount }}" sc-camel-on-change="{{ handleTxnAmount }}" placeholder="0.00" style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13.5px">
+          </div>
+        </div>
+
+        <div style="font-size:12px;font-weight:600;color:oklch(0.52 0.012 95);margin-bottom:6px">Category</div>
+        <sc-raw-select value="{{ txnForm.category }}" sc-camel-on-change="{{ handleTxnCategory }}" style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13.5px;margin-bottom:14px;background:white">
+          <option value="">Select category…</option>
+          <sc-for list="{{ txnFormCategoryOptions }}" as="c" hint-placeholder-count="5">
+            <option value="{{ c }}">{{ c }}</option>
+          </sc-for>
+        </sc-raw-select>
+
+        <div style="font-size:12px;font-weight:600;color:oklch(0.52 0.012 95);margin-bottom:6px">{{ payerLabel }}</div>
+        <input type="text" value="{{ txnForm.payer }}" sc-camel-on-change="{{ handleTxnPayer }}" placeholder="e.g. Cargill, tenant, Home Depot" style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13.5px;margin-bottom:14px">
+
+        <div style="font-size:12px;font-weight:600;color:oklch(0.52 0.012 95);margin-bottom:6px">{{ accountLabel }}</div>
+        <sc-if value="{{ notAddingAccount }}" hint-placeholder-val="{{ true }}">
+          <sc-raw-select value="{{ txnForm.account }}" sc-camel-on-change="{{ handleTxnAccount }}" style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13.5px;margin-bottom:14px;background:white">
+            <sc-for list="{{ accountOptions }}" as="a" hint-placeholder-count="1">
+              <option value="{{ a }}">{{ a }}</option>
+            </sc-for>
+            <option value="__add">+ Add account…</option>
+          </sc-raw-select>
+        </sc-if>
+        <sc-if value="{{ addingAccount }}">
+          <div style="display:flex;gap:8px;margin-bottom:14px">
+            <input type="text" value="{{ newAccountName }}" sc-camel-on-change="{{ handleNewAccountName }}" placeholder="e.g. Chase Checking" style="flex:1;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13.5px">
+            <div style="padding:9px 14px;border-radius:8px;background:oklch(0.52 0.13 150);color:white;font-size:13px;font-weight:600;cursor:pointer" sc-camel-on-click="{{ saveNewAccount }}">Add</div>
+            <div style="padding:9px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:oklch(0.52 0.012 95)" sc-camel-on-click="{{ cancelNewAccount }}">Cancel</div>
+          </div>
+        </sc-if>
+
+        <div style="font-size:12px;font-weight:600;color:oklch(0.52 0.012 95);margin-bottom:6px">Note (optional)</div>
+        <input type="text" value="{{ txnForm.note }}" sc-camel-on-change="{{ handleTxnNote }}" placeholder="Details for your records" style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13.5px;margin-bottom:20px">
+
+        <sc-if value="{{ txnError }}"><div style="font-size:12px;color:oklch(0.55 0.16 25);margin-bottom:12px;line-height:1.5">{{ txnError }}</div></sc-if>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <sc-if value="{{ isEditingTxn }}"><span style="font-size:12.5px;color:oklch(0.55 0.16 25);cursor:pointer;font-weight:600" sc-camel-on-click="{{ deleteEditingTxn }}">Delete</span></sc-if>
+          <sc-if value="{{ isNotEditingTxn }}"><span></span></sc-if>
+          <div style="display:flex;gap:10px">
+            <div style="padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:oklch(0.52 0.012 95)" sc-camel-on-click="{{ closeModals }}">Cancel</div>
+            <div style="padding:9px 18px;border-radius:8px;background:oklch(0.52 0.13 150);color:white;font-size:13px;font-weight:600;cursor:pointer;opacity:{{ txnSaveOpacity }};pointer-events:{{ txnSavePE }}" sc-camel-on-click="{{ saveTxn }}">Save</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showAcctModal }}">
+    <div style="position:fixed;inset:0;background:rgba(20,20,20,0.4);display:flex;align-items:center;justify-content:center;z-index:50" sc-camel-on-click="{{ closeModals }}">
+      <div style="background:white;border-radius:14px;padding:26px 28px;width:600px;max-width:92vw;max-height:85vh;overflow:auto" sc-camel-on-click="{{ stopProp }}">
+        <div style="font-size:16px;font-weight:700;margin-bottom:8px">Accounts &amp; opening balances</div>
+        <div style="font-size:12.5px;color:oklch(0.52 0.012 95);line-height:1.55;margin-bottom:18px">Each account belongs to a business and has a one-time opening balance (what was in it before you started tracking). Balances then update automatically from transactions — never re-enter them on the balance sheet. To give Cash an opening balance, add an account named “Cash” assigned to a business.</div>
+        <div style="display:grid;grid-template-columns:1fr 170px 120px 24px;gap:10px;font-size:11px;font-weight:700;color:oklch(0.52 0.012 95);text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px"><div>Account name</div><div>Business</div><div>Opening balance</div><div></div></div>
+        <sc-for list="{{ acctDraftList }}" as="a" hint-placeholder-count="1">
+          <div style="display:grid;grid-template-columns:1fr 170px 120px 24px;gap:10px;align-items:center;margin-bottom:8px">
+            <input type="text" value="{{ a.name }}" sc-camel-on-change="{{ a.onName }}" style="box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13px;width:100%">
+            <sc-raw-select value="{{ a.businessId }}" sc-camel-on-change="{{ a.onBiz }}" style="box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13px;background:white;width:100%">
+              <option value="">Shared</option>
+              <sc-for list="{{ businesses }}" as="b" hint-placeholder-count="3"><option value="{{ b.id }}">{{ b.name }}</option></sc-for>
+            </sc-raw-select>
+            <input type="number" value="{{ a.opening }}" sc-camel-on-change="{{ a.onOpening }}" placeholder="0.00" style="box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13px;width:100%">
+            <span style="cursor:pointer;color:oklch(0.55 0.16 25);font-size:15px;text-align:center" sc-camel-on-click="{{ a.onDelete }}">×</span>
+          </div>
+        </sc-for>
+        <div style="display:grid;grid-template-columns:1fr 170px 120px 24px;gap:10px;align-items:center;margin-bottom:8px;padding-top:8px;border-top:1px dashed oklch(0.9 0.006 95)">
+          <input type="text" value="{{ newAcct.name }}" sc-camel-on-change="{{ handleNewAcctName }}" placeholder="New account name…" style="box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13px;width:100%">
+          <sc-raw-select value="{{ newAcct.businessId }}" sc-camel-on-change="{{ handleNewAcctBiz }}" style="box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13px;background:white;width:100%">
+            <option value="">Shared</option>
+            <sc-for list="{{ businesses }}" as="b" hint-placeholder-count="3"><option value="{{ b.id }}">{{ b.name }}</option></sc-for>
+          </sc-raw-select>
+          <input type="number" value="{{ newAcct.opening }}" sc-camel-on-change="{{ handleNewAcctOpening }}" placeholder="0.00" style="box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13px;width:100%">
+          <span></span>
+        </div>
+        <sc-if value="{{ acctError }}"><div style="font-size:12px;color:oklch(0.55 0.16 25);margin:10px 0;line-height:1.5">{{ acctError }}</div></sc-if>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+          <div style="padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:oklch(0.52 0.012 95)" sc-camel-on-click="{{ closeModals }}">Cancel</div>
+          <div style="padding:9px 18px;border-radius:8px;background:oklch(0.52 0.13 150);color:white;font-size:13px;font-weight:600;cursor:pointer" sc-camel-on-click="{{ saveAccounts }}">Save all</div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showAssetModal }}">
+    <div style="position:fixed;inset:0;background:rgba(20,20,20,0.4);display:flex;align-items:center;justify-content:center;z-index:50" sc-camel-on-click="{{ closeModals }}">
+      <div style="background:white;border-radius:14px;padding:26px 28px;width:380px;max-width:90vw" sc-camel-on-click="{{ stopProp }}">
+        <div style="font-size:16px;font-weight:700;margin-bottom:18px">Add asset / liability</div>
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <div style="{{ assetKindAssetStyle }}" sc-camel-on-click="{{ setAssetKindAsset }}">Asset</div>
+          <div style="{{ assetKindLiabilityStyle }}" sc-camel-on-click="{{ setAssetKindLiability }}">Liability</div>
+        </div>
+        <div style="font-size:12px;font-weight:600;color:oklch(0.52 0.012 95);margin-bottom:6px">Business</div>
+        <sc-if value="{{ hasBusinesses }}" hint-placeholder-val="{{ true }}">
+          <sc-raw-select value="{{ assetForm.businessId }}" sc-camel-on-change="{{ handleAssetBizChange }}" style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13.5px;margin-bottom:14px;background:white">
+            <option value="">Select business…</option>
+            <sc-for list="{{ businesses }}" as="b" hint-placeholder-count="3">
+              <option value="{{ b.id }}">{{ b.name }}</option>
+            </sc-for>
+          </sc-raw-select>
+        </sc-if>
+        <sc-if value="{{ noBusinesses }}"><div style="font-size:12.5px;color:oklch(0.55 0.16 25);margin-bottom:14px">Add a business from the sidebar first.</div></sc-if>
+        <div style="font-size:12px;font-weight:600;color:oklch(0.52 0.012 95);margin-bottom:6px">Name</div>
+        <input type="text" value="{{ assetForm.name }}" sc-camel-on-change="{{ handleAssetName }}" placeholder="e.g. Land, Mortgage" style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13.5px;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:600;color:oklch(0.52 0.012 95);margin-bottom:6px">Value</div>
+        <input type="number" value="{{ assetForm.value }}" sc-camel-on-change="{{ handleAssetValue }}" placeholder="0.00" style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid oklch(0.9 0.006 95);font-size:13.5px;margin-bottom:20px">
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <div style="padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:oklch(0.52 0.012 95)" sc-camel-on-click="{{ closeModals }}">Cancel</div>
+          <div style="padding:9px 18px;border-radius:8px;background:oklch(0.52 0.13 150);color:white;font-size:13px;font-weight:600;cursor:pointer;opacity:{{ assetSaveOpacity }};pointer-events:{{ assetSavePE }}" sc-camel-on-click="{{ saveAsset }}">Save</div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</sc-if>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script="">
+// Same Supabase project as the farm sales app — this tracker reuses that login session.
+const SUPABASE_URL = 'https://qpthtykkqxpujudyieyr.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFwdGh0eWtrcXhwdWp1ZHlpZXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMDgzODEsImV4cCI6MjA5NjY4NDM4MX0.VXgzPAvIYUCae8KT4t9Xbt60SdsdC_QHwBN9RwlQQ1A';
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const ACCENT = 'oklch(0.52 0.13 150)';
+const ACCENT_SOFT = 'oklch(0.94 0.05 150)';
+const NEG = 'oklch(0.55 0.16 25)';
+const NEG_SOFT = 'oklch(0.95 0.05 25)';
+const TEXT_SEC = 'oklch(0.52 0.012 95)';
+const TEXT = 'oklch(0.24 0.01 95)';
+
+const BIZ_TYPES = {
+  farm: {
+    label: 'Farm', scheduleShort: 'Schedule F', scheduleFull: 'Schedule F — Profit or Loss From Farming', dot: 'oklch(0.6 0.13 150)',
+    income: ['Livestock sales','Grain & produce sales','Co-op distributions','Agricultural program payments','Custom hire income','Other farm income'],
+    expense: ['Feed','Seeds & plants','Fertilizers & chemicals','Fuel & oil','Repairs & maintenance','Veterinary & breeding','Rent/lease (land & equipment)','Insurance','Utilities','Hired labor','Supplies','Taxes','Interest','Depreciation']
+  },
+  rental: {
+    label: 'Rental property', scheduleShort: 'Schedule E', scheduleFull: 'Schedule E — Supplemental Income and Loss', dot: 'oklch(0.62 0.12 70)',
+    income: ['Rents received'],
+    expense: ['Advertising','Auto & travel','Cleaning & maintenance','Insurance','Legal & professional fees','Management fees','Mortgage interest','Repairs','Supplies','Taxes','Utilities','Depreciation']
+  },
+  other: {
+    label: 'Other business', scheduleShort: 'Schedule C', scheduleFull: 'Schedule C — Profit or Loss From Business', dot: 'oklch(0.6 0.12 250)',
+    income: ['Commissions & fees','Sales & services','Other income'],
+    expense: ['Advertising & marketing','Car & travel','Contract labor','Insurance','Legal & professional','Office expense','Supplies','Meals (50%)','Utilities','Dues & subscriptions','Depreciation']
+  }
+};
+
+function fmtMoney(n){
+  const v = Math.round((n||0)*100)/100;
+  const sign = v < 0 ? '-' : '';
+  return sign + '$' + Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtDateLabel(d){
+  const [y,m,day] = d.split('-').map(Number);
+  return MONTHS[m-1] + ' ' + day + ', ' + y;
+}
+function newId(prefix){ return prefix + '_' + Date.now() + '_' + Math.floor(Math.random()*100000); }
+
+class Component extends DCLogic {
+  state = {
+    authStatus: 'loading', authError: '',
+    view: 'dashboard',
+    currentBusiness: null,
+    period: { mode: 'year', year: new Date().getFullYear(), quarter: Math.ceil((new Date().getMonth()+1)/3) },
+    reportsTab: 'income',
+    search: '', filterType: 'all', filterCategory: 'all',
+    showAddBusiness: false, newBizName: '', newBizType: 'farm',
+    showTxnModal: false, editingTxnId: null,
+    txnForm: { businessId: '', date: '', type: 'income', category: '', amount: '', note: '', payer: '', account: 'Cash' },
+    showAssetModal: false,
+    assetForm: { businessId: '', kind: 'asset', name: '', value: '' },
+
+    businesses: [],
+    transactions: [],
+    assets: [],
+    refreshing: false, refreshError: '', diag: '', accounts: [], addingAccount: false, newAccountName: '', txnError: '',
+    showAcctModal: false, acctDrafts: [], newAcct: {name:'', businessId:'', opening:''}, acctError: '', acctSaved: false
+  };
+
+  accessToken = null;
+
+  async componentDidMount(){
+    try {
+      const saved = localStorage.getItem('farm-auth');
+      if (!saved) { this.setState({authStatus:'denied', authError:'Sign in through the main farm app first, then reopen this tracker.'}); return; }
+      const { refresh_token } = JSON.parse(saved);
+      if (!refresh_token) { this.setState({authStatus:'denied', authError:'Sign in through the main farm app first, then reopen this tracker.'}); return; }
+
+      const tokRes = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+        method:'POST', headers:{ apikey:SUPABASE_ANON_KEY, 'Content-Type':'application/json' },
+        body: JSON.stringify({ refresh_token })
+      });
+      const tok = await tokRes.json().catch(()=>({}));
+      if (!tokRes.ok || !tok.access_token) { this.setState({authStatus:'denied', authError:'Your session expired — sign in again in the main farm app.'}); return; }
+      this.accessToken = tok.access_token;
+
+      const profRes = await fetch(SUPABASE_URL + '/rest/v1/profiles?id=eq.' + tok.user.id + '&select=role', {
+        headers:{ apikey:SUPABASE_ANON_KEY, Authorization:'Bearer ' + this.accessToken }
+      });
+      const profRows = await profRes.json().catch(()=>[]);
+      if (!profRows?.[0] || profRows[0].role !== 'farmer') { this.setState({authStatus:'denied', authError:'This tracker is only available to the farmer account.'}); return; }
+
+      await this.loadAll();
+      this.setState(s=>({authStatus:'ready', currentBusiness: s.businesses[0]?.id ?? null}));
+    } catch (e) {
+      this.setState({authStatus:'error', authError: e.message || 'Could not connect.'});
+    }
+  }
+
+  async rest(path, { method='GET', body } = {}){
+    const res = await fetch(SUPABASE_URL + '/rest/v1' + path, {
+      method,
+      headers:{ apikey:SUPABASE_ANON_KEY, Authorization:'Bearer ' + this.accessToken, 'Content-Type':'application/json', Prefer:'return=representation' },
+      body: body !== undefined ? JSON.stringify(body) : undefined
+    });
+    if (res.status === 204) return null;
+    const data = await res.json().catch(()=>null);
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' on ' + method + ' ' + path.split('?')[0] + ' — ' + (data?.message || data?.hint || 'request failed'));
+    return data;
+  }
+
+  async loadAll(){
+    const [businesses, transactions, assets, accounts] = await Promise.all([
+      this.rest('/businesses?select=*&order=name'),
+      this.rest('/ledger_transactions?select=*&order=date.desc'),
+      this.rest('/ledger_assets?select=*'),
+      this.rest('/ledger_accounts?select=*&order=name').catch(function(){ return []; })
+    ]);
+    this.setState(s=>{
+      const nextBiz = (businesses||[]).map(b=>({ id:b.id, name:b.name, type:b.type }));
+      const stillValid = nextBiz.some(b=>b.id===s.currentBusiness);
+      return {
+        businesses: nextBiz,
+        transactions: (transactions||[]).map(t=>({ id:t.id, businessId:t.business_id, date:t.date, type:t.type, category:t.category, amount:Number(t.amount), note:t.note||'', payer:t.payer||'', account:t.account||'Cash' })),
+        assets: (assets||[]).map(a=>({ id:a.id, businessId:a.business_id, kind:a.kind, name:a.name, value:Number(a.value) })),
+        accounts: (accounts||[]).map(a=>({ id:a.id, name:a.name, openingBalance:Number(a.opening_balance||0), businessId:a.business_id||null })),
+        currentBusiness: stillValid ? s.currentBusiness : (nextBiz[0]?.id ?? null),
+        diag: 'Loaded ' + nextBiz.length + ' businesses, ' + (transactions||[]).length + ' transactions, ' + (assets||[]).length + ' assets from ' + SUPABASE_URL.replace('https://','')
+      };
+    });
+  }
+
+  refreshData = async () => {
+    this.setState({refreshing:true, refreshError:''});
+    try { await this.loadAll(); this.setState({refreshing:false}); }
+    catch (e) { this.setState({refreshing:false, refreshError:e.message || 'Refresh failed'}); }
+  };
+
+  withinPeriod(dateStr){
+    const [y,m] = dateStr.split('-').map(Number);
+    const p = this.state.period;
+    if (y !== p.year) return false;
+    if (p.mode === 'quarter') return Math.ceil(m/3) === p.quarter;
+    return true;
+  }
+  scopeBizIds(){
+    return [this.state.currentBusiness];
+  }
+  scopeBusinesses(){
+    const ids = this.scopeBizIds();
+    return this.state.businesses.filter(b=>ids.includes(b.id));
+  }
+  bizName(id){ const b = this.state.businesses.find(x=>x.id===id); return b ? b.name : ''; }
+  bizById(id){ return this.state.businesses.find(x=>x.id===id); }
+  periodEnd(){ const p=this.state.period; if (p.mode==='quarter'){ return p.year+'-'+String(p.quarter*3).padStart(2,'0')+'-31'; } return p.year+'-12-31'; }
+  periodStart(){ const p=this.state.period; if (p.mode==='quarter'){ return p.year+'-'+String((p.quarter-1)*3+1).padStart(2,'0')+'-01'; } return p.year+'-01-01'; }
+  computedAccounts(bizId){
+    const rows = this.state.accounts.filter(a=>!a.businessId || a.businessId===bizId);
+    const hasCash = rows.some(a=>a.name.toLowerCase()==='cash');
+    return hasCash ? rows : [{id:'_cash', name:'Cash', openingBalance:0, businessId:bizId}, ...rows];
+  }
+  acctBalance(bizId, name, endDate, before){
+    return this.state.transactions.filter(t=>t.businessId===bizId && (t.account||'Cash').toLowerCase()===name.toLowerCase() && (before ? t.date<endDate : t.date<=endDate))
+      .reduce((a,t)=>a+(t.type==='income'?t.amount:-t.amount),0);
+  }
+  startCashFor(bizId){
+    const start = this.periodStart();
+    return this.computedAccounts(bizId).reduce((sum,a)=>sum + ((a.businessId===bizId)?a.openingBalance:0) + this.acctBalance(bizId, a.name, start, true), 0);
+  }
+
+  goDashboard = () => this.setState({view:'dashboard'});
+  goTransactions = () => this.setState({view:'transactions'});
+  goReports = () => this.setState({view:'reports'});
+  goAccounts = () => this.setState(s=>({view:'accounts', acctError:'', acctSaved:false, acctDrafts:s.accounts.map(a=>({id:a.id, name:a.name, businessId:a.businessId||'', opening:String(a.openingBalance||0)})), newAcct:{name:'', businessId:s.currentBusiness||'', opening:''}}));
+  selectBusiness = (id) => this.setState({currentBusiness:id});
+
+  setModeYear = () => this.setState(s=>({period:{...s.period, mode:'year'}}));
+  setModeQuarter = () => this.setState(s=>({period:{...s.period, mode:'quarter'}}));
+  handleYearChange = (e) => this.setState(s=>({period:{...s.period, year:Number(e.target.value)}}));
+  handleQuarterChange = (e) => this.setState(s=>({period:{...s.period, quarter:Number(e.target.value)}}));
+
+  setTabIncome = () => this.setState({reportsTab:'income'});
+  setTabBalance = () => this.setState({reportsTab:'balance'});
+  setTabCashflow = () => this.setState({reportsTab:'cashflow'});
+  setTabTax = () => this.setState({reportsTab:'tax'});
+  printReport = () => window.print();
+
+  handleSearchChange = (e) => this.setState({search:e.target.value});
+  handleFilterTypeChange = (e) => this.setState({filterType:e.target.value});
+  handleFilterCategoryChange = (e) => this.setState({filterCategory:e.target.value});
+
+  stopProp = (e) => e.stopPropagation();
+  closeModals = () => this.setState({showAddBusiness:false, showTxnModal:false, showAssetModal:false, showAcctModal:false, editingTxnId:null});
+
+  openAddBusiness = () => this.setState({showAddBusiness:true, newBizName:'', newBizType:'farm'});
+  handleNewBizName = (e) => this.setState({newBizName:e.target.value});
+  setBizTypeFarm = () => this.setState({newBizType:'farm'});
+  setBizTypeRental = () => this.setState({newBizType:'rental'});
+  setBizTypeOther = () => this.setState({newBizType:'other'});
+  saveBusiness = async () => {
+    const name = this.state.newBizName.trim();
+    if (!name) return;
+    try {
+      const rows = await this.rest('/businesses', { method:'POST', body:{ name, type:this.state.newBizType } });
+      const b = rows[0];
+      this.setState(s=>({businesses:[...s.businesses, {id:b.id, name:b.name, type:b.type}], showAddBusiness:false, currentBusiness:b.id}));
+    } catch (e) { this.setState({authError:e.message}); }
+  };
+
+  openAddTxn = () => {
+    const biz = this.state.currentBusiness !== 'all' ? this.state.currentBusiness : '';
+    this.setState({showTxnModal:true, editingTxnId:null, txnError:'', addingAccount:false, newAccountName:'', txnForm:{businessId:biz, date:'', type:'income', category:'', amount:'', note:'', payer:'', account:'Cash'}});
+  };
+  openEditTxn = (id) => {
+    const t = this.state.transactions.find(x=>x.id===id);
+    if (!t) return;
+    this.setState({showTxnModal:true, editingTxnId:id, txnError:'', addingAccount:false, newAccountName:'', txnForm:{businessId:t.businessId, date:t.date, type:t.type, category:t.category, amount:String(t.amount), note:t.note||'', payer:t.payer||'', account:t.account||'Cash'}});
+  };
+  setTxnTypeIncome = () => this.setState(s=>({txnForm:{...s.txnForm, type:'income', category:''}}));
+  setTxnTypeExpense = () => this.setState(s=>({txnForm:{...s.txnForm, type:'expense', category:''}}));
+  handleTxnBizChange = (e) => { const v = e.target.value; const id = /^\d+$/.test(v) ? Number(v) : v; this.setState(s=>({txnForm:{...s.txnForm, businessId:id, category:''}})); };
+  handleTxnDate = (e) => this.setState(s=>({txnForm:{...s.txnForm, date:e.target.value}}));
+  handleTxnAmount = (e) => this.setState(s=>({txnForm:{...s.txnForm, amount:e.target.value}}));
+  handleTxnCategory = (e) => this.setState(s=>({txnForm:{...s.txnForm, category:e.target.value}}));
+  handleTxnNote = (e) => this.setState(s=>({txnForm:{...s.txnForm, note:e.target.value}}));
+  handleTxnPayer = (e) => this.setState(s=>({txnForm:{...s.txnForm, payer:e.target.value}}));
+  handleTxnAccount = (e) => { const v = e.target.value; if (v==='__add') { this.setState({addingAccount:true, newAccountName:''}); } else { this.setState(s=>({txnForm:{...s.txnForm, account:v}})); } };
+  handleNewAccountName = (e) => this.setState({newAccountName:e.target.value});
+  cancelNewAccount = () => this.setState({addingAccount:false, newAccountName:''});
+  saveNewAccount = async () => {
+    const name = this.state.newAccountName.trim();
+    if (!name) return;
+    try {
+      const rows = await this.rest('/ledger_accounts', { method:'POST', body:{ name } });
+      const a = rows[0];
+      this.setState(s=>({accounts:[...s.accounts, {id:a.id, name:a.name}].sort((x,y)=>x.name.localeCompare(y.name)), addingAccount:false, newAccountName:'', txnError:'', txnForm:{...s.txnForm, account:a.name}}));
+    } catch (e) { this.setState({txnError:(e.message||'Could not add account')+' \u2014 run ledger-accounts-migration.sql in Supabase first.'}); }
+  };
+  saveTxn = async () => {
+    const f = this.state.txnForm;
+    if (!f.businessId || !f.date || !f.category || !f.amount || Number(f.amount) <= 0) return;
+    const body = { business_id:f.businessId, date:f.date, type:f.type, category:f.category, amount:Number(f.amount), note:f.note, payer:(f.payer||'').trim(), account:f.account||'Cash' };
+    try {
+      const editingId = this.state.editingTxnId;
+      const rows = editingId
+        ? await this.rest('/ledger_transactions?id=eq.'+editingId, { method:'PATCH', body })
+        : await this.rest('/ledger_transactions', { method:'POST', body });
+      const t = rows[0];
+      const rec = { id:t.id, businessId:t.business_id, date:t.date, type:t.type, category:t.category, amount:Number(t.amount), note:t.note||'', payer:t.payer||'', account:t.account||'Cash' };
+      this.setState(s=>{
+        const transactions = editingId ? s.transactions.map(x=>x.id===editingId?rec:x) : [...s.transactions, rec];
+        const parts = rec.date.split('-').map(Number);
+        return {transactions, showTxnModal:false, editingTxnId:null, txnError:'', period:{...s.period, year:parts[0], quarter:Math.ceil(parts[1]/3)}};
+      });
+    } catch (e) { this.setState({txnError:(e.message||'Save failed')+' \u2014 if it mentions payer or account, run ledger-accounts-migration.sql in Supabase.'}); }
+  };
+  deleteTxn = async (id) => {
+    if (!window.confirm('Delete this transaction?')) return;
+    try {
+      await this.rest('/ledger_transactions?id=eq.'+id, { method:'DELETE' });
+      this.setState(s=>({transactions:s.transactions.filter(t=>t.id!==id)}));
+    } catch (e) { this.setState({authError:e.message}); }
+  };
+  deleteEditingTxn = () => { if (this.state.editingTxnId) this.deleteTxn(this.state.editingTxnId); this.setState({showTxnModal:false, editingTxnId:null}); };
+
+  openManageAccounts = () => this.setState(s=>({showAcctModal:true, acctError:'', acctSaved:false, acctDrafts:s.accounts.map(a=>({id:a.id, name:a.name, businessId:a.businessId||'', opening:String(a.openingBalance||0)})), newAcct:{name:'', businessId:s.currentBusiness||'', opening:''}}));
+  editDraft(id, patch){ this.setState(s=>({acctDrafts:s.acctDrafts.map(d=>d.id===id?{...d,...patch}:d)})); }
+  handleNewAcctName = (e)=>this.setState(s=>({newAcct:{...s.newAcct, name:e.target.value}}));
+  handleNewAcctBiz = (e)=>{ const v=e.target.value; this.setState(s=>({newAcct:{...s.newAcct, businessId: v===''?'':(/^\d+$/.test(v)?Number(v):v)}})); };
+  handleNewAcctOpening = (e)=>this.setState(s=>({newAcct:{...s.newAcct, opening:e.target.value}}));
+  saveAccounts = async () => {
+    try {
+      for (const d of this.state.acctDrafts) {
+        if (!d.name.trim()) continue;
+        await this.rest('/ledger_accounts?id=eq.'+d.id, { method:'PATCH', body:{ name:d.name.trim(), business_id: d.businessId===''?null:d.businessId, opening_balance:Number(d.opening)||0 } });
+      }
+      const na = this.state.newAcct;
+      if (na.name.trim()) await this.rest('/ledger_accounts', { method:'POST', body:{ name:na.name.trim(), business_id: na.businessId===''?null:na.businessId, opening_balance:Number(na.opening)||0 } });
+      const accounts = await this.rest('/ledger_accounts?select=*&order=name');
+      const accts = (accounts||[]).map(a=>({ id:a.id, name:a.name, openingBalance:Number(a.opening_balance||0), businessId:a.business_id||null }));
+      this.setState(s=>({accounts:accts, showAcctModal:false, acctSaved:true,
+        acctDrafts:accts.map(a=>({id:a.id, name:a.name, businessId:a.businessId||'', opening:String(a.openingBalance||0)})),
+        newAcct:{name:'', businessId:s.newAcct.businessId, opening:''}}));
+    } catch (e) { this.setState({acctError:(e.message||'Save failed')+' \u2014 run the updated ledger-accounts-migration.sql in Supabase first.'}); }
+  };
+  deleteAccount = async (id) => {
+    if (!window.confirm('Delete this account? Past transactions keep their account label.')) return;
+    try { await this.rest('/ledger_accounts?id=eq.'+id, { method:'DELETE' }); this.setState(s=>({accounts:s.accounts.filter(a=>a.id!==id), acctDrafts:s.acctDrafts.filter(d=>d.id!==id)})); }
+    catch (e) { this.setState({acctError:e.message}); }
+  };
+  openAddAsset = () => {
+    const biz = this.state.currentBusiness !== 'all' ? this.state.currentBusiness : '';
+    this.setState({showAssetModal:true, assetForm:{businessId:biz, kind:'asset', name:'', value:''}});
+  };
+  setAssetKindAsset = () => this.setState(s=>({assetForm:{...s.assetForm, kind:'asset'}}));
+  setAssetKindLiability = () => this.setState(s=>({assetForm:{...s.assetForm, kind:'liability'}}));
+  handleAssetBizChange = (e) => { const v = e.target.value; const id = /^\d+$/.test(v) ? Number(v) : v; this.setState(s=>({assetForm:{...s.assetForm, businessId:id}})); };
+  handleAssetName = (e) => this.setState(s=>({assetForm:{...s.assetForm, name:e.target.value}}));
+  handleAssetValue = (e) => this.setState(s=>({assetForm:{...s.assetForm, value:e.target.value}}));
+  saveAsset = async () => {
+    const f = this.state.assetForm;
+    if (!f.businessId || !f.name.trim() || f.value === '') return;
+    try {
+      const rows = await this.rest('/ledger_assets', { method:'POST', body:{ business_id:f.businessId, kind:f.kind, name:f.name.trim(), value:Number(f.value) } });
+      const a = rows[0];
+      const rec = { id:a.id, businessId:a.business_id, kind:a.kind, name:a.name, value:Number(a.value) };
+      this.setState(s=>({assets:[...s.assets, rec], showAssetModal:false}));
+    } catch (e) { this.setState({authError:e.message}); }
+  };
+  deleteAsset = async (id) => {
+    if (!window.confirm('Delete this entry?')) return;
+    try {
+      await this.rest('/ledger_assets?id=eq.'+id, { method:'DELETE' });
+      this.setState(s=>({assets:s.assets.filter(a=>a.id!==id)}));
+    } catch (e) { this.setState({authError:e.message}); }
+  };
+
+  renderVals(){
+    const s = this.state;
+    if (s.authStatus !== 'ready') {
+      return { isAuthReady:false, isAuthLoading: s.authStatus==='loading', isAuthDenied: s.authStatus!=='loading', authError: s.authError };
+    }
+    const scopeBiz = this.scopeBusinesses();
+    const scopeIds = scopeBiz.map(b=>b.id);
+
+    const businessList = s.businesses.map(b=>({
+      id:b.id, name:b.name, typeLabel:BIZ_TYPES[b.type].label, dotColor:BIZ_TYPES[b.type].dot,
+      rowStyle:this.rowStyle(s.currentBusiness===b.id), fontWeight: s.currentBusiness===b.id?700:500,
+      onSelect: ()=>this.selectBusiness(b.id)
+    }));
+
+    const currentBizMeta = (()=>{ const b=this.bizById(s.currentBusiness); return {name:b?b.name:'', scheduleShort:b?BIZ_TYPES[b.type].scheduleShort:''}; })();
+
+    const allYears = Array.from(new Set(s.transactions.map(t=>Number(t.date.slice(0,4))))).sort((a,b)=>b-a);
+    const periodYearOptions = allYears.length ? allYears : [s.period.year];
+    const quarterOptions = [{value:1,label:'Q1 (Jan–Mar)'},{value:2,label:'Q2 (Apr–Jun)'},{value:3,label:'Q3 (Jul–Sep)'},{value:4,label:'Q4 (Oct–Dec)'}];
+    const periodLabel = s.period.mode==='quarter' ? ('Q'+s.period.quarter+' '+s.period.year) : String(s.period.year);
+
+    const scopeTxnsPeriod = s.transactions.filter(t=> scopeIds.includes(t.businessId) && this.withinPeriod(t.date));
+    const sum = (arr,type,cat)=>arr.filter(t=>t.type===type && (!cat||t.category===cat)).reduce((a,t)=>a+t.amount,0);
+    const kpiIncome = sum(scopeTxnsPeriod,'income');
+    const kpiExpense = sum(scopeTxnsPeriod,'expense');
+    const kpiNet = kpiIncome - kpiExpense;
+    const periodEndDate = this.periodEnd();
+    const kpiCash = scopeIds.reduce((tot,bid)=> tot + this.computedAccounts(bid).reduce((sum,a)=> sum + ((a.businessId===bid)?a.openingBalance:0) + this.acctBalance(bid, a.name, periodEndDate), 0), 0);
+
+    const monthly = Array.from({length:12},(_,i)=>{
+      const txns = s.transactions.filter(t=> scopeIds.includes(t.businessId) && Number(t.date.slice(0,4))===s.period.year && Number(t.date.slice(5,7))-1===i);
+      return {label:MONTHS[i], income:sum(txns,'income'), expense:sum(txns,'expense')};
+    });
+    const maxVal = Math.max(1, ...monthly.map(m=>Math.max(m.income,m.expense)));
+    const monthlyChart = monthly.map(m=>({label:m.label, incomeH: Math.round(m.income/maxVal*100), expenseH: Math.round(m.expense/maxVal*100)}));
+
+    const expenseCatTotals = {};
+    scopeTxnsPeriod.filter(t=>t.type==='expense').forEach(t=>{ expenseCatTotals[t.category]=(expenseCatTotals[t.category]||0)+t.amount; });
+    const topExpenseArr = Object.entries(expenseCatTotals).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const maxExpense = Math.max(1, ...topExpenseArr.map(e=>e[1]));
+    const topExpenseCategories = topExpenseArr.map(([category,amount])=>({category, amountLabel:fmtMoney(amount), pct: Math.round(amount/maxExpense*100)}));
+
+    const recentTxns = [...scopeTxnsPeriod].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6).map(t=>({
+      category:t.category, dateLabel:fmtDateLabel(t.date), bizName:this.bizName(t.businessId), showBiz:false,
+      amountLabel:(t.type==='income'?'+':'-')+fmtMoney(t.amount), amountColor: t.type==='income'?ACCENT:NEG
+    }));
+
+    const filteredTxnsList = s.transactions.filter(t=>
+      scopeIds.includes(t.businessId) && this.withinPeriod(t.date) &&
+      (s.filterType==='all'||t.type===s.filterType) &&
+      (s.filterCategory==='all'||t.category===s.filterCategory) &&
+      (s.search.trim()==='' || (t.category+' '+(t.note||'')+' '+(t.payer||'')+' '+(t.account||'')+' '+this.bizName(t.businessId)).toLowerCase().includes(s.search.toLowerCase()))
+    ).sort((a,b)=>b.date.localeCompare(a.date)).map(t=>({
+      id:t.id, dateLabel:fmtDateLabel(t.date), bizName:this.bizName(t.businessId), showBiz:false,
+      category:t.category, note:t.note, subLabel:[t.payer, t.account, t.note].filter(Boolean).join(' \u00b7 '), typeLabel:t.type==='income'?'Income':'Expense',
+      typeBg: t.type==='income'?ACCENT_SOFT:NEG_SOFT, typeColor: t.type==='income'?'oklch(0.32 0.06 150)':'oklch(0.36 0.08 25)',
+      amountLabel:(t.type==='income'?'+':'-')+fmtMoney(t.amount), amountColor: t.type==='income'?ACCENT:NEG,
+      onEdit:()=>this.openEditTxn(t.id), onDelete:()=>this.deleteTxn(t.id)
+    }));
+
+    const catSet = new Set();
+    scopeBiz.forEach(b=>{ BIZ_TYPES[b.type].income.forEach(c=>catSet.add(c)); BIZ_TYPES[b.type].expense.forEach(c=>catSet.add(c)); });
+    const categoryFilterOptions = Array.from(catSet).sort();
+
+    // Reports sections
+    const sectionsBiz = scopeBiz;
+    const incomeStatementSections = sectionsBiz.map(b=>{
+      const txns = s.transactions.filter(t=>t.businessId===b.id && this.withinPeriod(t.date));
+      const def = BIZ_TYPES[b.type];
+      const incomeRows = def.income.map(c=>({category:c, amount:sum(txns,'income',c)})).filter(r=>r.amount>0).map(r=>({...r, amountLabel:fmtMoney(r.amount)}));
+      const expenseRows = def.expense.map(c=>({category:c, amount:sum(txns,'expense',c)})).filter(r=>r.amount>0).map(r=>({...r, amountLabel:fmtMoney(r.amount)}));
+      const incomeTotal = sum(txns,'income'), expenseTotal = sum(txns,'expense'), net = incomeTotal-expenseTotal;
+      return {id:b.id, name:b.name, scheduleShort:def.scheduleShort, incomeRows, incomeTotalLabel:fmtMoney(incomeTotal), expenseRows, expenseTotalLabel:fmtMoney(expenseTotal), netLabel:fmtMoney(net), netColor: net>=0?ACCENT:NEG, _incomeTotal:incomeTotal, _expenseTotal:expenseTotal, _net:net};
+    });
+
+    const balanceSheetSections = sectionsBiz.map(b=>{
+      const def = BIZ_TYPES[b.type];
+      const acctNamesLower = new Set(s.accounts.map(a=>a.name.toLowerCase()));
+      const rows = s.assets.filter(a=>a.businessId===b.id);
+      const cashRows = this.computedAccounts(b.id).map(a=>{
+        const value = ((a.businessId===b.id)?a.openingBalance:0) + this.acctBalance(b.id, a.name, periodEndDate);
+        return {name:a.name, value, valueLabel:fmtMoney(value)};
+      }).filter(r=>r.value!==0 || r.name.toLowerCase()==='cash');
+      const cashTotal = cashRows.reduce((a,x)=>a+x.value,0);
+      const assetRows = rows.filter(r=>r.kind==='asset' && !/cash/i.test(r.name) && !acctNamesLower.has(r.name.toLowerCase())).map(r=>({...r, valueLabel:fmtMoney(r.value), onDelete:()=>this.deleteAsset(r.id)}));
+      const assetTotal = cashTotal + assetRows.reduce((a,x)=>a+x.value,0);
+      const liabilityRows = rows.filter(r=>r.kind==='liability').map(r=>({...r, valueLabel:fmtMoney(r.value), onDelete:()=>this.deleteAsset(r.id)}));
+      const liabilityTotal = liabilityRows.reduce((a,x)=>a+x.value,0);
+      const equity = assetTotal - liabilityTotal;
+      return {id:b.id, name:b.name, scheduleShort:def.scheduleShort, cashRows, cashTotalLabel:fmtMoney(cashTotal), assetRows, assetTotalLabel:fmtMoney(assetTotal), liabilityRows, liabilityTotalLabel:fmtMoney(liabilityTotal), equityLabel:fmtMoney(equity)};
+    });
+
+    const months = s.period.mode==='quarter' ? [(s.period.quarter-1)*3,(s.period.quarter-1)*3+1,(s.period.quarter-1)*3+2] : [0,1,2,3,4,5,6,7,8,9,10,11];
+    const cashFlowSections = sectionsBiz.map(b=>{
+      const def = BIZ_TYPES[b.type];
+      const startCash = this.startCashFor(b.id);
+      let running = startCash;
+      const rows = months.map(mi=>{
+        const txns = s.transactions.filter(t=>t.businessId===b.id && Number(t.date.slice(0,4))===s.period.year && Number(t.date.slice(5,7))-1===mi);
+        const inc = sum(txns,'income'), exp = sum(txns,'expense'), net = inc-exp;
+        running += net;
+        return {label:MONTHS[mi]+' '+s.period.year, incomeLabel:fmtMoney(inc), expenseLabel:fmtMoney(exp), netLabel:(net>=0?'+':'')+fmtMoney(net), netColor: net>=0?ACCENT:NEG, runningLabel:fmtMoney(running), _net:net};
+      });
+      const totalNet = rows.reduce((a,x)=>a+x._net,0);
+      return {id:b.id, name:b.name, scheduleShort:def.scheduleShort, startCashLabel:fmtMoney(startCash), rows, totalNetLabel:(totalNet>=0?'+':'')+fmtMoney(totalNet), endCashLabel:fmtMoney(running)};
+    });
+
+    const taxSections = sectionsBiz.map(b=>{
+      const txns = s.transactions.filter(t=>t.businessId===b.id && this.withinPeriod(t.date));
+      const def = BIZ_TYPES[b.type];
+      const incomeRows = def.income.map(c=>({category:c, amountLabel:fmtMoney(sum(txns,'income',c))}));
+      const expenseRows = def.expense.map(c=>({category:c, amountLabel:fmtMoney(sum(txns,'expense',c))}));
+      const incomeTotal = sum(txns,'income'), expenseTotal = sum(txns,'expense'), net = incomeTotal-expenseTotal;
+      return {id:b.id, name:b.name, scheduleFull:def.scheduleFull, incomeRows, incomeTotalLabel:fmtMoney(incomeTotal), expenseRows, expenseTotalLabel:fmtMoney(expenseTotal), netLine:'Net profit / loss ('+def.scheduleShort+')', netLabel:fmtMoney(net), netColor: net>=0?ACCENT:NEG};
+    });
+
+    // txn form category options
+    const accountOptions = ['Cash', ...s.accounts.map(a=>a.name).filter(x=>x.toLowerCase()!=='cash')];
+    const acctDraftList = s.acctDrafts.map(d=>({
+      id:d.id, name:d.name, businessId:d.businessId, opening:d.opening,
+      onName:(e)=>this.editDraft(d.id,{name:e.target.value}),
+      onBiz:(e)=>{const v=e.target.value; this.editDraft(d.id,{businessId: v===''?'':(/^\d+$/.test(v)?Number(v):v)});},
+      onOpening:(e)=>this.editDraft(d.id,{opening:e.target.value}),
+      onDelete:()=>this.deleteAccount(d.id)
+    }));
+    const txnBiz = this.bizById(s.txnForm.businessId);
+    const txnFormCategoryOptions = txnBiz ? BIZ_TYPES[txnBiz.type][s.txnForm.type] : [];
+
+    return {
+      isAuthReady: true, isAuthLoading:false, isAuthDenied:false, authError:'',
+      navDashboardStyle: this.navStyle(s.view==='dashboard'),
+      navTransactionsStyle: this.navStyle(s.view==='transactions'),
+      navReportsStyle: this.navStyle(s.view==='reports'),
+      goDashboard: this.goDashboard, goTransactions: this.goTransactions, goReports: this.goReports,
+      businessList, openAddBusiness: this.openAddBusiness,
+
+      currentBizMeta,
+      isDashboard: s.view==='dashboard', isTransactions: s.view==='transactions', isReports: s.view==='reports', isAccounts: s.view==='accounts',
+      navAccountsStyle: this.navStyle(s.view==='accounts'), goAccounts: this.goAccounts, acctSaved: s.acctSaved && !s.acctError,
+
+      modeYearStyle: this.pillStyle(s.period.mode==='year'), modeQuarterStyle: this.pillStyle(s.period.mode==='quarter'),
+      setModeYear: this.setModeYear, setModeQuarter: this.setModeQuarter,
+      isQuarterMode: s.period.mode==='quarter', quarterOptions, period: s.period,
+      handleQuarterChange: this.handleQuarterChange, handleYearChange: this.handleYearChange,
+      periodYearOptions, periodLabel, openAddTxn: this.openAddTxn,
+
+      kpiIncomeLabel: fmtMoney(kpiIncome), kpiExpenseLabel: fmtMoney(kpiExpense),
+      kpiNetLabel: fmtMoney(kpiNet), kpiNetColor: kpiNet>=0?ACCENT:NEG, kpiCashLabel: fmtMoney(kpiCash),
+      monthlyChart,
+      hasTopExpenses: topExpenseCategories.length>0, noTopExpenses: topExpenseCategories.length===0, topExpenseCategories,
+      hasRecent: recentTxns.length>0, noRecent: recentTxns.length===0, recentTxns,
+
+      search: s.search, handleSearchChange: this.handleSearchChange,
+      filterType: s.filterType, handleFilterTypeChange: this.handleFilterTypeChange,
+      filterCategory: s.filterCategory, handleFilterCategoryChange: this.handleFilterCategoryChange,
+      categoryFilterOptions, showBizColumn: false, txnGridExtra: '',
+      hasFilteredTxns: filteredTxnsList.length>0, noFilteredTxns: filteredTxnsList.length===0, filteredTxnsList,
+
+      reportsTab: s.reportsTab,
+      tabIncomeStyle: this.tabStyle(s.reportsTab==='income'), tabBalanceStyle: this.tabStyle(s.reportsTab==='balance'),
+      tabCashflowStyle: this.tabStyle(s.reportsTab==='cashflow'), tabTaxStyle: this.tabStyle(s.reportsTab==='tax'),
+      setTabIncome: this.setTabIncome, setTabBalance: this.setTabBalance, setTabCashflow: this.setTabCashflow, setTabTax: this.setTabTax,
+      isTabIncome: s.reportsTab==='income', isTabBalance: s.reportsTab==='balance', isTabCashflow: s.reportsTab==='cashflow', isTabTax: s.reportsTab==='tax',
+      printReport: this.printReport,
+
+      incomeStatementSections,
+
+      balanceSheetSections, openAddAsset: this.openAddAsset,
+
+      cashFlowSections,
+      taxSections,
+
+      businesses: s.businesses, hasBusinesses: s.businesses.length>0, noBusinesses: s.businesses.length===0,
+      refreshData: this.refreshData, refreshLabel: s.refreshing ? 'Refreshing…' : 'Refresh data', refreshError: s.refreshError || '', diag: s.diag || '',
+      showAddBusiness: s.showAddBusiness, newBizName: s.newBizName,
+      handleNewBizName: this.handleNewBizName,
+      bizTypeFarmStyle: this.chipStyle(s.newBizType==='farm'), bizTypeRentalStyle: this.chipStyle(s.newBizType==='rental'), bizTypeOtherStyle: this.chipStyle(s.newBizType==='other'),
+      setBizTypeFarm: this.setBizTypeFarm, setBizTypeRental: this.setBizTypeRental, setBizTypeOther: this.setBizTypeOther,
+      bizSaveOpacity: s.newBizName.trim() ? 1 : 0.5,
+      bizSavePE: s.newBizName.trim() ? 'auto' : 'none',
+      saveBusiness: this.saveBusiness, closeModals: this.closeModals, stopProp: this.stopProp,
+
+      showTxnModal: s.showTxnModal, txnForm: s.txnForm, txnFormCategoryOptions,
+      txnModalTitle: s.editingTxnId ? 'Edit transaction' : 'Add transaction',
+      isEditingTxn: !!s.editingTxnId, isNotEditingTxn: !s.editingTxnId,
+      txnTypeIncomeStyle: this.chipStyle(s.txnForm.type==='income'), txnTypeExpenseStyle: this.chipStyle(s.txnForm.type==='expense'),
+      setTxnTypeIncome: this.setTxnTypeIncome, setTxnTypeExpense: this.setTxnTypeExpense,
+      handleTxnBizChange: this.handleTxnBizChange, handleTxnDate: this.handleTxnDate, handleTxnAmount: this.handleTxnAmount,
+      handleTxnCategory: this.handleTxnCategory, handleTxnNote: this.handleTxnNote,
+      txnSaveOpacity: (s.txnForm.businessId && s.txnForm.date && s.txnForm.category && Number(s.txnForm.amount)>0) ? 1 : 0.5,
+      txnSavePE: (s.txnForm.businessId && s.txnForm.date && s.txnForm.category && Number(s.txnForm.amount)>0) ? 'auto' : 'none',
+      saveTxn: this.saveTxn, deleteEditingTxn: this.deleteEditingTxn,
+      handleTxnPayer: this.handleTxnPayer, handleTxnAccount: this.handleTxnAccount,
+      accountOptions, addingAccount: s.addingAccount, notAddingAccount: !s.addingAccount,
+      newAccountName: s.newAccountName, handleNewAccountName: this.handleNewAccountName,
+      saveNewAccount: this.saveNewAccount, cancelNewAccount: this.cancelNewAccount,
+      txnError: s.txnError || '',
+      payerLabel: s.txnForm.type==='income' ? 'Received from (optional)' : 'Paid to (optional)',
+      accountLabel: s.txnForm.type==='income' ? 'Account received in' : 'Account paid from',
+
+      showAssetModal: s.showAssetModal, assetForm: s.assetForm,
+      assetKindAssetStyle: this.chipStyle(s.assetForm.kind==='asset'), assetKindLiabilityStyle: this.chipStyle(s.assetForm.kind==='liability'),
+      setAssetKindAsset: this.setAssetKindAsset, setAssetKindLiability: this.setAssetKindLiability,
+      handleAssetBizChange: this.handleAssetBizChange, handleAssetName: this.handleAssetName, handleAssetValue: this.handleAssetValue,
+      assetSaveOpacity: (s.assetForm.businessId && s.assetForm.name.trim() && s.assetForm.value!=='') ? 1 : 0.5,
+      assetSavePE: (s.assetForm.businessId && s.assetForm.name.trim() && s.assetForm.value!=='') ? 'auto' : 'none',
+      saveAsset: this.saveAsset,
+      showAcctModal: s.showAcctModal, acctError: s.acctError || '', acctDraftList,
+      newAcct: s.newAcct, handleNewAcctName: this.handleNewAcctName, handleNewAcctBiz: this.handleNewAcctBiz, handleNewAcctOpening: this.handleNewAcctOpening,
+      openManageAccounts: this.openManageAccounts, saveAccounts: this.saveAccounts
+    };
+  }
+
+  navStyle(active){
+    return 'padding:9px 10px;border-radius:8px;font-size:13.5px;cursor:pointer;margin-bottom:2px;font-weight:'+(active?700:500)+';background:'+(active?ACCENT_SOFT:'transparent')+';color:'+(active?TEXT:TEXT_SEC);
+  }
+  rowStyle(active){
+    return 'display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:8px;cursor:pointer;margin-bottom:2px;background:'+(active?ACCENT_SOFT:'transparent');
+  }
+  pillStyle(active){
+    return 'padding:6px 14px;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;background:'+(active?'white':'transparent')+';color:'+(active?TEXT:TEXT_SEC)+';box-shadow:'+(active?'0 1px 2px rgba(0,0,0,0.08)':'none');
+  }
+  tabStyle(active){
+    return 'padding:8px 16px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;background:'+(active?'white':'transparent')+';color:'+(active?TEXT:TEXT_SEC)+';box-shadow:'+(active?'0 1px 2px rgba(0,0,0,0.08)':'none');
+  }
+  chipStyle(active){
+    return 'flex:1;text-align:center;padding:9px 10px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:'+(active?ACCENT_SOFT:'oklch(0.96 0.005 95)')+';color:'+(active?'oklch(0.32 0.06 150)':TEXT_SEC)+';border:1px solid '+(active?'transparent':'oklch(0.9 0.006 95)');
+  }
+}
+
+</script>
+
+
+
+</body></html>

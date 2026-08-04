@@ -1,0 +1,201 @@
+@import "tailwindcss";
+
+/* ============================================================================
+   Farm app — Herd design language
+
+   Almost none of this touches App.jsx. Tailwind v4 is token-driven, so the
+   2,514 lines of existing utility classes get redirected by redefining the
+   tokens underneath them: `bg-green-600` still says bg-green-600 in the JSX,
+   it just resolves to ink now.
+
+   The palette is Herd's: a warm near-black, a registration-paper cream, one
+   field-drab mineral tone, and a hairline gray. Colour is structural.
+
+   NOTE ON YELLOW. Herd reserves ear-tag yellow (#F2C230) for one thing only —
+   an animal inside a drug withdrawal period, where the milk or meat cannot be
+   sold. Warnings in this app are mapped to a muted ochre instead. With both
+   apps open on the same screen, yellow has to keep meaning exactly one thing.
+   ========================================================================== */
+
+@theme {
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
+
+  /* Neutrals — warm, not blue-gray. gray-900 is Herd's ink, gray-300 its rule. */
+  --color-gray-50:  #f4f1e9;
+  --color-gray-100: #efece3;
+  --color-gray-200: #e4e0d4;
+  --color-gray-300: #d6d2c6;
+  --color-gray-400: #a9a496;
+  --color-gray-500: #767263;
+  --color-gray-600: #5f5b4e;
+  --color-gray-700: #43443c;
+  --color-gray-800: #2a2b25;
+  --color-gray-900: #191a16;
+  --color-gray-950: #101109;
+
+  /* Green is the app's primary action colour. 600 becomes ink and 700 the
+     mineral tone, so every `bg-green-600 hover:bg-green-700` button now goes
+     black to olive — the same move as Herd's solid button. */
+  --color-green-50:  #e9ebe1;
+  --color-green-100: #dfe0d3;
+  --color-green-200: #c7cab5;
+  --color-green-300: #a9ae93;
+  --color-green-400: #868c6e;
+  --color-green-500: #6b7156;
+  --color-green-600: #191a16;
+  --color-green-700: #5c6248;
+  --color-green-800: #4a4f3a;
+  --color-green-900: #3a3e2e;
+
+  /* Cyan carries focus rings, blue carries informational badges. Both go
+     neutral — an interface this dense does not need two accent hues. */
+  --color-cyan-50:  #efece3;
+  --color-cyan-100: #e4e0d4;
+  --color-cyan-200: #d6d2c6;
+  --color-cyan-400: #767263;
+  --color-cyan-500: #191a16;
+  --color-cyan-600: #191a16;
+  --color-cyan-700: #43443c;
+  --color-cyan-800: #2a2b25;
+
+  --color-blue-50:  #efece3;
+  --color-blue-100: #e4e0d4;
+  --color-blue-200: #d6d2c6;
+  --color-blue-400: #767263;
+  --color-blue-500: #5c6248;
+  --color-blue-600: #43443c;
+  --color-blue-700: #2a2b25;
+  --color-blue-800: #191a16;
+  --color-blue-900: #191a16;
+
+  /* Red stays genuinely red. Destructive and error states are the one place a
+     distinct hue is doing real work. */
+  --color-red-50:  #f6e9e6;
+  --color-red-100: #eed5cf;
+  --color-red-200: #e0b8ae;
+  --color-red-300: #d4a99f;
+  --color-red-400: #b06a5c;
+  --color-red-500: #8a2f22;
+  --color-red-600: #8a2f22;
+  --color-red-700: #7d2a20;
+  --color-red-800: #6b241b;
+  --color-red-900: #551c15;
+
+  /* Warnings. Deliberately ochre, not the reserved hazard yellow. */
+  --color-amber-50:  #f3ebd8;
+  --color-amber-100: #e9dcbc;
+  --color-amber-300: #d3be86;
+  --color-amber-600: #8a6a2e;
+  --color-amber-700: #75591f;
+  --color-amber-800: #5e4718;
+
+  --color-orange-50:  #f3ebd8;
+  --color-orange-100: #e9dcbc;
+  --color-orange-200: #ddcda2;
+  --color-orange-300: #d3be86;
+  --color-orange-500: #8a6a2e;
+  --color-orange-600: #8a6a2e;
+  --color-orange-700: #75591f;
+  --color-orange-800: #5e4718;
+
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+  --radius-3xl: 0;
+  --radius-4xl: 0;
+
+  --shadow-2xs: none;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-xl: none;
+  --shadow-2xl: none;
+}
+
+@layer base {
+  /* Tailwind v4 defaults an unqualified `border` to currentColor, so every
+     uncoloured border takes the text colour. The app writes bare `border` 84
+     times; without this they all come out near-black instead of hairline. */
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-gray-300);
+  }
+
+  body {
+    background: var(--color-gray-100);
+    color: var(--color-gray-900);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   Unlayered rules. These sit outside @layer, so they beat the utility classes
+   in App.jsx without !important and without any JSX edits.
+   -------------------------------------------------------------------------- */
+
+/* rounded-full is hardcoded in v4 rather than read from a token, so it has to
+   be flattened here rather than in @theme above. */
+[class*="rounded"] {
+  border-radius: 0;
+}
+
+[class*="shadow-"] {
+  box-shadow: none;
+}
+
+/* The core typographic idea: large serif against small letterspaced sans.
+   This overrides font-bold on headings — Herd sets its display face at weight
+   400 and lets size carry the emphasis. */
+.text-xl,
+.text-2xl,
+.text-3xl,
+.text-4xl {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+/* Figures read as tabular everywhere — quantities, prices, counts. */
+input[type="number"],
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  font-family: var(--font-sans);
+  background: var(--color-gray-100);
+  border: 1px solid var(--color-gray-300);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--color-gray-900);
+  box-shadow: inset 0 0 0 1px var(--color-gray-900);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-gray-900);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

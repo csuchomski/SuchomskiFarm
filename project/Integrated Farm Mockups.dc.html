@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"><style>
+body{margin:0;background:#e8e4d8;font-family:"IBM Plex Sans",system-ui,sans-serif;color:#191a16;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+*,*::before,*::after{box-sizing:border-box;border-radius:0}
+a{color:#5c6248}a:hover{color:#191a16}
+.dv-turn{padding:44px 48px 36px;border-bottom:1px solid #d6d2c6;scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:12px;margin:0 0 24px}
+.dv-tid{font:500 11px/1 "IBM Plex Mono",monospace;padding:4px 7px;background:#191a16;color:#efece3;text-decoration:none;letter-spacing:.06em}
+.dv-tname{font:400 17px/1.2 Newsreader,serif;color:#191a16}
+.dv-opts{display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}
+.dv-oid{font:500 11px/1 "IBM Plex Mono",monospace;padding:4px 7px;background:#d6d2c6;color:#191a16;text-decoration:none;letter-spacing:.06em}
+.dv-olabel{display:flex;align-items:baseline;gap:10px;font:400 13px/1.3 "IBM Plex Sans",sans-serif;color:#43443c}
+.dv-card{background:#efece3;border:1px solid #d6d2c6;overflow:hidden}
+.dv-opt:target .dv-oid{background:#191a16;color:#efece3}
+.dv-next{margin:28px 0 0;font:400 13px/1.7 "IBM Plex Sans",sans-serif;color:#767263}
+.mono{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.serif{font-family:Newsreader,serif;font-weight:400;letter-spacing:-.01em;line-height:1.15}
+.eyebrow{font:500 11px/1 "IBM Plex Sans",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#767263}
+</style></helmet>
+
+<section class="dv-turn" id="t2">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Store and Books, built inside <a class="dv-oid" href="#1a">1a</a>’s rail shell</span></div>
+
+<div class="dv-opts">
+
+  <!-- ═══════════════ 2a — Store: products & inventory ═══════════════ -->
+  <div class="dv-opt" id="2a">
+    <div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>Store · Products &amp; inventory — where a milking becomes something sellable · desktop 1280</div>
+    <div class="dv-card" style="width:1280px">
+      <div style="height:1165px;background:#efece3;display:flex;flex-direction:column">
+
+        <div style="height:56px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid #d6d2c6">
+          <div class="serif" style="font-size:22px;letter-spacing:-.02em">Suchomski<span style="color:#5c6248">.</span></div>
+          <div style="display:flex;align-items:center;gap:20px">
+            <div style="display:flex;align-items:center;gap:8px;border:1px solid #d6d2c6;padding:7px 11px;width:300px">
+              <span class="mono" style="font-size:13px;color:#a9a496">⌕</span>
+              <span style="font:400 13px/1 'IBM Plex Sans',sans-serif;color:#a9a496">Search everything</span>
+            </div>
+            <div class="eyebrow">Family Farm · 41 head · Chris</div>
+          </div>
+        </div>
+
+        <div style="flex:1;display:flex;min-height:0">
+
+          <div style="width:208px;flex:none;border-right:1px solid #d6d2c6;padding:24px 0;display:flex;flex-direction:column">
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Today</div>
+            <div class="eyebrow" style="padding:24px 16px 8px">Herd</div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent;display:flex;justify-content:space-between">Animals<span class="mono" style="color:#767263">41</span></div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Milkings</div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent;display:flex;justify-content:space-between">Health<span style="width:9px;height:9px;background:#f2c230;border:1px solid #191a16;align-self:center"></span></div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Lactations</div>
+            <div class="eyebrow" style="padding:24px 16px 8px">Store</div>
+            <div style="padding:12px 16px;font-size:13px;border-left:2px solid #5c6248;font-weight:500;background:#e8e4d8;display:flex;justify-content:space-between">Products<span class="mono" style="color:#767263">7</span></div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent;display:flex;justify-content:space-between">Orders<span class="mono" style="color:#767263">6</span></div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Schedules</div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Customers</div>
+            <div class="eyebrow" style="padding:24px 16px 8px">Books</div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Transactions</div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Accounts</div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Balance sheet</div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Reports</div>
+            <div style="flex:1"></div>
+            <div style="padding:12px 16px;font-size:13px;color:#5c6248;border-top:1px solid #d6d2c6">Farm store ↗</div>
+          </div>
+
+          <div style="flex:1;min-width:0;padding:24px 32px 32px;overflow:hidden">
+
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding-bottom:16px;border-bottom:1px solid #d6d2c6">
+              <div>
+                <div class="eyebrow">Store · 7 products · 2 sold out</div>
+                <div class="serif" style="font-size:34px;margin-top:4px">Products</div>
+              </div>
+              <div style="display:flex;gap:8px">
+                <div style="min-height:44px;display:flex;align-items:center;padding:0 16px;border:1px solid #191a16;font:500 13px/1 'IBM Plex Sans',sans-serif">Forecast</div>
+                <div style="min-height:44px;display:flex;align-items:center;padding:0 16px;border:1px solid #191a16;background:#191a16;color:#efece3;font:500 13px/1 'IBM Plex Sans',sans-serif">New product</div>
+              </div>
+            </div>
+
+            <!-- product rowlist -->
+            <div style="display:grid;grid-template-columns:1fr 96px 96px 108px 108px;gap:12px;padding:16px 8px 8px;border-bottom:1px solid #d6d2c6" class="eyebrow">
+              <span>Product</span><span style="text-align:right">On hand</span><span style="text-align:right">Claimed</span><span style="text-align:right">Open to shop</span><span style="text-align:right">Held weekly</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 96px 96px 108px 108px;gap:12px;align-items:center;padding:12px 8px;border-bottom:1px solid #d6d2c6;background:#e8e4d8">
+              <span><span class="serif" style="font-size:17px">Raw milk</span> <span class="mono" style="font-size:13px;color:#767263">· $8.00 / gallon</span><br><span style="font-size:13px;color:#5c6248">from 9 cows in milk</span></span>
+              <span class="mono" style="text-align:right;font-size:15px">18.4</span>
+              <span class="mono" style="text-align:right;font-size:15px">11.0</span>
+              <span class="mono" style="text-align:right;font-size:15px;font-weight:500">7.4</span>
+              <span class="mono" style="text-align:right;font-size:15px;color:#8a6a2e">4.0</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 96px 96px 108px 108px;gap:12px;align-items:center;padding:12px 8px;border-bottom:1px solid #d6d2c6">
+              <span><span class="serif" style="font-size:17px">Eggs</span> <span class="mono" style="font-size:13px;color:#767263">· $6.50 / dozen</span><br><span style="font-size:13px;color:#8a6a2e">short by 3 dozen Friday</span></span>
+              <span class="mono" style="text-align:right;font-size:15px">14</span>
+              <span class="mono" style="text-align:right;font-size:15px">5</span>
+              <span class="mono" style="text-align:right;font-size:15px;font-weight:500">9</span>
+              <span class="mono" style="text-align:right;font-size:15px;color:#8a6a2e">6</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 96px 96px 108px 108px;gap:12px;align-items:center;padding:12px 8px;border-bottom:1px solid #d6d2c6">
+              <span><span class="serif" style="font-size:17px">Ground beef</span> <span class="mono" style="font-size:13px;color:#767263">· $9.00 / lb</span><br><span style="font-size:13px;color:#767263">traced per steer · next processing 12 Sep</span></span>
+              <span class="mono" style="text-align:right;font-size:15px;color:#767263">0</span>
+              <span class="mono" style="text-align:right;font-size:15px;color:#767263">0</span>
+              <span style="text-align:right"><span style="display:inline-flex;align-items:center;padding:2px 7px;border:1px solid #d6d2c6;background:#e8e4d8;color:#767263;font:500 11px/1.4 'IBM Plex Sans',sans-serif;letter-spacing:.08em;text-transform:uppercase">Sold out</span></span>
+              <span class="mono" style="text-align:right;font-size:15px;color:#767263">—</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 96px 96px 108px 108px;gap:12px;align-items:center;padding:12px 8px;border-bottom:1px solid #d6d2c6">
+              <span><span class="serif" style="font-size:17px">Honey</span> <span class="mono" style="font-size:13px;color:#767263">· $14.00 / quart</span></span>
+              <span class="mono" style="text-align:right;font-size:15px">11</span>
+              <span class="mono" style="text-align:right;font-size:15px">2</span>
+              <span class="mono" style="text-align:right;font-size:15px;font-weight:500">9</span>
+              <span class="mono" style="text-align:right;font-size:15px;color:#767263">—</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 96px 96px 108px 108px;gap:12px;align-items:center;padding:12px 8px;border-bottom:1px solid #d6d2c6">
+              <span><span class="serif" style="font-size:17px">Sweet corn</span> <span class="mono" style="font-size:13px;color:#767263">· $0.75 / ear</span><br><span style="font-size:13px;color:#767263">field crop · no animal source</span></span>
+              <span class="mono" style="text-align:right;font-size:15px">240</span>
+              <span class="mono" style="text-align:right;font-size:15px">96</span>
+              <span class="mono" style="text-align:right;font-size:15px;font-weight:500">144</span>
+              <span class="mono" style="text-align:right;font-size:15px;color:#767263">—</span>
+            </div>
+
+            <!-- selected product panel -->
+            <div style="border:1px solid #191a16;background:#e8e4d8;padding:20px;margin-top:24px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px">
+                <div class="serif" style="font-size:27px">Raw milk</div>
+                <span class="mono" style="font-size:13px;color:#767263">gallons · 3 decimal places</span>
+              </div>
+              <div style="font-size:13px;color:#43443c;margin-bottom:20px;max-width:68ch;text-wrap:pretty">Milk goes in pooled: the day’s gallons become one batch, and each cow’s share is recorded against her lactation in Herd rather than splitting inventory nine ways. Beef is the opposite — keep separate batches so a cut stays traceable to the steer.</div>
+
+              <div class="eyebrow" style="margin-bottom:10px">Add this morning’s milking</div>
+              <div style="display:grid;grid-template-columns:150px 1fr 120px 130px;gap:8px;margin-bottom:16px">
+                <div style="min-height:48px;display:flex;align-items:center;padding:0 12px;border:1px solid #d6d2c6;background:#efece3" class="mono">
+                  <span style="font-size:15px">2026-08-04</span>
+                </div>
+                <div style="min-height:48px;display:flex;align-items:center;padding:0 12px;border:1px solid #d6d2c6;background:#efece3">
+                  <span class="mono" style="font-size:15px;font-weight:500">18.400</span><span style="font-size:13px;color:#767263;margin-left:8px">gallons from 9 animals</span>
+                </div>
+                <div style="min-height:48px;display:flex;align-items:center;justify-content:center;border:1px solid #191a16;font:500 13px/1 'IBM Plex Sans',sans-serif">Per animal</div>
+                <div style="min-height:48px;display:flex;align-items:center;justify-content:center;border:1px solid #191a16;background:#191a16;color:#efece3;font:500 13px/1 'IBM Plex Sans',sans-serif">Add batch</div>
+              </div>
+
+              <!-- per-animal attribution -->
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#d6d2c6;border:1px solid #d6d2c6;margin-bottom:14px">
+                <div style="background:#efece3;padding:10px 12px;display:flex;align-items:center;gap:10px">
+                  <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #5c6248;background:#e8e4d8;font-size:13px;font-weight:500;flex:none">1042</span>
+                  <span style="flex:1;font-size:15px">Juniper</span><span class="mono" style="font-size:15px;font-weight:500">2.600</span>
+                </div>
+                <div style="background:#efece3;padding:10px 12px;display:flex;align-items:center;gap:10px">
+                  <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #5c6248;background:#e8e4d8;font-size:13px;font-weight:500;flex:none">1017</span>
+                  <span style="flex:1;font-size:15px">Clover</span><span class="mono" style="font-size:15px;font-weight:500">2.200</span>
+                </div>
+                <div style="background:#efece3;padding:10px 12px;display:flex;align-items:center;gap:10px">
+                  <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #a9a496;background:#e8e4d8;font-size:13px;font-weight:500;flex:none">1088</span>
+                  <span style="flex:1;font-size:15px">Marigold</span><span class="mono" style="font-size:15px;font-weight:500">1.900</span>
+                </div>
+                <div style="background:#efece3;padding:10px 12px;display:flex;align-items:center;gap:10px">
+                  <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #5c6248;background:#e8e4d8;font-size:13px;font-weight:500;flex:none">1121</span>
+                  <span style="flex:1;font-size:15px">Birdie</span><span class="mono" style="font-size:15px;font-weight:500">1.600</span>
+                </div>
+                <div style="background:#efece3;padding:10px 12px;display:flex;align-items:center;gap:10px">
+                  <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #8a2f22;background:#e8e4d8;font-size:13px;font-weight:500;flex:none">1130</span>
+                  <span style="flex:1;font-size:15px">Pepper</span><span class="mono" style="font-size:15px;font-weight:500">1.100</span>
+                </div>
+                <div style="background:rgba(242,194,48,.22);padding:10px 12px;display:flex;align-items:center;gap:10px">
+                  <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #f2c230;background:#e8e4d8;font-size:13px;font-weight:500;flex:none">1103</span>
+                  <span style="flex:1;font-size:15px">Hazel</span><span class="eyebrow" style="color:#191a16">Excluded</span>
+                </div>
+              </div>
+              <div style="font-size:13px;color:#43443c;margin-bottom:20px">Four more cows recorded. Hazel’s 1.8 gal is held out of the batch and logged as fed to pigs — her withdrawal runs to 9 August.</div>
+
+              <div class="eyebrow" style="margin-bottom:10px">Batches on hand</div>
+              <div style="display:grid;grid-template-columns:130px 1fr 96px 96px 96px;gap:12px;padding:0 8px 8px;border-bottom:1px solid #d6d2c6" class="eyebrow">
+                <span>Produced</span><span>Source</span><span style="text-align:right">Quantity</span><span style="text-align:right">Reserved</span><span style="text-align:right">Available</span>
+              </div>
+              <div style="display:grid;grid-template-columns:130px 1fr 96px 96px 96px;gap:12px;padding:11px 8px;border-bottom:1px solid #d6d2c6;font-size:13px" class="mono">
+                <span>4 Aug</span><span style="color:#767263">pooled · 9 animals</span><span style="text-align:right">18.400</span><span style="text-align:right">11.000</span><span style="text-align:right;font-weight:500">7.400</span>
+              </div>
+              <div style="display:grid;grid-template-columns:130px 1fr 96px 96px 96px;gap:12px;padding:11px 8px;border-bottom:1px solid #d6d2c6;font-size:13px" class="mono">
+                <span>3 Aug</span><span style="color:#767263">pooled · 9 animals</span><span style="text-align:right">18.100</span><span style="text-align:right">18.100</span><span style="text-align:right;color:#767263">0</span>
+              </div>
+              <div style="display:grid;grid-template-columns:130px 1fr 96px 96px 96px;gap:12px;padding:11px 8px;font-size:13px" class="mono">
+                <span>2 Aug</span><span style="color:#767263">pooled · 10 animals</span><span style="text-align:right">19.200</span><span style="text-align:right">18.700</span><span style="text-align:right;color:#8a6a2e">0.500 to pigs</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ 2b — Books: transactions ═══════════════ -->
+  <div class="dv-opt" id="2b">
+    <div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a>Books · Transactions — the Ledger converted to Herd, with every line attributable to an animal · desktop 1280</div>
+    <div class="dv-card" style="width:1280px">
+      <div style="height:1105px;background:#efece3;display:flex;flex-direction:column">
+
+        <div style="height:56px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid #d6d2c6">
+          <div class="serif" style="font-size:22px;letter-spacing:-.02em">Suchomski<span style="color:#5c6248">.</span></div>
+          <div style="display:flex;align-items:center;gap:20px">
+            <div style="display:flex;align-items:center;gap:8px;border:1px solid #d6d2c6;padding:7px 11px;width:300px">
+              <span class="mono" style="font-size:13px;color:#a9a496">⌕</span>
+              <span style="font:400 13px/1 'IBM Plex Sans',sans-serif;color:#a9a496">Search everything</span>
+            </div>
+            <div class="eyebrow">Family Farm · Bookkeeper view</div>
+          </div>
+        </div>
+
+        <div style="flex:1;display:flex;min-height:0">
+
+          <div style="width:208px;flex:none;border-right:1px solid #d6d2c6;padding:24px 0;display:flex;flex-direction:column">
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Today</div>
+            <div class="eyebrow" style="padding:24px 16px 8px">Herd</div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent;display:flex;justify-content:space-between">Animals<span class="mono" style="color:#767263">41</span></div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Lactations</div>
+            <div class="eyebrow" style="padding:24px 16px 8px">Store</div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent;display:flex;justify-content:space-between">Products<span class="mono" style="color:#767263">7</span></div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent;display:flex;justify-content:space-between">Orders<span class="mono" style="color:#767263">6</span></div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Customers</div>
+            <div class="eyebrow" style="padding:24px 16px 8px">Books</div>
+            <div style="padding:12px 16px;font-size:13px;border-left:2px solid #5c6248;font-weight:500;background:#e8e4d8;display:flex;justify-content:space-between">Transactions<span class="mono" style="color:#8a6a2e">4</span></div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Accounts</div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Balance sheet</div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Reports</div>
+            <div class="eyebrow" style="padding:24px 16px 8px">Businesses</div>
+            <div style="padding:12px 16px;font-size:13px;border-left:2px solid transparent;font-weight:500">Dairy &amp; farm store</div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Row crops</div>
+            <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Rental land</div>
+            <div style="flex:1"></div>
+            <div style="padding:12px 16px;font-size:13px;color:#5c6248;border-top:1px solid #d6d2c6">Export CSV</div>
+          </div>
+
+          <div style="flex:1;min-width:0;padding:24px 32px 32px;overflow:hidden">
+
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding-bottom:16px;border-bottom:1px solid #d6d2c6">
+              <div>
+                <div class="eyebrow">Dairy &amp; farm store · July 2026</div>
+                <div class="serif" style="font-size:34px;margin-top:4px">Transactions</div>
+              </div>
+              <div style="display:flex;gap:8px">
+                <div style="min-height:44px;display:flex;align-items:center;padding:0 16px;border:1px solid #d6d2c6;font:400 13px/1 'IBM Plex Mono',monospace">July 2026 ▾</div>
+                <div style="min-height:44px;display:flex;align-items:center;padding:0 16px;border:1px solid #191a16;background:#191a16;color:#efece3;font:500 13px/1 'IBM Plex Sans',sans-serif">Add entry</div>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:48px;padding:20px 0 24px;border-bottom:1px solid #d6d2c6">
+              <div style="min-width:120px"><div class="serif mono" style="font-size:27px">$6,180</div><div class="eyebrow" style="margin-top:4px">Income</div></div>
+              <div style="min-width:120px"><div class="serif mono" style="font-size:27px;color:#8a2f22">$3,770</div><div class="eyebrow" style="margin-top:4px">Expenses</div></div>
+              <div style="min-width:120px"><div class="serif mono" style="font-size:27px">+$2,410</div><div class="eyebrow" style="margin-top:4px">Net</div></div>
+              <div style="min-width:120px"><div class="serif mono" style="font-size:27px">$14,062</div><div class="eyebrow" style="margin-top:4px">Cash on hand</div></div>
+              <div style="min-width:120px"><div class="serif mono" style="font-size:27px;color:#8a6a2e">4</div><div class="eyebrow" style="margin-top:4px">Awaiting category</div></div>
+            </div>
+
+            <!-- arriving from the store -->
+            <div style="border-left:2px solid #5c6248;background:#dfe0d3;padding:14px 16px;margin:24px 0">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
+                <span class="eyebrow" style="color:#43443c">Arriving from the store</span>
+                <span class="mono" style="font-size:13px">$164.50 · 4 pickups</span>
+              </div>
+              <div style="font-size:13px;margin-bottom:12px;max-width:68ch;text-wrap:pretty">Every completed pickup lands here already priced and dated. Confirm the category once and it posts — nothing is re-typed from the store.</div>
+              <div style="display:flex;gap:8px">
+                <div style="min-height:40px;display:flex;align-items:center;padding:0 14px;border:1px solid #191a16;background:#191a16;color:#efece3;font:500 13px/1 'IBM Plex Sans',sans-serif">Post all as Milk sales</div>
+                <div style="min-height:40px;display:flex;align-items:center;padding:0 14px;border:1px solid #191a16;font:500 13px/1 'IBM Plex Sans',sans-serif">Review one by one</div>
+              </div>
+            </div>
+
+            <!-- ledger -->
+            <div style="display:grid;grid-template-columns:88px 1fr 150px 178px 130px 104px;gap:12px;padding:0 8px 8px;border-bottom:1px solid #d6d2c6" class="eyebrow">
+              <span>Date</span><span>Description</span><span>Category</span><span>Attributed to</span><span>Account</span><span style="text-align:right">Amount</span>
+            </div>
+            <div style="display:grid;grid-template-columns:88px 1fr 150px 178px 130px 104px;gap:12px;align-items:center;padding:11px 8px;border-bottom:1px solid #d6d2c6;font-size:13px;background:#dfe0d3" class="mono">
+              <span>31 Jul</span><span>Pickup · S. Mattson</span><span style="color:#767263">Uncategorised</span><span style="color:#767263">Dairy herd</span><span style="color:#767263">Chase Checking</span><span style="text-align:right;font-weight:500">+$41.00</span>
+            </div>
+            <div style="display:grid;grid-template-columns:88px 1fr 150px 178px 130px 104px;gap:12px;align-items:center;padding:11px 8px;border-bottom:1px solid #d6d2c6;font-size:13px" class="mono">
+              <span>30 Jul</span><span>Excede · metritis</span><span>Vet &amp; medicine</span>
+              <span style="display:flex;align-items:center;gap:8px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:40px;height:26px;border:1px solid #191a16;border-left:5px solid #f2c230;background:#e8e4d8;font-size:11px;font-weight:500">1103</span><span>Hazel</span></span>
+              <span style="color:#767263">Farm Visa</span><span style="text-align:right;font-weight:500;color:#8a2f22">−$178.00</span>
+            </div>
+            <div style="display:grid;grid-template-columns:88px 1fr 150px 178px 130px 104px;gap:12px;align-items:center;padding:11px 8px;border-bottom:1px solid #d6d2c6;font-size:13px" class="mono">
+              <span>28 Jul</span><span>Weekly pickups · 11 customers</span><span>Milk sales</span><span style="color:#767263">Dairy herd · 9 head</span><span style="color:#767263">Venmo</span><span style="text-align:right;font-weight:500">+$486.00</span>
+            </div>
+            <div style="display:grid;grid-template-columns:88px 1fr 150px 178px 130px 104px;gap:12px;align-items:center;padding:11px 8px;border-bottom:1px solid #d6d2c6;font-size:13px" class="mono">
+              <span>24 Jul</span><span>Vandenberg Feed · 2 ton</span><span>Feed</span><span style="color:#5c6248">Dairy herd · split 41</span><span style="color:#767263">Chase Checking</span><span style="text-align:right;font-weight:500;color:#8a2f22">−$612.00</span>
+            </div>
+            <div style="display:grid;grid-template-columns:88px 1fr 150px 178px 130px 104px;gap:12px;align-items:center;padding:11px 8px;border-bottom:1px solid #d6d2c6;font-size:13px" class="mono">
+              <span>19 Jul</span><span>Hoof trim · 6 cows</span><span>Vet &amp; medicine</span><span style="color:#5c6248">6 animals →</span><span style="color:#767263">Farm Visa</span><span style="text-align:right;font-weight:500;color:#8a2f22">−$270.00</span>
+            </div>
+            <div style="display:grid;grid-template-columns:88px 1fr 150px 178px 130px 104px;gap:12px;align-items:center;padding:11px 8px;border-bottom:1px solid #d6d2c6;font-size:13px" class="mono">
+              <span>15 Jul</span><span>Egg sales · farm store</span><span>Egg sales</span><span style="color:#767263">Laying flock</span><span style="color:#767263">Cash box</span><span style="text-align:right;font-weight:500">+$214.50</span>
+            </div>
+            <div style="display:grid;grid-template-columns:88px 1fr 150px 178px 130px 104px;gap:12px;align-items:center;padding:11px 8px;border-bottom:1px solid #d6d2c6;font-size:13px" class="mono">
+              <span>12 Jul</span><span>Bedding · 40 bales straw</span><span>Bedding &amp; supplies</span><span style="color:#5c6248">Dairy herd · split 41</span><span style="color:#767263">Chase Checking</span><span style="text-align:right;font-weight:500;color:#8a2f22">−$320.00</span>
+            </div>
+            <div style="display:grid;grid-template-columns:88px 1fr 150px 178px 130px 104px;gap:12px;align-items:center;padding:11px 8px;border-bottom:1px solid #d6d2c6;font-size:13px" class="mono">
+              <span>8 Jul</span><span>Bottling supplies</span><span>Packaging</span><span style="color:#767263">Farm store</span><span style="color:#767263">Farm Visa</span><span style="text-align:right;font-weight:500;color:#8a2f22">−$96.40</span>
+            </div>
+
+            <!-- footer split -->
+            <div style="display:grid;grid-template-columns:1fr 348px;gap:32px;margin-top:24px">
+              <div>
+                <div class="serif" style="font-size:21px;margin-bottom:12px">Where July went</div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px" class="mono"><span>Feed</span><span style="font-weight:500">$1,224 · 32%</span></div>
+                <div style="height:6px;background:#e8e4d8;margin-bottom:14px"><div style="height:100%;width:32%;background:#5c6248"></div></div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px" class="mono"><span>Vet &amp; medicine</span><span style="font-weight:500">$904 · 24%</span></div>
+                <div style="height:6px;background:#e8e4d8;margin-bottom:14px"><div style="height:100%;width:24%;background:#5c6248"></div></div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px" class="mono"><span>Bedding &amp; supplies</span><span style="font-weight:500">$640 · 17%</span></div>
+                <div style="height:6px;background:#e8e4d8;margin-bottom:14px"><div style="height:100%;width:17%;background:#5c6248"></div></div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px" class="mono"><span>Everything else</span><span style="font-weight:500">$1,002 · 27%</span></div>
+                <div style="height:6px;background:#e8e4d8"><div style="height:100%;width:27%;background:#5c6248"></div></div>
+              </div>
+              <div>
+                <div class="serif" style="font-size:21px;margin-bottom:12px">Unallocated</div>
+                <div style="border:1px dashed #d6d2c6;padding:24px">
+                  <div class="serif" style="font-size:21px;margin-bottom:8px">One entry needs a home</div>
+                  <div style="font-size:13px;color:#767263;margin-bottom:12px;max-width:52ch;text-wrap:pretty">The 24 July feed invoice is set to split evenly across 41 head. Weight it by production instead and the per-cow numbers on <a href="#1c">every animal record</a> change with it.</div>
+                  <div style="display:flex;gap:8px">
+                    <div style="min-height:40px;display:flex;align-items:center;padding:0 14px;border:1px solid #191a16;font:500 13px/1 'IBM Plex Sans',sans-serif">Split evenly</div>
+                    <div style="min-height:40px;display:flex;align-items:center;padding:0 14px;border:1px solid #191a16;background:#191a16;color:#efece3;font:500 13px/1 'IBM Plex Sans',sans-serif">By production</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="dv-next">Try next: “add Orders and Schedules to turn 2” · “show the balance sheet with the herd valued as an asset” · “make <a class="dv-oid" href="#2b">2b</a> the bookkeeper’s only screen, permissions and all”</p>
+</section>
+
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">One shell for herd, store and books — built in Herd’s design language, since the farm-app already speaks it</span></div>
+
+<div class="dv-opts">
+
+  <!-- ═══════════════ 1a — rail shell, Today as home ═══════════════ -->
+  <div class="dv-opt" id="1a">
+    <div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Herd’s rail shell, extended to all three · “Today” as home · desktop 1280</div>
+    <div class="dv-card" style="width:1280px">
+      <div style="height:950px;background:#efece3;display:flex;flex-direction:column">
+
+        <!-- topbar 56 -->
+        <div style="height:56px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid #d6d2c6">
+          <div class="serif" style="font-size:22px;letter-spacing:-.02em">Suchomski<span style="color:#5c6248">.</span></div>
+          <div style="display:flex;align-items:center;gap:20px">
+            <div style="display:flex;align-items:center;gap:8px;border:1px solid #d6d2c6;background:#efece3;padding:7px 11px;width:300px">
+              <span class="mono" style="font-size:13px;color:#a9a496">⌕</span>
+              <span style="font:400 13px/1 'IBM Plex Sans',sans-serif;color:#a9a496">Juniper, raw milk, feed invoice…</span>
+            </div>
+            <div class="eyebrow">Family Farm · 41 head · Chris</div>
+          </div>
+        </div>
+
+        <div style="flex:1;display:flex;min-height:0">
+
+          <!-- rail 208 -->
+          <div style="width:208px;flex:none;border-right:1px solid #d6d2c6;padding:24px 0;display:flex;flex-direction:column">
+            <div style="display:flex;flex-direction:column">
+              <div style="padding:12px 16px;font-size:13px;border-left:2px solid #5c6248;font-weight:500;background:#e8e4d8">Today</div>
+            </div>
+            <div class="eyebrow" style="padding:24px 16px 8px">Herd</div>
+            <div style="display:flex;flex-direction:column">
+              <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent;display:flex;justify-content:space-between">Animals<span class="mono" style="color:#767263">41</span></div>
+              <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Milkings</div>
+              <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent;display:flex;justify-content:space-between">Health<span style="width:9px;height:9px;background:#f2c230;border:1px solid #191a16;align-self:center"></span></div>
+              <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Lactations</div>
+            </div>
+            <div class="eyebrow" style="padding:24px 16px 8px">Store</div>
+            <div style="display:flex;flex-direction:column">
+              <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent;display:flex;justify-content:space-between">Products<span class="mono" style="color:#767263">7</span></div>
+              <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent;display:flex;justify-content:space-between">Orders<span class="mono" style="color:#767263">6</span></div>
+              <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Schedules</div>
+              <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Customers</div>
+            </div>
+            <div class="eyebrow" style="padding:24px 16px 8px">Books</div>
+            <div style="display:flex;flex-direction:column">
+              <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Transactions</div>
+              <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Accounts</div>
+              <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Balance sheet</div>
+              <div style="padding:12px 16px;font-size:13px;color:#43443c;border-left:2px solid transparent">Reports</div>
+            </div>
+            <div style="flex:1"></div>
+            <div style="padding:12px 16px;font-size:13px;color:#5c6248;border-top:1px solid #d6d2c6">Farm store ↗</div>
+          </div>
+
+          <!-- main -->
+          <div style="flex:1;min-width:0;padding:24px 32px 32px;overflow:hidden">
+
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding-bottom:16px;border-bottom:1px solid #d6d2c6">
+              <div>
+                <div class="eyebrow">Wednesday 4 August 2026</div>
+                <div class="serif" style="font-size:34px;margin-top:4px">Today</div>
+              </div>
+              <div style="display:flex;gap:8px">
+                <div style="min-height:44px;display:flex;align-items:center;padding:0 16px;border:1px solid #191a16;font:500 13px/1 'IBM Plex Sans',sans-serif;letter-spacing:.02em">Log milking</div>
+                <div style="min-height:44px;display:flex;align-items:center;padding:0 16px;border:1px solid #191a16;background:#191a16;color:#efece3;font:500 13px/1 'IBM Plex Sans',sans-serif;letter-spacing:.02em">Record pickup</div>
+              </div>
+            </div>
+
+            <!-- stats, flat -->
+            <div style="display:flex;gap:48px;padding:20px 0 24px;border-bottom:1px solid #d6d2c6">
+              <div style="min-width:120px">
+                <div class="serif mono" style="font-size:27px">18.4 <span style="font-size:13px;color:#767263">gal</span></div>
+                <div class="eyebrow" style="margin-top:4px">Milk today</div>
+              </div>
+              <div style="min-width:120px">
+                <div class="serif mono" style="font-size:27px">9 <span style="font-size:13px;color:#767263">/ 41</span></div>
+                <div class="eyebrow" style="margin-top:4px">Cows in milk</div>
+              </div>
+              <div style="min-width:120px">
+                <div class="serif mono" style="font-size:27px">6</div>
+                <div class="eyebrow" style="margin-top:4px">Pickups due</div>
+              </div>
+              <div style="min-width:120px">
+                <div class="serif mono" style="font-size:27px">+$2,410</div>
+                <div class="eyebrow" style="margin-top:4px">Net · July</div>
+              </div>
+              <div style="min-width:120px">
+                <div class="serif mono" style="font-size:27px">$41.90</div>
+                <div class="eyebrow" style="margin-top:4px">Cost / cow · MTD</div>
+              </div>
+            </div>
+
+            <!-- the chain, pedigree-grid treatment -->
+            <div style="padding:24px 0;border-bottom:1px solid #d6d2c6">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
+                <div class="serif" style="font-size:21px">This morning, end to end</div>
+                <span class="mono" style="font-size:13px;color:#767263">one entry, four places</span>
+              </div>
+              <div style="display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:1px;background:#d6d2c6;border:1px solid #d6d2c6">
+                <div style="background:#efece3;padding:14px 16px;display:flex;flex-direction:column;gap:5px;min-height:88px;justify-content:center">
+                  <div class="eyebrow">1 · Herd</div>
+                  <div class="serif" style="font-size:17px">9 cows milked</div>
+                  <div class="mono" style="font-size:11px;color:#767263">18.4 gal, per animal</div>
+                </div>
+                <div style="background:#efece3;padding:14px 16px;display:flex;flex-direction:column;gap:5px;min-height:88px;justify-content:center">
+                  <div class="eyebrow">2 · Inventory</div>
+                  <div class="serif" style="font-size:17px">Batch 04 Aug</div>
+                  <div class="mono" style="font-size:11px;color:#767263">pooled · raw milk</div>
+                </div>
+                <div style="background:#efece3;padding:14px 16px;display:flex;flex-direction:column;gap:5px;min-height:88px;justify-content:center">
+                  <div class="eyebrow">3 · Store</div>
+                  <div class="serif" style="font-size:17px">11.0 gal claimed</div>
+                  <div class="mono" style="font-size:11px;color:#767263">7.4 open to shop</div>
+                </div>
+                <div style="background:#191a16;color:#efece3;padding:14px 16px;display:flex;flex-direction:column;gap:5px;min-height:88px;justify-content:center">
+                  <div class="eyebrow" style="color:#a9a496">4 · Books</div>
+                  <div class="serif" style="font-size:17px">+$88.00 posted</div>
+                  <div class="mono" style="font-size:11px;color:#a9a496">Milk sales · Dairy</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 348px;gap:32px;padding-top:24px">
+
+              <!-- profit per head : rowlist -->
+              <div>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px">
+                  <div class="serif" style="font-size:21px">Profit per head</div>
+                  <span class="mono" style="font-size:13px;color:#5c6248">all 41 →</span>
+                </div>
+                <div style="display:grid;grid-template-columns:60px 1fr 76px 76px 84px;gap:12px;padding:0 8px 8px;border-bottom:1px solid #d6d2c6" class="eyebrow">
+                  <span>Tag</span><span>Animal</span><span style="text-align:right">Gal</span><span style="text-align:right">Cost</span><span style="text-align:right">Net</span>
+                </div>
+                <div style="display:grid;grid-template-columns:60px 1fr 76px 76px 84px;gap:12px;align-items:center;padding:11px 8px;border-bottom:1px solid #d6d2c6">
+                  <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #5c6248;background:#e8e4d8;font-size:13px;font-weight:500">1042</span>
+                  <span><span class="serif" style="font-size:17px">Juniper</span><br><span style="font-size:13px;color:#767263">Jersey · L3 d112</span></span>
+                  <span class="mono" style="text-align:right;font-size:15px">1,918</span>
+                  <span class="mono" style="text-align:right;font-size:15px;color:#8a2f22">$742</span>
+                  <span class="mono" style="text-align:right;font-size:15px;font-weight:500">+$1,596</span>
+                </div>
+                <div style="display:grid;grid-template-columns:60px 1fr 76px 76px 84px;gap:12px;align-items:center;padding:11px 8px;border-bottom:1px solid #d6d2c6">
+                  <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #5c6248;background:#e8e4d8;font-size:13px;font-weight:500">1017</span>
+                  <span><span class="serif" style="font-size:17px">Clover</span><br><span style="font-size:13px;color:#767263">Jersey · L4 d208</span></span>
+                  <span class="mono" style="text-align:right;font-size:15px">1,744</span>
+                  <span class="mono" style="text-align:right;font-size:15px;color:#8a2f22">$698</span>
+                  <span class="mono" style="text-align:right;font-size:15px;font-weight:500">+$1,394</span>
+                </div>
+                <div style="display:grid;grid-template-columns:60px 1fr 76px 76px 84px;gap:12px;align-items:center;padding:11px 8px;border-bottom:1px solid #d6d2c6">
+                  <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #a9a496;background:#e8e4d8;font-size:13px;font-weight:500">1088</span>
+                  <span><span class="serif" style="font-size:17px">Marigold</span><br><span style="font-size:13px;color:#767263">Guernsey · L2 d151</span></span>
+                  <span class="mono" style="text-align:right;font-size:15px">1,502</span>
+                  <span class="mono" style="text-align:right;font-size:15px;color:#8a2f22">$651</span>
+                  <span class="mono" style="text-align:right;font-size:15px;font-weight:500">+$1,151</span>
+                </div>
+                <div style="display:grid;grid-template-columns:60px 1fr 76px 76px 84px;gap:12px;align-items:center;padding:11px 8px;border-bottom:1px solid #d6d2c6;background:#e8e4d8">
+                  <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #f2c230;background:#e8e4d8;font-size:13px;font-weight:500">1103</span>
+                  <span><span class="serif" style="font-size:17px">Hazel</span> <span style="display:inline-flex;align-items:center;padding:2px 7px;border:1px solid #191a16;background:#f2c230;font:500 11px/1.4 'IBM Plex Sans',sans-serif;letter-spacing:.08em;text-transform:uppercase">Withdrawal</span><br><span style="font-size:13px;color:#767263">Jersey · L2 d64 · milk discarded</span></span>
+                  <span class="mono" style="text-align:right;font-size:15px">1,190</span>
+                  <span class="mono" style="text-align:right;font-size:15px;color:#8a2f22">$734</span>
+                  <span class="mono" style="text-align:right;font-size:15px;font-weight:500">+$456</span>
+                </div>
+                <div style="display:grid;grid-template-columns:60px 1fr 76px 76px 84px;gap:12px;align-items:center;padding:11px 8px;border-bottom:1px solid #d6d2c6">
+                  <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #5c6248;background:#e8e4d8;font-size:13px;font-weight:500">1121</span>
+                  <span><span class="serif" style="font-size:17px">Birdie</span><br><span style="font-size:13px;color:#767263">Jersey · L1 d78</span></span>
+                  <span class="mono" style="text-align:right;font-size:15px">908</span>
+                  <span class="mono" style="text-align:right;font-size:15px;color:#8a2f22">$689</span>
+                  <span class="mono" style="text-align:right;font-size:15px;font-weight:500">+$219</span>
+                </div>
+                <div style="display:grid;grid-template-columns:60px 1fr 76px 76px 84px;gap:12px;align-items:center;padding:11px 8px;border-bottom:1px solid #d6d2c6">
+                  <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #8a2f22;background:#e8e4d8;font-size:13px;font-weight:500">1130</span>
+                  <span><span class="serif" style="font-size:17px">Pepper</span><br><span style="font-size:13px;color:#8a2f22">below feed cost · 3 months</span></span>
+                  <span class="mono" style="text-align:right;font-size:15px">612</span>
+                  <span class="mono" style="text-align:right;font-size:15px;color:#8a2f22">$705</span>
+                  <span class="mono" style="text-align:right;font-size:15px;font-weight:500;color:#8a2f22">−$93</span>
+                </div>
+              </div>
+
+              <!-- needs you -->
+              <div>
+                <div class="serif" style="font-size:21px;margin-bottom:12px">Needs you</div>
+                <div style="background:#f2c230;color:#191a16;border-top:3px solid #191a16;border-bottom:3px solid #191a16;padding:12px 16px;margin-bottom:16px">
+                  <div class="eyebrow" style="color:#191a16">Withdrawal · until 9 Aug</div>
+                  <div class="serif" style="font-size:21px;margin:2px 0">Hazel · 1103</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px 24px;font-size:13px;font-weight:500">
+                    <span>Excede · 5 days left</span><span>Milk excluded from batches</span>
+                  </div>
+                </div>
+                <div style="border-left:2px solid #5c6248;background:#dfe0d3;padding:12px 16px;font-size:13px;margin-bottom:16px">
+                  <strong style="font-weight:500">4 pickups are uncategorised.</strong> $164.50 is sitting in the store, waiting for a category before it reaches the books.
+                </div>
+                <div style="border-top:1px solid #d6d2c6;padding:12px 8px;display:flex;gap:12px;align-items:flex-start">
+                  <span style="width:9px;height:9px;background:#8a6a2e;margin-top:6px;flex:none"></span>
+                  <div><div style="font-size:15px">Eggs short by 3 dozen Friday</div><div style="font-size:13px;color:#767263">Weekly pickups exceed forecast supply</div></div>
+                </div>
+                <div style="border-top:1px solid #d6d2c6;padding:12px 8px;display:flex;gap:12px;align-items:flex-start">
+                  <span style="width:9px;height:9px;background:#8a2f22;margin-top:6px;flex:none"></span>
+                  <div><div style="font-size:15px">Pepper is below feed cost</div><div style="font-size:13px;color:#767263">Third month running · review or cull</div></div>
+                </div>
+                <div style="border-top:1px solid #d6d2c6;border-bottom:1px solid #d6d2c6;padding:12px 8px;display:flex;gap:12px;align-items:flex-start">
+                  <span style="width:9px;height:9px;background:#5c6248;margin-top:6px;flex:none"></span>
+                  <div><div style="font-size:15px">Feed invoice unallocated</div><div style="font-size:13px;color:#767263">$612 · split across 41 head?</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ 1b — tab shell, herd board home ═══════════════ -->
+  <div class="dv-opt" id="1b">
+    <div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>No rail — Herd’s uppercase tabs carry the whole app · the herd board is home · desktop 1280</div>
+    <div class="dv-card" style="width:1280px">
+      <div style="height:900px;background:#efece3;display:flex;flex-direction:column">
+
+        <div style="height:56px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid #d6d2c6">
+          <div class="serif" style="font-size:22px;letter-spacing:-.02em">Suchomski<span style="color:#5c6248">.</span></div>
+          <div style="display:flex;align-items:center;gap:20px">
+            <div style="display:flex;align-items:center;gap:8px;border:1px solid #d6d2c6;padding:7px 11px;width:300px">
+              <span class="mono" style="font-size:13px;color:#a9a496">⌕</span>
+              <span style="font:400 13px/1 'IBM Plex Sans',sans-serif;color:#a9a496">Search everything</span>
+            </div>
+            <div class="eyebrow">Family Farm · 41 head · Chris</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:24px;padding:16px 32px 0;border-bottom:1px solid #d6d2c6;flex:none">
+          <div class="eyebrow" style="padding:0 0 12px;color:#191a16;border-bottom:2px solid #191a16;margin-bottom:-1px">Herd <span class="mono" style="margin-left:4px;letter-spacing:0">41</span></div>
+          <div class="eyebrow" style="padding:0 0 12px">Milk <span class="mono" style="margin-left:4px;letter-spacing:0">18.4</span></div>
+          <div class="eyebrow" style="padding:0 0 12px">Store <span class="mono" style="margin-left:4px;letter-spacing:0">7</span></div>
+          <div class="eyebrow" style="padding:0 0 12px">Orders <span class="mono" style="margin-left:4px;letter-spacing:0">6</span></div>
+          <div class="eyebrow" style="padding:0 0 12px">Books</div>
+          <div class="eyebrow" style="padding:0 0 12px">Reports</div>
+          <div class="eyebrow" style="padding:0 0 12px">Customers</div>
+          <div style="flex:1"></div>
+          <div class="eyebrow" style="padding:0 0 12px;color:#5c6248">Farm store ↗</div>
+        </div>
+
+        <div style="padding:24px 32px;flex:1;overflow:hidden">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding-bottom:16px;border-bottom:1px solid #d6d2c6;margin-bottom:20px">
+            <div>
+              <div class="eyebrow">41 head · 9 in milk · 18.4 gal today</div>
+              <div class="serif" style="font-size:34px;margin-top:4px">The herd</div>
+            </div>
+            <div style="display:flex;border:1px solid #d6d2c6">
+              <div style="min-height:40px;display:flex;align-items:center;padding:0 14px;border-right:1px solid #d6d2c6;background:#191a16;color:#efece3;font:500 13px/1 'IBM Plex Sans',sans-serif">In milk</div>
+              <div style="min-height:40px;display:flex;align-items:center;padding:0 14px;border-right:1px solid #d6d2c6;font-size:13px;color:#43443c">Dry</div>
+              <div style="min-height:40px;display:flex;align-items:center;padding:0 14px;border-right:1px solid #d6d2c6;font-size:13px;color:#43443c">Heifers</div>
+              <div style="min-height:40px;display:flex;align-items:center;padding:0 14px;border-right:1px solid #d6d2c6;font-size:13px;color:#43443c">Beef</div>
+              <div style="min-height:40px;display:flex;align-items:center;padding:0 14px;font-size:13px;color:#43443c">All</div>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#d6d2c6;border:1px solid #d6d2c6">
+
+            <div style="background:#efece3;padding:18px 20px">
+              <div style="display:flex;gap:14px;align-items:flex-start">
+                <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #5c6248;background:#e8e4d8;font-size:13px;font-weight:500;flex:none">1042</span>
+                <div style="flex:1;min-width:0">
+                  <div class="serif" style="font-size:21px">Juniper</div>
+                  <div style="font-size:13px;color:#767263">Jersey · L3 day 112</div>
+                </div>
+                <div class="mono" style="text-align:right;flex:none"><span style="font-size:17px;font-weight:500">2.6</span><br><span style="font-size:11px;color:#767263">gal today</span></div>
+              </div>
+              <div style="display:flex;align-items:flex-end;gap:2px;height:64px;margin:18px 0 6px;border-bottom:1px solid #d6d2c6">
+                <div style="flex:1;background:#dfe0d3;height:34%"></div><div style="flex:1;background:#dfe0d3;height:52%"></div><div style="flex:1;background:#dfe0d3;height:68%"></div><div style="flex:1;background:#dfe0d3;height:80%"></div><div style="flex:1;background:#dfe0d3;height:88%"></div><div style="flex:1;background:#5c6248;height:94%"></div><div style="flex:1;background:#5c6248;height:99%"></div><div style="flex:1;background:#5c6248;height:96%"></div><div style="flex:1;background:#5c6248;height:93%"></div><div style="flex:1;background:#5c6248;height:90%"></div><div style="flex:1;background:#5c6248;height:86%"></div><div style="flex:1;background:#191a16;height:83%"></div>
+              </div>
+              <div class="mono" style="font-size:11px;color:#767263;display:flex;justify-content:space-between"><span>freshened 14 Apr</span><span>peak 3.1</span></div>
+              <div style="display:flex;gap:24px;border-top:1px solid #d6d2c6;margin-top:16px;padding-top:14px">
+                <div><div class="serif mono" style="font-size:21px">1,918</div><div class="eyebrow" style="margin-top:3px">Gallons</div></div>
+                <div><div class="serif mono" style="font-size:21px;color:#8a2f22">$742</div><div class="eyebrow" style="margin-top:3px">Cost</div></div>
+                <div><div class="serif mono" style="font-size:21px">+$1,596</div><div class="eyebrow" style="margin-top:3px">Net</div></div>
+              </div>
+            </div>
+
+            <div style="background:#efece3;padding:18px 20px">
+              <div style="display:flex;gap:14px;align-items:flex-start">
+                <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #5c6248;background:#e8e4d8;font-size:13px;font-weight:500;flex:none">1017</span>
+                <div style="flex:1;min-width:0">
+                  <div class="serif" style="font-size:21px">Clover</div>
+                  <div style="font-size:13px;color:#767263">Jersey · L4 day 208</div>
+                </div>
+                <div class="mono" style="text-align:right;flex:none"><span style="font-size:17px;font-weight:500">2.2</span><br><span style="font-size:11px;color:#767263">gal today</span></div>
+              </div>
+              <div style="display:flex;align-items:flex-end;gap:2px;height:64px;margin:18px 0 6px;border-bottom:1px solid #d6d2c6">
+                <div style="flex:1;background:#dfe0d3;height:40%"></div><div style="flex:1;background:#dfe0d3;height:62%"></div><div style="flex:1;background:#dfe0d3;height:78%"></div><div style="flex:1;background:#dfe0d3;height:90%"></div><div style="flex:1;background:#5c6248;height:96%"></div><div style="flex:1;background:#5c6248;height:92%"></div><div style="flex:1;background:#5c6248;height:84%"></div><div style="flex:1;background:#5c6248;height:76%"></div><div style="flex:1;background:#5c6248;height:70%"></div><div style="flex:1;background:#5c6248;height:64%"></div><div style="flex:1;background:#5c6248;height:58%"></div><div style="flex:1;background:#191a16;height:54%"></div>
+              </div>
+              <div class="mono" style="font-size:11px;color:#767263;display:flex;justify-content:space-between"><span>freshened 8 Jan</span><span>peak 3.4</span></div>
+              <div style="display:flex;gap:24px;border-top:1px solid #d6d2c6;margin-top:16px;padding-top:14px">
+                <div><div class="serif mono" style="font-size:21px">1,744</div><div class="eyebrow" style="margin-top:3px">Gallons</div></div>
+                <div><div class="serif mono" style="font-size:21px;color:#8a2f22">$698</div><div class="eyebrow" style="margin-top:3px">Cost</div></div>
+                <div><div class="serif mono" style="font-size:21px">+$1,394</div><div class="eyebrow" style="margin-top:3px">Net</div></div>
+              </div>
+            </div>
+
+            <div style="background:#efece3;padding:0">
+              <div style="background:#f2c230;color:#191a16;border-bottom:3px solid #191a16;padding:8px 20px">
+                <div class="eyebrow" style="color:#191a16">Withdrawal · Excede · until 9 Aug</div>
+              </div>
+              <div style="padding:18px 20px">
+                <div style="display:flex;gap:14px;align-items:flex-start">
+                  <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #f2c230;background:#e8e4d8;font-size:13px;font-weight:500;flex:none">1103</span>
+                  <div style="flex:1;min-width:0">
+                    <div class="serif" style="font-size:21px">Hazel</div>
+                    <div style="font-size:13px;color:#767263">Jersey · L2 day 64</div>
+                  </div>
+                  <div class="mono" style="text-align:right;flex:none"><span style="font-size:17px;font-weight:500">1.8</span><br><span style="font-size:11px;color:#8a6a2e">discarded</span></div>
+                </div>
+                <div style="display:flex;align-items:flex-end;gap:2px;height:64px;margin:18px 0 6px;border-bottom:1px solid #d6d2c6">
+                  <div style="flex:1;background:#dfe0d3;height:38%"></div><div style="flex:1;background:#dfe0d3;height:58%"></div><div style="flex:1;background:#dfe0d3;height:74%"></div><div style="flex:1;background:#dfe0d3;height:86%"></div><div style="flex:1;background:#5c6248;height:92%"></div><div style="flex:1;background:#5c6248;height:88%"></div><div style="flex:1;background:#5c6248;height:84%"></div><div style="flex:1;background:#f2c230;height:80%"></div><div style="flex:1;background:#f2c230;height:78%"></div><div style="flex:1;background:#f2c230;height:76%"></div><div style="flex:1;background:#e8e4d8;height:74%"></div><div style="flex:1;background:#e8e4d8;height:72%"></div>
+                </div>
+                <div class="mono" style="font-size:11px;color:#8a6a2e;display:flex;justify-content:space-between"><span>5 days left</span><span>3.9 gal to pigs</span></div>
+                <div style="display:flex;gap:24px;border-top:1px solid #d6d2c6;margin-top:16px;padding-top:14px">
+                  <div><div class="serif mono" style="font-size:21px">1,190</div><div class="eyebrow" style="margin-top:3px">Gallons</div></div>
+                  <div><div class="serif mono" style="font-size:21px;color:#8a2f22">$734</div><div class="eyebrow" style="margin-top:3px">Cost</div></div>
+                  <div><div class="serif mono" style="font-size:21px">+$456</div><div class="eyebrow" style="margin-top:3px">Net</div></div>
+                </div>
+              </div>
+            </div>
+
+            <div style="background:#efece3;padding:18px 20px">
+              <div style="display:flex;gap:14px;align-items:flex-start">
+                <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #a9a496;background:#e8e4d8;font-size:13px;font-weight:500;flex:none">1088</span>
+                <div style="flex:1;min-width:0">
+                  <div class="serif" style="font-size:21px">Marigold</div>
+                  <div style="font-size:13px;color:#767263">Guernsey · L2 day 151</div>
+                </div>
+                <div class="mono" style="text-align:right;flex:none"><span style="font-size:17px;font-weight:500">1.9</span><br><span style="font-size:11px;color:#767263">gal today</span></div>
+              </div>
+              <div style="display:flex;align-items:flex-end;gap:2px;height:64px;margin:18px 0 6px;border-bottom:1px solid #d6d2c6">
+                <div style="flex:1;background:#dfe0d3;height:32%"></div><div style="flex:1;background:#dfe0d3;height:50%"></div><div style="flex:1;background:#dfe0d3;height:66%"></div><div style="flex:1;background:#dfe0d3;height:76%"></div><div style="flex:1;background:#5c6248;height:84%"></div><div style="flex:1;background:#5c6248;height:88%"></div><div style="flex:1;background:#5c6248;height:82%"></div><div style="flex:1;background:#5c6248;height:74%"></div><div style="flex:1;background:#5c6248;height:68%"></div><div style="flex:1;background:#5c6248;height:62%"></div><div style="flex:1;background:#191a16;height:58%"></div><div style="flex:1;background:#191a16;height:55%"></div>
+              </div>
+              <div class="mono" style="font-size:11px;color:#767263;display:flex;justify-content:space-between"><span>freshened 6 Mar</span><span>peak 2.7</span></div>
+              <div style="display:flex;gap:24px;border-top:1px solid #d6d2c6;margin-top:16px;padding-top:14px">
+                <div><div class="serif mono" style="font-size:21px">1,502</div><div class="eyebrow" style="margin-top:3px">Gallons</div></div>
+                <div><div class="serif mono" style="font-size:21px;color:#8a2f22">$651</div><div class="eyebrow" style="margin-top:3px">Cost</div></div>
+                <div><div class="serif mono" style="font-size:21px">+$1,151</div><div class="eyebrow" style="margin-top:3px">Net</div></div>
+              </div>
+            </div>
+
+            <div style="background:#efece3;padding:18px 20px">
+              <div style="display:flex;gap:14px;align-items:flex-start">
+                <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #5c6248;background:#e8e4d8;font-size:13px;font-weight:500;flex:none">1121</span>
+                <div style="flex:1;min-width:0">
+                  <div class="serif" style="font-size:21px">Birdie</div>
+                  <div style="font-size:13px;color:#767263">Jersey · L1 day 78</div>
+                </div>
+                <div class="mono" style="text-align:right;flex:none"><span style="font-size:17px;font-weight:500">1.6</span><br><span style="font-size:11px;color:#767263">gal today</span></div>
+              </div>
+              <div style="display:flex;align-items:flex-end;gap:2px;height:64px;margin:18px 0 6px;border-bottom:1px solid #d6d2c6">
+                <div style="flex:1;background:#dfe0d3;height:28%"></div><div style="flex:1;background:#dfe0d3;height:44%"></div><div style="flex:1;background:#dfe0d3;height:58%"></div><div style="flex:1;background:#5c6248;height:68%"></div><div style="flex:1;background:#5c6248;height:74%"></div><div style="flex:1;background:#5c6248;height:76%"></div><div style="flex:1;background:#5c6248;height:72%"></div><div style="flex:1;background:#191a16;height:69%"></div><div style="flex:1;background:#e8e4d8;height:2%"></div><div style="flex:1;background:#e8e4d8;height:2%"></div><div style="flex:1;background:#e8e4d8;height:2%"></div><div style="flex:1;background:#e8e4d8;height:2%"></div>
+              </div>
+              <div class="mono" style="font-size:11px;color:#767263;display:flex;justify-content:space-between"><span>freshened 18 May</span><span>first lactation</span></div>
+              <div style="display:flex;gap:24px;border-top:1px solid #d6d2c6;margin-top:16px;padding-top:14px">
+                <div><div class="serif mono" style="font-size:21px">908</div><div class="eyebrow" style="margin-top:3px">Gallons</div></div>
+                <div><div class="serif mono" style="font-size:21px;color:#8a2f22">$689</div><div class="eyebrow" style="margin-top:3px">Cost</div></div>
+                <div><div class="serif mono" style="font-size:21px">+$219</div><div class="eyebrow" style="margin-top:3px">Net</div></div>
+              </div>
+            </div>
+
+            <div style="background:#efece3;padding:18px 20px">
+              <div style="display:flex;gap:14px;align-items:flex-start">
+                <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border:1px solid #191a16;border-left:6px solid #8a2f22;background:#e8e4d8;font-size:13px;font-weight:500;flex:none">1130</span>
+                <div style="flex:1;min-width:0">
+                  <div class="serif" style="font-size:21px">Pepper</div>
+                  <div style="font-size:13px;color:#767263">Jersey · L1 day 96</div>
+                </div>
+                <div class="mono" style="text-align:right;flex:none"><span style="font-size:17px;font-weight:500">1.1</span><br><span style="font-size:11px;color:#767263">gal today</span></div>
+              </div>
+              <div style="display:flex;align-items:flex-end;gap:2px;height:64px;margin:18px 0 6px;border-bottom:1px solid #d6d2c6">
+                <div style="flex:1;background:#dfe0d3;height:24%"></div><div style="flex:1;background:#dfe0d3;height:36%"></div><div style="flex:1;background:#dfe0d3;height:46%"></div><div style="flex:1;background:#5c6248;height:52%"></div><div style="flex:1;background:#5c6248;height:56%"></div><div style="flex:1;background:#5c6248;height:52%"></div><div style="flex:1;background:#5c6248;height:48%"></div><div style="flex:1;background:#191a16;height:44%"></div><div style="flex:1;background:#191a16;height:41%"></div><div style="flex:1;background:#e8e4d8;height:2%"></div><div style="flex:1;background:#e8e4d8;height:2%"></div><div style="flex:1;background:#e8e4d8;height:2%"></div>
+              </div>
+              <div class="mono" style="font-size:11px;color:#8a2f22;display:flex;justify-content:space-between"><span>below feed cost</span><span>3 months</span></div>
+              <div style="display:flex;gap:24px;border-top:1px solid #d6d2c6;margin-top:16px;padding-top:14px">
+                <div><div class="serif mono" style="font-size:21px">612</div><div class="eyebrow" style="margin-top:3px">Gallons</div></div>
+                <div><div class="serif mono" style="font-size:21px;color:#8a2f22">$705</div><div class="eyebrow" style="margin-top:3px">Cost</div></div>
+                <div><div class="serif mono" style="font-size:21px;color:#8a2f22">−$93</div><div class="eyebrow" style="margin-top:3px">Net</div></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ 1c — animal record ═══════════════ -->
+  <div class="dv-opt" id="1c">
+    <div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>One animal record — Herd’s profile header, with milk and money on the same page · desktop 1280</div>
+    <div class="dv-card" style="width:1280px">
+      <div style="background:#efece3">
+
+        <div style="height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid #d6d2c6">
+          <div class="serif" style="font-size:22px;letter-spacing:-.02em">Suchomski<span style="color:#5c6248">.</span></div>
+          <div class="eyebrow">Herd · Animals · Hazel</div>
+        </div>
+
+        <!-- the one high-chroma element -->
+        <div style="background:#f2c230;color:#191a16;border-top:3px solid #191a16;border-bottom:3px solid #191a16;padding:12px 32px">
+          <div class="eyebrow" style="color:#191a16">Withdrawal in effect</div>
+          <div class="serif" style="font-size:21px;margin:2px 0">Milk from this animal cannot be sold until 9 August</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px 24px;font-size:13px;font-weight:500">
+            <span>Excede · administered 30 July</span><span>5 days remaining</span><span>Excluded from every store batch automatically</span><span>3.9 gal fed to pigs so far</span>
+          </div>
+        </div>
+
+        <!-- profile head -->
+        <div style="border-bottom:1px solid #d6d2c6;padding:16px 32px 0">
+          <div style="display:flex;gap:16px;align-items:flex-start">
+            <div style="width:84px;height:84px;flex:none;border:1px solid #d6d2c6;background:repeating-linear-gradient(135deg,#efece3,#efece3 6px,#e8e4d8 6px,#e8e4d8 12px);display:flex;align-items:center;justify-content:center">
+              <span class="eyebrow" style="font-size:10px">Photo</span>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div class="serif" style="font-size:34px;line-height:1.05;margin-bottom:2px">Hazel</div>
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-size:13px;color:#767263">
+                <span>Jersey</span><span>·</span><span>born 11 February 2023</span><span>·</span><span>3 years 5 months</span>
+                <span style="display:inline-flex;align-items:center;padding:2px 7px;border:1px solid #5c6248;color:#5c6248;font:500 11px/1.4 'IBM Plex Sans',sans-serif;letter-spacing:.08em;text-transform:uppercase">Dairy cow</span>
+                <span style="display:inline-flex;align-items:center;padding:2px 7px;border:1px solid #191a16;background:#f2c230;color:#191a16;font:500 11px/1.4 'IBM Plex Sans',sans-serif;letter-spacing:.08em;text-transform:uppercase">Withdrawal</span>
+              </div>
+            </div>
+            <span class="mono" style="display:inline-flex;align-items:center;justify-content:center;min-width:64px;height:46px;border:1px solid #191a16;border-left:6px solid #f2c230;background:#e8e4d8;font-size:17px;font-weight:500;flex:none">1103</span>
+            <div style="display:flex;gap:8px;flex:none">
+              <div style="min-height:44px;display:flex;align-items:center;padding:0 16px;border:1px solid #191a16;font:500 13px/1 'IBM Plex Sans',sans-serif">Log treatment</div>
+              <div style="min-height:44px;display:flex;align-items:center;padding:0 16px;border:1px solid #191a16;background:#191a16;color:#efece3;font:500 13px/1 'IBM Plex Sans',sans-serif">Log milking</div>
+            </div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:48px;padding:20px 0 0">
+            <div style="min-width:104px"><div class="serif mono" style="font-size:21px">1,190</div><div class="eyebrow" style="margin-top:3px">Gal · L2</div></div>
+            <div style="min-width:104px"><div class="serif mono" style="font-size:21px">2.9</div><div class="eyebrow" style="margin-top:3px">Peak gal / day</div></div>
+            <div style="min-width:104px"><div class="serif mono" style="font-size:21px">64</div><div class="eyebrow" style="margin-top:3px">Days in milk</div></div>
+            <div style="min-width:104px"><div class="serif mono" style="font-size:21px;color:#8a2f22">$734</div><div class="eyebrow" style="margin-top:3px">Cost · L2</div></div>
+            <div style="min-width:104px"><div class="serif mono" style="font-size:21px">+$456</div><div class="eyebrow" style="margin-top:3px">Net · L2</div></div>
+            <div style="min-width:104px"><div class="serif mono" style="font-size:21px">$0.62</div><div class="eyebrow" style="margin-top:3px">Cost / gallon</div></div>
+          </div>
+          <div style="display:flex;gap:24px;padding:16px 0 0">
+            <div class="eyebrow" style="padding:0 0 12px">Record</div>
+            <div class="eyebrow" style="padding:0 0 12px;color:#191a16;border-bottom:2px solid #191a16;margin-bottom:-1px">Milk &amp; money</div>
+            <div class="eyebrow" style="padding:0 0 12px">Health <span class="mono" style="margin-left:4px;letter-spacing:0">6</span></div>
+            <div class="eyebrow" style="padding:0 0 12px">Lactations <span class="mono" style="margin-left:4px;letter-spacing:0">2</span></div>
+            <div class="eyebrow" style="padding:0 0 12px">Pedigree</div>
+            <div class="eyebrow" style="padding:0 0 12px">Calves <span class="mono" style="margin-left:4px;letter-spacing:0">1</span></div>
+          </div>
+        </div>
+
+        <div style="padding:24px 32px 32px;display:grid;grid-template-columns:1fr 348px;gap:32px">
+
+          <div>
+            <!-- curve -->
+            <div style="padding-bottom:24px;border-bottom:1px solid #d6d2c6">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
+                <div class="serif" style="font-size:21px">Lactation curve</div>
+                <div class="mono" style="display:flex;gap:16px;font-size:11px">
+                  <span style="font-size:11px;color:#43443c"><span style="display:inline-block;width:9px;height:9px;background:#5c6248;margin-right:6px"></span>L2 current</span>
+                  <span style="font-size:11px;color:#767263"><span style="display:inline-block;width:9px;height:9px;background:#dfe0d3;margin-right:6px"></span>L1 same day</span>
+                  <span style="font-size:11px;color:#8a6a2e"><span style="display:inline-block;width:9px;height:9px;background:#f2c230;border:1px solid #191a16;margin-right:6px"></span>Discarded</span>
+                </div>
+              </div>
+              <div style="display:flex;align-items:flex-end;gap:4px;height:184px;border-bottom:1px solid #d6d2c6">
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:26%"></div><div style="flex:1;background:#5c6248;height:30%"></div></div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:40%"></div><div style="flex:1;background:#5c6248;height:46%"></div></div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:54%"></div><div style="flex:1;background:#5c6248;height:62%"></div></div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:64%"></div><div style="flex:1;background:#5c6248;height:74%"></div></div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:72%"></div><div style="flex:1;background:#5c6248;height:84%"></div></div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:76%"></div><div style="flex:1;background:#5c6248;height:92%"></div></div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:78%"></div><div style="flex:1;background:#5c6248;height:96%"></div></div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:75%"></div><div style="flex:1;background:#5c6248;height:93%"></div></div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:72%"></div><div style="flex:1;background:#5c6248;height:90%"></div></div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:69%"></div><div style="flex:1;background:#f2c230;height:87%"></div></div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:66%"></div><div style="flex:1;background:#f2c230;height:85%"></div></div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:63%"></div><div style="flex:1;background:#f2c230;height:83%"></div></div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:60%"></div><div style="flex:1;background:#e8e4d8;height:2%"></div></div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:56%"></div><div style="flex:1;background:#e8e4d8;height:2%"></div></div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:52%"></div><div style="flex:1;background:#e8e4d8;height:2%"></div></div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:47%"></div><div style="flex:1;background:#e8e4d8;height:2%"></div></div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:42%"></div><div style="flex:1;background:#e8e4d8;height:2%"></div></div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%"><div style="flex:1;background:#dfe0d3;height:36%"></div><div style="flex:1;background:#e8e4d8;height:2%"></div></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-top:8px" class="mono">
+                <span style="font-size:11px;color:#767263">day 10</span>
+                <span style="font-size:11px;color:#767263">peak · day 52 · 2.9 gal</span>
+                <span style="font-size:11px;color:#767263">day 305 projected</span>
+              </div>
+            </div>
+
+            <!-- where her milk went -->
+            <div style="padding-top:24px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px">
+                <div class="serif" style="font-size:21px">Where her milk went</div>
+                <span class="mono" style="font-size:13px;color:#767263">last 7 days</span>
+              </div>
+              <div style="display:grid;grid-template-columns:88px 1fr 74px 1fr 88px;gap:12px;padding:0 8px 8px;border-bottom:1px solid #d6d2c6" class="eyebrow">
+                <span>Date</span><span>Batch</span><span style="text-align:right">Gal</span><span>Outcome</span><span style="text-align:right">Value</span>
+              </div>
+              <div style="display:grid;grid-template-columns:88px 1fr 74px 1fr 88px;gap:12px;padding:11px 8px;border-bottom:1px solid #d6d2c6;font-size:13px;background:rgba(242,194,48,.16)" class="mono">
+                <span>4 Aug</span><span style="color:#767263">excluded</span><span style="text-align:right">1.8</span><span style="color:#8a6a2e">Fed to pigs</span><span style="text-align:right">—</span>
+              </div>
+              <div style="display:grid;grid-template-columns:88px 1fr 74px 1fr 88px;gap:12px;padding:11px 8px;border-bottom:1px solid #d6d2c6;font-size:13px;background:rgba(242,194,48,.16)" class="mono">
+                <span>3 Aug</span><span style="color:#767263">excluded</span><span style="text-align:right">1.9</span><span style="color:#8a6a2e">Fed to pigs</span><span style="text-align:right">—</span>
+              </div>
+              <div style="display:grid;grid-template-columns:88px 1fr 74px 1fr 88px;gap:12px;padding:11px 8px;border-bottom:1px solid #d6d2c6;font-size:13px" class="mono">
+                <span>29 Jul</span><span style="color:#767263">Raw milk · pooled</span><span style="text-align:right">2.4</span><span style="color:#5c6248">Sold · 3 pickups</span><span style="text-align:right;font-weight:500">$19.20</span>
+              </div>
+              <div style="display:grid;grid-template-columns:88px 1fr 74px 1fr 88px;gap:12px;padding:11px 8px;border-bottom:1px solid #d6d2c6;font-size:13px" class="mono">
+                <span>28 Jul</span><span style="color:#767263">Raw milk · pooled</span><span style="text-align:right">2.5</span><span style="color:#5c6248">Sold · 4 pickups</span><span style="text-align:right;font-weight:500">$20.00</span>
+              </div>
+              <div style="display:grid;grid-template-columns:88px 1fr 74px 1fr 88px;gap:12px;padding:12px 8px;border-bottom:1px solid #d6d2c6;font-size:13px;background:#e8e4d8;font-weight:500" class="mono">
+                <span>7 days</span><span style="color:#767263">3 sold · 4 discarded</span><span style="text-align:right">14.6</span><span style="color:#8a6a2e">7.4 unsellable</span><span style="text-align:right">$57.60</span>
+              </div>
+              <div style="border-left:2px solid #5c6248;background:#dfe0d3;padding:12px 16px;font-size:13px;margin-top:16px">
+                Her feed and vet costs keep accruing through the withdrawal while none of her milk can be sold — that gap is the honest reason her net is behind the others this lactation.
+              </div>
+            </div>
+          </div>
+
+          <!-- right column -->
+          <div>
+            <div class="serif" style="font-size:21px;margin-bottom:12px">Costs on her line</div>
+            <div style="padding:0 0 8px">
+              <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px" class="mono"><span>Feed · share of herd</span><span style="font-weight:500">$498</span></div>
+              <div style="height:6px;background:#e8e4d8;margin-bottom:16px"><div style="height:100%;width:68%;background:#5c6248"></div></div>
+              <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px" class="mono"><span>Vet &amp; medicine</span><span style="font-weight:500">$178</span></div>
+              <div style="height:6px;background:#e8e4d8;margin-bottom:16px"><div style="height:100%;width:24%;background:#5c6248"></div></div>
+              <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px" class="mono"><span>Bedding &amp; supplies</span><span style="font-weight:500">$58</span></div>
+              <div style="height:6px;background:#e8e4d8"><div style="height:100%;width:8%;background:#5c6248"></div></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;border-top:1px solid #d6d2c6;padding:12px 0;font-size:13px" class="mono">
+              <span style="color:#767263">Attributed via <span style="color:#191a16">Dairy herd</span></span><span style="font-weight:500">$734</span>
+            </div>
+            <div style="display:inline-flex;align-items:center;gap:8px;border:1px solid #d6d2c6;background:#e8e4d8;padding:8px 12px;margin-bottom:24px">
+              <span class="eyebrow">Source</span><span class="mono" style="font-size:13px">Books · 14 entries →</span>
+            </div>
+
+            <div class="serif" style="font-size:21px;margin:0 0 12px">Health</div>
+            <div style="display:grid;grid-template-columns:minmax(120px,34%) 1fr;border-top:1px solid #d6d2c6;margin-bottom:24px">
+              <div class="eyebrow" style="padding:12px 12px 12px 0;border-bottom:1px solid #d6d2c6">30 Jul</div>
+              <div style="padding:12px 0;border-bottom:1px solid #d6d2c6;font-size:15px">Excede · metritis<br><span style="font-size:13px;color:#8a6a2e">withdrawal 10 days · vet $178</span></div>
+              <div class="eyebrow" style="padding:12px 12px 12px 0;border-bottom:1px solid #d6d2c6">2 Jun</div>
+              <div style="padding:12px 0;border-bottom:1px solid #d6d2c6;font-size:15px">Hoof trim<br><span style="font-size:13px;color:#767263">routine · $45</span></div>
+              <div class="eyebrow" style="padding:12px 12px 12px 0;border-bottom:1px solid #d6d2c6">1 Jun</div>
+              <div style="padding:12px 0;border-bottom:1px solid #d6d2c6;font-size:15px">Freshened · L2<br><span style="font-size:13px;color:#767263">bull calf · tag 1141</span></div>
+            </div>
+
+            <div class="serif" style="font-size:21px;margin:0 0 12px">Pedigree</div>
+            <div style="display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:1px;background:#d6d2c6;border:1px solid #d6d2c6">
+              <div style="background:#efece3;padding:12px;display:flex;flex-direction:column;justify-content:center;gap:3px;min-height:68px">
+                <div class="eyebrow" style="font-size:10px">Dam</div>
+                <div class="serif" style="font-size:15px">Willow</div>
+                <div class="mono" style="font-size:11px;color:#767263">0921 · Jersey</div>
+              </div>
+              <div style="background:repeating-linear-gradient(135deg,#efece3,#efece3 6px,#e8e4d8 6px,#e8e4d8 12px);padding:12px;display:flex;flex-direction:column;justify-content:center;gap:3px;min-height:68px">
+                <div class="eyebrow" style="font-size:10px">Sire</div>
+                <div class="serif" style="font-size:15px;color:#767263">Unknown</div>
+                <div class="mono" style="font-size:11px;color:#767263">AI · no record</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ 1d — customer store ═══════════════ -->
+  <div class="dv-opt" id="1d">
+    <div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>The farm store — all a customer ever sees · mobile 390</div>
+    <div class="dv-card" style="width:390px">
+      <div style="background:#efece3;min-height:860px;display:flex;flex-direction:column">
+
+        <div style="height:56px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid #d6d2c6">
+          <div class="serif" style="font-size:22px;letter-spacing:-.02em">Suchomski<span style="color:#5c6248">.</span></div>
+          <div class="eyebrow">Farm store</div>
+        </div>
+
+        <div style="padding:24px 16px 16px;border-bottom:1px solid #d6d2c6">
+          <div class="eyebrow">Wednesday 4 August</div>
+          <div class="serif" style="font-size:34px;margin-top:4px">Fresh today</div>
+          <div style="font-size:15px;color:#767263;margin-top:8px;text-wrap:pretty">Reserve what you want and pick it up at the farm. Pay cash or Venmo when you collect.</div>
+        </div>
+
+        <!-- products as rowlist -->
+        <div style="border-bottom:1px solid #d6d2c6;padding:20px 16px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+            <div>
+              <div class="serif" style="font-size:21px">Raw milk</div>
+              <div class="mono" style="font-size:13px;color:#767263;margin-top:2px">$8.00 per gallon</div>
+            </div>
+            <div class="mono" style="text-align:right;flex:none"><span style="font-size:21px;font-weight:500">7.4</span><br><span style="font-size:11px;color:#767263">gallons left</span></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <div style="flex:none;width:96px;min-height:48px;display:flex;align-items:center;padding:0 12px;border:1px solid #d6d2c6;background:#efece3;font:400 15px/1 'IBM Plex Mono',monospace;color:#a9a496">Qty</div>
+            <div style="flex:1;min-height:48px;display:flex;align-items:center;justify-content:center;border:1px solid #191a16;background:#191a16;color:#efece3;font:500 13px/1 'IBM Plex Sans',sans-serif;letter-spacing:.02em">Reserve</div>
+          </div>
+          <div style="font-size:13px;color:#5c6248;margin-top:12px">Want it every week? Set up a weekly pickup →</div>
+        </div>
+
+        <div style="border-bottom:1px solid #d6d2c6;padding:20px 16px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+            <div>
+              <div class="serif" style="font-size:21px">Eggs</div>
+              <div class="mono" style="font-size:13px;color:#767263;margin-top:2px">$6.50 per dozen</div>
+            </div>
+            <div class="mono" style="text-align:right;flex:none"><span style="font-size:21px;font-weight:500">9</span><br><span style="font-size:11px;color:#767263">dozen left</span></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <div style="flex:none;width:96px;min-height:48px;display:flex;align-items:center;padding:0 12px;border:1px solid #d6d2c6;background:#efece3;font:400 15px/1 'IBM Plex Mono',monospace;color:#a9a496">Qty</div>
+            <div style="flex:1;min-height:48px;display:flex;align-items:center;justify-content:center;border:1px solid #191a16;background:#191a16;color:#efece3;font:500 13px/1 'IBM Plex Sans',sans-serif;letter-spacing:.02em">Reserve</div>
+          </div>
+          <div style="font-size:13px;color:#5c6248;margin-top:12px">Want it every week? Set up a weekly pickup →</div>
+        </div>
+
+        <div style="border-bottom:1px solid #d6d2c6;padding:20px 16px;background:#e8e4d8">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+            <div>
+              <div class="serif" style="font-size:21px;color:#767263">Ground beef</div>
+              <div class="mono" style="font-size:13px;color:#767263;margin-top:2px">$9.00 per pound</div>
+            </div>
+            <div style="display:inline-flex;align-items:center;padding:2px 7px;border:1px solid #d6d2c6;background:#e8e4d8;color:#767263;font:500 11px/1.4 'IBM Plex Sans',sans-serif;letter-spacing:.08em;text-transform:uppercase;flex:none">Sold out</div>
+          </div>
+          <div style="font-size:13px;color:#767263;margin-top:12px">Back in September, after the next processing date.</div>
+        </div>
+
+        <!-- your pickups -->
+        <div style="padding:24px 16px 16px">
+          <div class="serif" style="font-size:27px">Your pickups</div>
+        </div>
+        <div style="border-top:1px solid #d6d2c6;padding:16px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+            <div>
+              <div class="serif" style="font-size:21px">2 gal raw milk</div>
+              <div class="mono" style="font-size:13px;color:#767263;margin-top:2px">Every Friday · next 7 August</div>
+            </div>
+            <div style="text-align:right;flex:none">
+              <div style="display:inline-flex;align-items:center;padding:2px 7px;border:1px solid #5c6248;color:#5c6248;font:500 11px/1.4 'IBM Plex Sans',sans-serif;letter-spacing:.08em;text-transform:uppercase">Weekly</div>
+              <div class="mono" style="font-size:15px;font-weight:500;margin-top:6px">$16.00</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <div style="flex:1;min-height:48px;display:flex;align-items:center;justify-content:center;border:1px solid #191a16;background:#191a16;color:#efece3;font:500 13px/1 'IBM Plex Sans',sans-serif">I picked this up</div>
+            <div style="flex:none;min-height:48px;display:flex;align-items:center;padding:0 16px;border:1px solid #191a16;font:500 13px/1 'IBM Plex Sans',sans-serif">Skip</div>
+          </div>
+        </div>
+        <div style="border-top:1px solid #d6d2c6;border-bottom:1px solid #d6d2c6;padding:16px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+            <div>
+              <div class="serif" style="font-size:21px">1 dozen eggs</div>
+              <div class="mono" style="font-size:13px;color:#767263;margin-top:2px">Reserved 3 August · pay at pickup</div>
+            </div>
+            <div class="mono" style="font-size:15px;font-weight:500;flex:none">$6.50</div>
+          </div>
+        </div>
+
+        <div style="padding:24px 16px">
+          <div style="border-left:2px solid #5c6248;background:#dfe0d3;padding:12px 16px;font-size:13px">
+            Today’s milk came from nine cows, bottled this morning. Nothing from an animal under treatment ever reaches a bottle.
+          </div>
+        </div>
+
+        <div style="flex:1"></div>
+        <div style="display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border-top:1px solid #d6d2c6">
+          <div style="min-height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-top:2px solid #5c6248;margin-top:-1px"><span class="eyebrow" style="letter-spacing:.06em;color:#191a16">Store</span></div>
+          <div style="min-height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-top:2px solid transparent;margin-top:-1px"><span class="eyebrow" style="letter-spacing:.06em">Pickups</span></div>
+          <div style="min-height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-top:2px solid transparent;margin-top:-1px"><span class="eyebrow" style="letter-spacing:.06em">Account</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="dv-next">Try next: “build Store and Books inside <a class="dv-oid" href="#1a">1a</a>’s shell” · “put <a class="dv-oid" href="#1b">1b</a>’s herd board on <a class="dv-oid" href="#1a">1a</a>’s home” · “show the bookkeeper’s narrower view” · “<a class="dv-oid" href="#1d">1d</a> needs photos and a warmer welcome”</p>
+</section>
+
+</x-dc>
+</body>
+</html>

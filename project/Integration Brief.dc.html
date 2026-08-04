@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet"><style>
+body{margin:0;background:#efece5;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#1c1b18}
+a{color:#5a6b3b}a:hover{color:#3f4c28}
+</style></helmet>
+
+<div style="max-width:1080px;margin:0 auto;padding:64px 56px 96px">
+
+  <div style="display:flex;align-items:baseline;gap:14px;border-bottom:1px solid rgba(28,27,24,.18);padding-bottom:18px;margin-bottom:44px">
+    <span style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#5a6b3b;border:1px solid rgba(90,107,59,.4);padding:5px 8px;border-radius:3px">Working brief</span>
+    <span style="font:400 11px/1 'IBM Plex Mono',monospace;color:rgba(28,27,24,.5)">v0 · awaiting codebase import</span>
+  </div>
+
+  <h1 style="font:400 52px/1.05 'Instrument Serif',serif;margin:0 0 18px;letter-spacing:-.01em;text-wrap:pretty">One farm, three apps, one shell</h1>
+  <p style="font:400 17px/1.6 'IBM Plex Sans',sans-serif;color:rgba(28,27,24,.72);max-width:60ch;margin:0 0 56px;text-wrap:pretty">How I read the problem, what I still need from you, and the structure I'd propose before drawing any screens. Correct me anywhere — it's cheaper now than after four mockups.</p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:56px">
+    <div style="background:#fbf9f4;border:1px solid rgba(28,27,24,.1);border-radius:6px;padding:26px 28px">
+      <div style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:rgba(28,27,24,.45);margin-bottom:16px">What I understood</div>
+      <div style="display:flex;flex-direction:column;gap:14px;font:400 14px/1.55 'IBM Plex Sans',sans-serif;color:rgba(28,27,24,.8)">
+        <div><strong style="font-weight:600;color:#1c1b18">farm-app</strong> — inventory and the farm store. Owns products, stock, and the only surface a customer ever sees.</div>
+        <div><strong style="font-weight:600;color:#1c1b18">herd app</strong> — the animals. Identity, health, and lactation records: gallons per cow per lactation, and averages across the herd.</div>
+        <div><strong style="font-weight:600;color:#1c1b18">FarmFinanceTracker</strong> — the books. Sales revenue from the store, costs attributed to the herd, everything else.</div>
+        <div>Mixed livestock plus crops. Internal users are you and your bookkeeper; customers only touch the store.</div>
+      </div>
+    </div>
+    <div style="background:#fbf9f4;border:1px solid rgba(28,27,24,.1);border-radius:6px;padding:26px 28px">
+      <div style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:rgba(28,27,24,.45);margin-bottom:16px">The seam that matters</div>
+      <p style="font:400 14px/1.6 'IBM Plex Sans',sans-serif;color:rgba(28,27,24,.8);margin:0 0 14px;text-wrap:pretty">Milk is the spine. A cow produces gallons, gallons become store inventory, inventory sells, and the sale lands in the books. Costs run the other direction and land back on the cow.</p>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font:400 12px/1 'IBM Plex Mono',monospace;color:#5a6b3b">
+        <span style="border:1px solid rgba(90,107,59,.35);padding:6px 9px;border-radius:3px;background:rgba(90,107,59,.07)">cow</span><span style="color:rgba(28,27,24,.35)">→</span>
+        <span style="border:1px solid rgba(90,107,59,.35);padding:6px 9px;border-radius:3px;background:rgba(90,107,59,.07)">lactation</span><span style="color:rgba(28,27,24,.35)">→</span>
+        <span style="border:1px solid rgba(90,107,59,.35);padding:6px 9px;border-radius:3px;background:rgba(90,107,59,.07)">gallons</span><span style="color:rgba(28,27,24,.35)">→</span>
+        <span style="border:1px solid rgba(90,107,59,.35);padding:6px 9px;border-radius:3px;background:rgba(90,107,59,.07)">inventory lot</span><span style="color:rgba(28,27,24,.35)">→</span>
+        <span style="border:1px solid rgba(90,107,59,.35);padding:6px 9px;border-radius:3px;background:rgba(90,107,59,.07)">store order</span><span style="color:rgba(28,27,24,.35)">→</span>
+        <span style="border:1px solid rgba(90,107,59,.35);padding:6px 9px;border-radius:3px;background:rgba(90,107,59,.07)">ledger entry</span>
+      </div>
+      <p style="font:400 13px/1.6 'IBM Plex Sans',sans-serif;color:rgba(28,27,24,.6);margin:16px 0 0;text-wrap:pretty">Cost and profit per head is the payoff of that chain, so it's the number I'd design the dashboard around.</p>
+    </div>
+  </div>
+
+  <h2 style="font:400 30px/1.2 'Instrument Serif',serif;margin:0 0 20px">Assumptions I'm making</h2>
+  <div style="display:flex;flex-direction:column;gap:0;border-top:1px solid rgba(28,27,24,.14);margin-bottom:56px">
+    <div style="display:grid;grid-template-columns:150px 1fr;gap:24px;padding:18px 0;border-bottom:1px solid rgba(28,27,24,.09)"><span style="font:500 11px/1.5 'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:rgba(28,27,24,.45)">Two shells</span><span style="font:400 14px/1.6 'IBM Plex Sans',sans-serif;color:rgba(28,27,24,.8);text-wrap:pretty">The internal app and the customer store are one system but not one interface. Customers get a small, quiet storefront with none of the operational nav.</span></div>
+    <div style="display:grid;grid-template-columns:150px 1fr;gap:24px;padding:18px 0;border-bottom:1px solid rgba(28,27,24,.09)"><span style="font:500 11px/1.5 'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:rgba(28,27,24,.45)">No modules</span><span style="font:400 14px/1.6 'IBM Plex Sans',sans-serif;color:rgba(28,27,24,.8);text-wrap:pretty">Nav is by farm object — Herd, Store, Books, plus a Today home — not by which app the feature used to live in. A user should never need to know there were three apps.</span></div>
+    <div style="display:grid;grid-template-columns:150px 1fr;gap:24px;padding:18px 0;border-bottom:1px solid rgba(28,27,24,.09)"><span style="font:500 11px/1.5 'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:rgba(28,27,24,.45)">Animal record</span><span style="font:400 14px/1.6 'IBM Plex Sans',sans-serif;color:rgba(28,27,24,.8);text-wrap:pretty">One page per cow holding identity, health, the lactation curve, and her financial line — feed and vet cost in, milk revenue out. This is where the integration becomes visible.</span></div>
+    <div style="display:grid;grid-template-columns:150px 1fr;gap:24px;padding:18px 0;border-bottom:1px solid rgba(28,27,24,.09)"><span style="font:500 11px/1.5 'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:rgba(28,27,24,.45)">Bookkeeper</span><span style="font:400 14px/1.6 'IBM Plex Sans',sans-serif;color:rgba(28,27,24,.8);text-wrap:pretty">Same shell, narrower permissions. She works in Books and needs sales to arrive from the store already categorized rather than re-entered.</span></div>
+    <div style="display:grid;grid-template-columns:150px 1fr;gap:24px;padding:18px 0;border-bottom:1px solid rgba(28,27,24,.09)"><span style="font:500 11px/1.5 'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:rgba(28,27,24,.45)">Mobile</span><span style="font:400 14px/1.6 'IBM Plex Sans',sans-serif;color:rgba(28,27,24,.8);text-wrap:pretty">Phone use in the field is capture, not analysis: log a milking, log a treatment, check a cow. Desktop is for reading.</span></div>
+    <div style="display:grid;grid-template-columns:150px 1fr;gap:24px;padding:18px 0;border-bottom:1px solid rgba(28,27,24,.09)"><span style="font:500 11px/1.5 'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:rgba(28,27,24,.45)">Crops
+</x-dc>
+</body>
+</html>

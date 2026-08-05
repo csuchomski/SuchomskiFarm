@@ -111,6 +111,37 @@ function round3(n: number) {
   return Math.round(n * 1000) / 1000;
 }
 
+/**
+ * Insert a new inventory batch. Chosen as the first real write in the app
+ * because it's the least entangled one available: public.inventory_batches
+ * has no farm_id, no created_by/rev audit columns, and no soft-delete — so
+ * if this fails, the cause is write permissions rather than a malformed
+ * audit payload.
+ *
+ * `reserved` is NOT NULL in the schema, so it's always sent explicitly.
+ */
+export async function addInventoryBatch(input: {
+  productId: number;
+  producedDate: string;
+  quantity: number;
+  herdAnimalId?: string | null;
+}): Promise<RealBatch> {
+  const { data, error } = await supabase
+    .from("inventory_batches")
+    .insert({
+      product_id: input.productId,
+      produced_date: input.producedDate,
+      quantity: input.quantity,
+      reserved: 0,
+      herd_animal_id: input.herdAnimalId ?? null,
+    })
+    .select("id, product_id, produced_date, quantity, reserved, herd_animal_id")
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as RealBatch;
+}
+
 /** "$8.00 / gallon", or just the unit when the product has no price set. */
 export function formatUnitPrice(p: RealProduct): string {
   if (p.price === null || p.price === undefined) return `— / ${p.unit}`;

@@ -106,6 +106,18 @@ export default function AnimalRecord() {
   const name = animal.barn_name ?? `Tag ${animal.ear_tag}`;
   const breeding = describeBreeding(breeds);
 
+  // Both directions of the pedigree come from the same herd fetch, so these
+  // cost nothing extra.
+  const offspring = herd
+    .filter((a) => a.dam_id === animal.id || a.sire_id === animal.id)
+    .sort((a, b) => b.birth_date.localeCompare(a.birth_date)); // newest first
+
+  const siblings = animal.dam_id
+    ? herd
+        .filter((a) => a.id !== animal.id && a.dam_id === animal.dam_id)
+        .sort((a, b) => b.birth_date.localeCompare(a.birth_date))
+    : [];
+
   return (
     <Frame title={name}>
       <div className="record-head">
@@ -229,6 +241,35 @@ export default function AnimalRecord() {
             <ParentCell label="Dam" parent={dam} recorded={Boolean(animal.dam_id)} />
             <ParentCell label="Sire" parent={sire} recorded={Boolean(animal.sire_id)} />
           </div>
+
+          <div className="serif" style={{ fontSize: 21, margin: "24px 0 12px" }}>
+            Offspring{offspring.length > 0 && <span className="mono" style={{ fontSize: 13, color: "var(--ink-muted)" }}> · {offspring.length}</span>}
+          </div>
+          {offspring.length > 0 ? (
+            offspring.map((child) => (
+              <RelativeRow
+                key={child.id}
+                animal={child}
+                note={child.dam_id === animal.id ? "out of" : "by"}
+              />
+            ))
+          ) : (
+            <p style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+              No offspring recorded — nothing in the herd lists {name} as a parent.
+            </p>
+          )}
+
+          {siblings.length > 0 && (
+            <>
+              <div className="serif" style={{ fontSize: 21, margin: "24px 0 12px" }}>
+                Out of the same dam
+                <span className="mono" style={{ fontSize: 13, color: "var(--ink-muted)" }}> · {siblings.length}</span>
+              </div>
+              {siblings.map((s) => (
+                <RelativeRow key={s.id} animal={s} note={dam?.barn_name || `tag ${dam?.ear_tag}`} />
+              ))}
+            </>
+          )}
         </div>
       </div>
     </Frame>
@@ -263,6 +304,25 @@ function ParentCell({ label, parent, recorded }: { label: string; parent: RealAn
         </>
       )}
     </div>
+  );
+}
+
+/** A related animal, linked. Same shape for offspring and siblings so the
+ * two lists read as one idea rather than two designs. */
+function RelativeRow({ animal, note }: { animal: RealAnimal; note: string }) {
+  return (
+    <Link to={`/animals/${animal.ear_tag}`} className="relative-row">
+      <EarTag tag={animal.ear_tag} accent="herd" />
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span className="serif" style={{ fontSize: 15 }}>
+          {animal.barn_name || `Tag ${animal.ear_tag}`}
+        </span>
+        <br />
+        <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+          {note} · {animal.class} · {formatAge(animal.birth_date)}
+        </span>
+      </span>
+    </Link>
   );
 }
 

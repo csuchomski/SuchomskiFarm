@@ -171,3 +171,16 @@
   padding: 8px 12px;
   margin-bottom: 24px;
 }
+
+.relative-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink);
+}
+
+.relative-row:hover {
+  background: var(--page);
+}

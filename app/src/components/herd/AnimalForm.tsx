@@ -44,6 +44,8 @@ export function AnimalForm({
   animal,
   herd,
   farmId,
+  prefill,
+  lockedParent,
   onSaved,
   onCancel,
 }: {
@@ -51,6 +53,12 @@ export function AnimalForm({
   animal?: RealAnimal;
   herd: RealAnimal[];
   farmId: string | null;
+  /** Starting values when creating — e.g. a calf opened from its dam. */
+  prefill?: Partial<AnimalEdit>;
+  /** Which parent was fixed by where the form was opened from. Shown as
+   * read-only rather than a picker, since changing it here would silently
+   * detach the calf from the animal you started on. */
+  lockedParent?: "dam" | "sire";
   onSaved: (saved: RealAnimal, wasCreated: boolean) => void;
   onCancel: () => void;
 }) {
@@ -72,8 +80,14 @@ export function AnimalForm({
           origin: animal.origin ?? "",
         }
       : // Default the required-but-unguessable fields to what the herd
-        // already uses, so a new animal matches its neighbours.
-        { ...BLANK, purpose: commonest(herd, "purpose"), origin: commonest(herd, "origin") },
+        // already uses, so a new animal matches its neighbours. A calf
+        // opened from a parent is born here by definition.
+        {
+          ...BLANK,
+          purpose: commonest(herd, "purpose"),
+          origin: commonest(herd, "origin") || "born_here",
+          ...prefill,
+        },
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -219,6 +233,9 @@ export function AnimalForm({
           />
         </Field>
 
+        {lockedParent === "dam" ? (
+          <LockedParent label="Dam" herd={herd} id={form.dam_id} />
+        ) : (
         <Field label="Dam">
           <select
             className="animal-form__input"
@@ -233,7 +250,11 @@ export function AnimalForm({
             ))}
           </select>
         </Field>
+        )}
 
+        {lockedParent === "sire" ? (
+          <LockedParent label="Sire" herd={herd} id={form.sire_id} />
+        ) : (
         <Field label="Sire">
           <select
             className="animal-form__input"
@@ -248,6 +269,7 @@ export function AnimalForm({
             ))}
           </select>
         </Field>
+        )}
       </div>
 
       <div style={{ marginTop: 12 }}>
@@ -411,6 +433,19 @@ function ListField({
 }
 
 const ADD_SENTINEL = "__add__";
+
+/** The parent this form was opened from: shown, not editable. */
+function LockedParent({ label, herd, id }: { label: string; herd: RealAnimal[]; id: string | null }) {
+  const parent = herd.find((a) => a.id === id);
+  return (
+    <Field label={label}>
+      <div className="animal-form__locked">
+        <span>{parent ? parent.barn_name || `Tag ${parent.ear_tag}` : "—"}</span>
+        <span className="eyebrow">Fixed</span>
+      </div>
+    </Field>
+  );
+}
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (

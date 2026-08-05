@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "../ui";
 import { setParent, type RealAnimal } from "../../lib/herd";
+import { AnimalForm } from "./AnimalForm";
 
 /**
  * Recording a calf from the parent's record. The alternative is opening the
@@ -10,15 +11,22 @@ import { setParent, type RealAnimal } from "../../lib/herd";
 export function OffspringEditor({
   parent,
   herd,
+  farmId,
   onChanged,
+  onCreated,
   onClose,
 }: {
   parent: RealAnimal;
   herd: RealAnimal[];
+  farmId: string | null;
+  /** An existing animal was linked to this parent. */
   onChanged: (child: RealAnimal) => void;
+  /** A new animal was created with this parent already set. */
+  onCreated: (child: RealAnimal) => void;
   onClose: () => void;
 }) {
   const role: "dam" | "sire" = parent.sex === "male" ? "sire" : "dam";
+  const [mode, setMode] = useState<"link" | "new">("link");
   const [childId, setChildId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,10 +53,35 @@ export function OffspringEditor({
     }
   };
 
+  const parentName = parent.barn_name || `tag ${parent.ear_tag}`;
+
+  if (mode === "new") {
+    return (
+      <div className="offspring-editor">
+        <div className="eyebrow" style={{ marginBottom: 8 }}>
+          New calf {role === "dam" ? "out of" : "by"} {parentName}
+        </div>
+        <AnimalForm
+          herd={herd}
+          farmId={farmId}
+          // The parent is fixed by where this was opened from, and the
+          // other side is offered as usual.
+          prefill={{ [role === "dam" ? "dam_id" : "sire_id"]: parent.id, class: "calf" }}
+          lockedParent={role}
+          onCancel={onClose}
+          onSaved={(saved) => {
+            onCreated(saved);
+            onClose();
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="offspring-editor">
       <div className="eyebrow" style={{ marginBottom: 8 }}>
-        Record an existing animal as {role === "dam" ? "out of" : "by"} {parent.barn_name || `tag ${parent.ear_tag}`}
+        Record an animal as {role === "dam" ? "out of" : "by"} {parentName}
       </div>
 
       {candidates.length === 0 ? (
@@ -77,6 +110,10 @@ export function OffspringEditor({
           <Button onClick={onClose}>Cancel</Button>
         </div>
       )}
+
+      <button type="button" className="link-button mono" style={{ marginTop: 10 }} onClick={() => setMode("new")}>
+        + Or add a calf that isn't in the herd yet →
+      </button>
 
       {error && (
         <p className="mono" style={{ fontSize: 13, color: "var(--red)", marginTop: 8 }} role="alert">

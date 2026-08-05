@@ -261,10 +261,12 @@ export default function AnimalRecord() {
             <OffspringEditor
               parent={animal}
               herd={herd}
+              farmId={farmId}
               onClose={() => setLinking(false)}
               onChanged={(child) =>
                 setResult({ ...result, herd: herd.map((a) => (a.id === child.id ? child : a)) })
               }
+              onCreated={(child) => setResult({ ...result, herd: [...herd, child] })}
             />
           )}
           {offspring.length > 0 ? (

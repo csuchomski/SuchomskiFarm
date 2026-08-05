@@ -40,3 +40,18 @@
   resize: vertical;
   font-family: "IBM Plex Sans", sans-serif;
 }
+
+/* A parent fixed by where the form was opened from — shown so you can see
+   what you're attaching to, not editable so it can't be silently detached. */
+.animal-form__locked {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  background: var(--page);
+  color: var(--ink-muted);
+  font: 400 15px/1 "IBM Plex Sans", sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}

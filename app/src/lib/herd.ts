@@ -35,13 +35,22 @@ export interface BreedShare {
 }
 
 export async function fetchAnimals(): Promise<RealAnimal[]> {
-  const { data, error } = await herdSchema().from("animals").select(ANIMAL_COLUMNS).order("barn_name");
+  const { data, error } = await herdSchema()
+    .from("animals")
+    .select(ANIMAL_COLUMNS)
+    .is("deleted_at", null)
+    .order("barn_name");
   if (error) throw new Error(`herd.animals: ${error.message}`);
   return (data ?? []) as RealAnimal[];
 }
 
 export async function fetchAnimalByTag(earTag: string): Promise<RealAnimal | null> {
-  const { data, error } = await herdSchema().from("animals").select(ANIMAL_COLUMNS).eq("ear_tag", earTag).maybeSingle();
+  const { data, error } = await herdSchema()
+    .from("animals")
+    .select(ANIMAL_COLUMNS)
+    .eq("ear_tag", earTag)
+    .is("deleted_at", null)
+    .maybeSingle();
   if (error) throw new Error(`herd.animals: ${error.message}`);
   return data as RealAnimal | null;
 }
@@ -106,8 +115,12 @@ export async function fetchBreedComposition(animalIds: string[]): Promise<Map<st
   if (animalIds.length === 0) return out;
 
   const [compRes, breedRes] = await Promise.all([
-    herdSchema().from("breed_composition").select("animal_id, breed_id, percent").in("animal_id", animalIds),
-    herdSchema().from("breeds").select("id, code, name"),
+    herdSchema()
+      .from("breed_composition")
+      .select("animal_id, breed_id, percent")
+      .in("animal_id", animalIds)
+      .is("deleted_at", null),
+    herdSchema().from("breeds").select("id, code, name").is("deleted_at", null),
   ]);
   if (compRes.error) throw new Error(`herd.breed_composition: ${compRes.error.message}`);
   if (breedRes.error) throw new Error(`herd.breeds: ${breedRes.error.message}`);
@@ -116,19 +129,30 @@ export async function fetchBreedComposition(animalIds: string[]): Promise<Map<st
     ((breedRes.data ?? []) as { id: string; code: string; name: string }[]).map((b) => [b.id, b]),
   );
 
+  // Summed per breed, not one entry per row. An animal can inherit the same
+  // breed down both sides — 50% Jersey from the dam and 25% from the sire is
+  // 75% Jersey, not "Jersey · Jersey".
+  const byAnimal = new Map<string, Map<string, number>>();
   for (const row of (compRes.data ?? []) as { animal_id: string; breed_id: string; percent: number }[]) {
-    const breed = breeds.get(row.breed_id);
-    const list = out.get(row.animal_id) ?? [];
-    list.push({
-      breedId: row.breed_id,
-      name: breed?.name ?? "Unknown breed",
-      code: breed?.code ?? "?",
-      percent: Number(row.percent),
-    });
-    out.set(row.animal_id, list);
+    const shares = byAnimal.get(row.animal_id) ?? new Map<string, number>();
+    shares.set(row.breed_id, (shares.get(row.breed_id) ?? 0) + Number(row.percent));
+    byAnimal.set(row.animal_id, shares);
   }
 
-  for (const list of out.values()) list.sort((a, b) => b.percent - a.percent);
+  for (const [animalId, shares] of byAnimal) {
+    const list: BreedShare[] = [...shares.entries()].map(([breedId, percent]) => {
+      const breed = breeds.get(breedId);
+      return {
+        breedId,
+        name: breed?.name ?? "Unknown breed",
+        code: breed?.code ?? "?",
+        percent: Math.round(percent * 100) / 100,
+      };
+    });
+    list.sort((a, b) => b.percent - a.percent || a.name.localeCompare(b.name));
+    out.set(animalId, list);
+  }
+
   return out;
 }
 

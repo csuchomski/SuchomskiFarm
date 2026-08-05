@@ -88,12 +88,14 @@ export async function fetchDashboardData(todayIso: string): Promise<DashboardDat
         .schema("herd")
         .from("animals")
         .select("id, ear_tag, barn_name, sex, class, status, birth_date")
+        .is("deleted_at", null)
         .order("barn_name"),
       supabase
         .schema("herd")
         .from("production_records")
         .select("id, animal_id, product_id, product_name, quantity, unit, produced_date, batch_id")
-        .eq("produced_date", todayIso),
+        .eq("produced_date", todayIso)
+        .is("deleted_at", null),
       supabase.from("inventory_batches").select("id, product_id, produced_date, quantity, reserved"),
       fetchProducts(),
       supabase.from("orders").select("id, status, picked_up_date, cancelled_date"),

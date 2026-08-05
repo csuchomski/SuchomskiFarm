@@ -1,6 +1,13 @@
 -- 001 — Scope the public (store/books) schema to a farm.
 --
--- STATUS: PROPOSAL. Not run.
+-- STATUS: SUPERSEDED. Do not run. See docs/business-as-tenant.md.
+--
+-- This adds businesses.farm_id, pointing business -> farm. The intended
+-- direction is the opposite: the business is the workspace and the farm is
+-- what a business of type 'farm' has, so the link belongs on herd.farms as
+-- business_id. Kept for the reasoning, not to be executed.
+--
+-- (Original header follows.)
 --
 -- Why: herd.* is multi-tenant — every table carries farm_id and every RLS
 -- policy checks herd.is_farm_member(farm_id). public.* has RLS enabled and

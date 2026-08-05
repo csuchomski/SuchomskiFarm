@@ -38,6 +38,22 @@
   color: var(--ink-faint);
 }
 
+.topbar__business {
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  color: var(--ink);
+  font: 500 11px/1 "IBM Plex Sans", sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 7px 8px;
+  max-width: 220px;
+}
+
+.topbar__business:focus-visible {
+  outline: 2px solid var(--herd-green);
+  outline-offset: 1px;
+}
+
 .topbar__signout {
   background: none;
   border: none;

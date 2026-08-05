@@ -1,9 +1,9 @@
-import { useFarm } from "../../lib/farm";
+import { useWorkspace } from "../../lib/workspace";
 import { signOut } from "../../lib/auth";
 import "./topbar.css";
 
 export function TopBar({ searchPlaceholder = "Search everything" }: { searchPlaceholder?: string }) {
-  const { role, loading } = useFarm();
+  const { businesses, business, role, loading, setBusinessId } = useWorkspace();
 
   return (
     <header className="topbar">
@@ -15,7 +15,28 @@ export function TopBar({ searchPlaceholder = "Search everything" }: { searchPlac
           <span className="mono topbar__search-icon">⌕</span>
           <span className="topbar__search-placeholder">{searchPlaceholder}</span>
         </div>
-        <div className="eyebrow">{loading ? "…" : `Suchomski Family Farm · ${role ?? "no role"}`}</div>
+
+        {loading ? (
+          <span className="eyebrow">…</span>
+        ) : businesses.length > 1 ? (
+          <select
+            className="topbar__business"
+            value={business?.id ?? ""}
+            onChange={(e) => setBusinessId(Number(e.target.value))}
+            aria-label="Business"
+          >
+            {businesses.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="eyebrow">{business?.name ?? "No business"}</span>
+        )}
+
+        {role && <span className="eyebrow">{role}</span>}
+
         <button className="topbar__signout eyebrow" onClick={() => void signOut()}>
           Sign out
         </button>

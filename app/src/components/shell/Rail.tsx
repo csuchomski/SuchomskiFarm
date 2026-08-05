@@ -1,38 +1,42 @@
 import { NavLink } from "react-router-dom";
-import { navGroups, topLevel, type NavItem } from "./nav";
+import { groupsForModules, topLevel, type NavItem } from "./nav";
+import { useWorkspace } from "../../lib/workspace";
 import "./rail.css";
 
 function RailRow({ item }: { item: NavItem }) {
-  const inner = (
-    <>
-      <span>{item.label}</span>
-      {item.count !== undefined && (
-        <span className={`mono rail-row__count rail-row__count--${item.countColor ?? "muted"}`}>{item.count}</span>
-      )}
-      {item.dot && <span className={`rail-row__dot rail-row__dot--${item.dot}`} />}
-    </>
-  );
-
-  if (item.to) {
+  if (!item.to) {
     return (
-      <NavLink
-        to={item.to}
-        end={item.to === "/"}
-        className={({ isActive }) => `rail-row ${isActive ? "rail-row--active" : ""}`}
-      >
-        {inner}
-      </NavLink>
+      <div className="rail-row rail-row--inert" title="Not built yet">
+        <span>{item.label}</span>
+      </div>
     );
   }
-
-  return <div className="rail-row rail-row--inert">{inner}</div>;
+  return (
+    <NavLink
+      to={item.to}
+      end={item.to === "/"}
+      className={({ isActive }) => `rail-row ${isActive ? "rail-row--active" : ""}`}
+    >
+      <span>{item.label}</span>
+    </NavLink>
+  );
 }
 
 export function Rail() {
+  const { modules, loading } = useWorkspace();
+  const groups = groupsForModules(modules);
+
   return (
     <aside className="rail">
       <RailRow item={topLevel} />
-      {navGroups.map((group) => (
+
+      {loading && (
+        <div className="eyebrow rail__heading" style={{ color: "var(--ink-faint)" }}>
+          Loading…
+        </div>
+      )}
+
+      {groups.map((group) => (
         <div key={group.heading}>
           <div className="eyebrow rail__heading">{group.heading}</div>
           {group.items.map((item) => (
@@ -40,6 +44,7 @@ export function Rail() {
           ))}
         </div>
       ))}
+
       <div className="rail__spacer" />
       <NavLink to="/shop" className="rail__footer-link">
         Farm store ↗

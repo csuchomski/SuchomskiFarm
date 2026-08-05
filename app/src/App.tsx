@@ -6,7 +6,7 @@ import StoreProducts from "./routes/StoreProducts";
 import BooksTransactions from "./routes/BooksTransactions";
 import CustomerStore from "./routes/CustomerStore";
 import { AuthProvider } from "./lib/auth";
-import { FarmProvider } from "./lib/farm";
+import { WorkspaceProvider } from "./lib/workspace";
 import { RequireAuth } from "./components/auth/RequireAuth";
 
 // Hash routing rather than browser routing: this deploys to GitHub Pages
@@ -18,7 +18,7 @@ import { RequireAuth } from "./components/auth/RequireAuth";
 export default function App() {
   return (
     <AuthProvider>
-      <FarmProvider>
+      <WorkspaceProvider>
         <HashRouter>
           <Routes>
             <Route element={<RequireAuth />}>
@@ -33,7 +33,7 @@ export default function App() {
             <Route path="/shop" element={<CustomerStore />} />
           </Routes>
         </HashRouter>
-      </FarmProvider>
+      </WorkspaceProvider>
     </AuthProvider>
   );
 }

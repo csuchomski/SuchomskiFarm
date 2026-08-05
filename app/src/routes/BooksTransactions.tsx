@@ -12,6 +12,7 @@ import {
   type Direction,
   type RealTransaction,
 } from "../lib/books-data";
+import { useWorkspace } from "../lib/workspace";
 import "./books-transactions.css";
 
 type Fetch = { state: "loading" } | { state: "error"; message: string } | { state: "ok"; data: BooksData };
@@ -23,8 +24,11 @@ const money = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDi
 const COLS = "96px 1fr 140px 120px 120px 120px 110px";
 
 export default function BooksTransactions() {
+  // The business is chosen once, in the topbar, and every screen follows it —
+  // rather than Books keeping a second selector that could disagree with it.
+  const { business } = useWorkspace();
+  const businessId = business?.id ?? null;
   const [result, setResult] = useState<Fetch>({ state: "loading" });
-  const [businessId, setBusinessId] = useState<number | null>(null);
 
   const [showForm, setShowForm] = useState(false);
   const [save, setSave] = useState<Save>({ state: "idle" });
@@ -44,7 +48,6 @@ export default function BooksTransactions() {
   const load = useCallback(async () => {
     const data = await fetchBooksData();
     setResult({ state: "ok", data });
-    setBusinessId((cur) => cur ?? data.businesses[0]?.id ?? null);
     setAccount((cur) => cur || data.accounts[0]?.name || "");
     return data;
   }, []);
@@ -61,7 +64,6 @@ export default function BooksTransactions() {
 
   const data = result.state === "ok" ? result.data : null;
   const types = useMemo(() => typeMap(data?.types ?? []), [data?.types]);
-  const business = data?.businesses.find((b) => b.id === businessId) ?? null;
   const rows: RealTransaction[] = data ? data.transactions.filter((t) => t.business_id === businessId) : [];
   const totals = summarise(rows, types);
 
@@ -127,22 +129,7 @@ export default function BooksTransactions() {
         title="Transactions"
         actions={
           <>
-            {data && data.businesses.length > 1 && (
-              <select
-                className="entry-form__field mono"
-                value={businessId ?? ""}
-                onChange={(e) => setBusinessId(Number(e.target.value))}
-                aria-label="Business"
-                style={{ minHeight: 44 }}
-              >
-                {data.businesses.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            )}
-            <Button variant="filled" onClick={() => setShowForm((v) => !v)} disabled={!data}>
+            <Button variant="filled" onClick={() => setShowForm((v) => !v)} disabled={!data || !businessId}>
               {showForm ? "Cancel" : "Add entry"}
             </Button>
           </>

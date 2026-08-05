@@ -6,6 +6,8 @@ import StoreProducts from "./routes/StoreProducts";
 import BooksTransactions from "./routes/BooksTransactions";
 import CustomerStore from "./routes/CustomerStore";
 import { AppStateProvider } from "./lib/store";
+import { AuthProvider } from "./lib/auth";
+import { RequireAuth } from "./components/auth/RequireAuth";
 
 // Hash routing rather than browser routing: this deploys to GitHub Pages
 // (a static file host with no server-side rewrite config), so a clean
@@ -15,17 +17,23 @@ import { AppStateProvider } from "./lib/store";
 // portable over pretty URLs, for an internal family-farm tool.
 export default function App() {
   return (
-    <AppStateProvider>
-      <HashRouter>
-        <Routes>
-          <Route path="/" element={<Today />} />
-          <Route path="/animals" element={<Animals />} />
-          <Route path="/animals/:tag" element={<AnimalRecord />} />
-          <Route path="/store/products" element={<StoreProducts />} />
-          <Route path="/books/transactions" element={<BooksTransactions />} />
-          <Route path="/shop" element={<CustomerStore />} />
-        </Routes>
-      </HashRouter>
-    </AppStateProvider>
+    <AuthProvider>
+      <AppStateProvider>
+        <HashRouter>
+          <Routes>
+            <Route element={<RequireAuth />}>
+              <Route path="/" element={<Today />} />
+              <Route path="/animals" element={<Animals />} />
+              <Route path="/animals/:tag" element={<AnimalRecord />} />
+              <Route path="/store/products" element={<StoreProducts />} />
+              <Route path="/books/transactions" element={<BooksTransactions />} />
+            </Route>
+            {/* Customer store sits outside the auth gate — a customer isn't
+                a farm_members row. See RequireAuth's comment. */}
+            <Route path="/shop" element={<CustomerStore />} />
+          </Routes>
+        </HashRouter>
+      </AppStateProvider>
+    </AuthProvider>
   );
 }

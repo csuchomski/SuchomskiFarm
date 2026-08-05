@@ -1,0 +1,29 @@
+.sign-in-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--page);
+}
+
+.sign-in-card {
+  width: 340px;
+  padding: 32px;
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+}
+
+.sign-in-field {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 15px/1 "IBM Plex Sans", sans-serif;
+}
+
+.sign-in-field:focus-visible {
+  outline: 2px solid var(--herd-green);
+  outline-offset: 1px;
+}

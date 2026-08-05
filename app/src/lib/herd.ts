@@ -1,11 +1,12 @@
 import { herdSchema } from "./supabase";
 
 /**
- * Real-data access layer against the herd.animals table, kept separate
- * from mockData.ts so it's obvious which screens have made the jump.
- * Deliberately minimal right now — no joins to breed_composition,
- * lactations, treatments, or cost_entries yet. Those come in later steps;
- * see IMPLEMENTATION_PLAN.md.
+ * Access layer for herd.animals.
+ *
+ * Deliberately minimal — no joins to breed_composition, lactations,
+ * treatments or cost_entries yet. breed_composition has rows and would be a
+ * cheap win; the rest are empty tables, so joining them would add queries
+ * that can only return nothing. See IMPLEMENTATION_PLAN.md.
  */
 export interface RealAnimal {
   id: string;

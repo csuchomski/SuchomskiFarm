@@ -1,6 +1,6 @@
 # Implementation plan — Integrated Farm App
 
-Status: **QUEUED — not started.** Waiting for explicit go-ahead from Chris.
+Status: **BUILT.** All 5 screens implemented in `app/` (React + TypeScript + Vite), verified with `npm run build` (typecheck clean) and a Playwright screenshot pass against every route. See `app/README.md` for how to run it and what's in/out of scope.
 
 ## Source of truth
 - `README.md` — handoff instructions

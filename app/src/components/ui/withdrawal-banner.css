@@ -1,0 +1,34 @@
+.withdrawal-banner {
+  background: var(--hazard-yellow);
+  color: var(--ink);
+}
+
+.withdrawal-banner--full {
+  border-top: 3px solid var(--ink);
+  border-bottom: 3px solid var(--ink);
+  padding: 12px 32px;
+}
+
+.withdrawal-banner--boxed {
+  border-top: 3px solid var(--ink);
+  border-bottom: 3px solid var(--ink);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.withdrawal-banner__eyebrow {
+  color: var(--ink);
+}
+
+.withdrawal-banner__title {
+  font-size: 21px;
+  margin: 2px 0;
+}
+
+.withdrawal-banner__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  font-size: 13px;
+  font-weight: 500;
+}

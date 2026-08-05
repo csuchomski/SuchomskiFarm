@@ -1,0 +1,37 @@
+.arriving-panel {
+  border-left: 2px solid var(--herd-green);
+  background: var(--paper-tint);
+  padding: 14px 16px;
+  margin: 24px 0;
+}
+
+.arriving-panel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.arriving-panel__body {
+  font-size: 13px;
+  margin-bottom: 12px;
+  max-width: 68ch;
+}
+
+.action-row {
+  display: flex;
+  gap: 8px;
+}
+
+.ledger-footer {
+  display: grid;
+  grid-template-columns: 1fr 348px;
+  gap: 32px;
+  margin-top: 24px;
+}
+
+.attribution-tag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

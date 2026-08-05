@@ -1,0 +1,112 @@
+.shop-hero {
+  padding: 24px 16px 16px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.shop-hero__title {
+  font-size: 34px;
+  margin-top: 4px;
+}
+
+.shop-hero__lede {
+  font-size: 15px;
+  color: var(--ink-muted);
+  margin-top: 8px;
+}
+
+.shop-product {
+  border-bottom: 1px solid var(--hairline);
+  padding: 20px 16px;
+}
+
+.shop-product--muted {
+  background: var(--page);
+}
+
+.shop-product__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.shop-product__name {
+  font-size: 21px;
+}
+
+.shop-product__price {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin-top: 2px;
+}
+
+.shop-product__qty {
+  text-align: right;
+  flex: none;
+}
+
+.shop-product__qty-num {
+  font-size: 21px;
+  font-weight: 500;
+}
+
+.shop-product__qty-label {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.shop-product__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.shop-qty-field {
+  flex: none;
+  width: 96px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  font: 400 15px/1 "IBM Plex Mono", monospace;
+  color: var(--ink-faint);
+}
+
+.shop-reserve-btn {
+  flex: 1;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  font: 500 13px/1 "IBM Plex Sans", sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.shop-weekly-link {
+  font-size: 13px;
+  color: var(--herd-green);
+  margin-top: 12px;
+}
+
+.shop-pickups-title {
+  padding: 24px 16px 16px;
+  font-size: 27px;
+}
+
+.shop-pickup {
+  border-top: 1px solid var(--hairline);
+  padding: 16px;
+}
+
+.shop-pickup:last-of-type {
+  border-bottom: 1px solid var(--hairline);
+}
+
+.shop-note {
+  padding: 24px 16px;
+}

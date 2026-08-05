@@ -1,0 +1,25 @@
+.stat-tile {
+  min-width: 104px;
+}
+
+.stat-tile__value--lg {
+  font-size: 27px;
+}
+
+.stat-tile__value--md {
+  font-size: 21px;
+}
+
+.stat-tile__value--red {
+  color: var(--red);
+}
+
+.stat-tile__unit {
+  font-size: 13px;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+}
+
+.stat-tile__label {
+  margin-top: 4px;
+}

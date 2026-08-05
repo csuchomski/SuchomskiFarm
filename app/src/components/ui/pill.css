@@ -1,0 +1,32 @@
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  font: 500 11px/1.4 "IBM Plex Sans", sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pill--outline {
+  border: 1px solid var(--hairline);
+  background: var(--page);
+  color: var(--ink-muted);
+}
+
+.pill--outline-green {
+  border: 1px solid var(--herd-green);
+  color: var(--herd-green);
+}
+
+.pill--withdrawal {
+  border: 1px solid var(--ink);
+  background: var(--hazard-yellow);
+  color: var(--ink);
+}
+
+.pill--neutral {
+  border: 1px solid var(--ink);
+  background: var(--page);
+  color: var(--ink);
+}

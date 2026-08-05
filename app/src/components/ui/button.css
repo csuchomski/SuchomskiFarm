@@ -1,0 +1,35 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  font: 500 13px/1 "IBM Plex Sans", sans-serif;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.btn--md {
+  min-height: 44px;
+  padding: 0 16px;
+}
+
+.btn--sm {
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+.btn--filled {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.btn--filled:hover {
+  opacity: 0.88;
+}
+
+.btn--outline:hover {
+  background: var(--paper-tint);
+}

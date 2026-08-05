@@ -1,0 +1,47 @@
+.topbar {
+  height: var(--topbar-height);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.topbar__wordmark {
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+.topbar__dot {
+  color: var(--herd-green);
+}
+
+.topbar__right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.topbar__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  padding: 7px 11px;
+  width: 300px;
+}
+
+.topbar__search-icon {
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+
+.topbar__search-placeholder {
+  font: 400 13px/1 "IBM Plex Sans", sans-serif;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,0 +1,24 @@
+.grid-row {
+  display: grid;
+  gap: 12px;
+  align-items: center;
+}
+
+.grid-row--header {
+  padding: 0 8px 8px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.grid-row--body {
+  padding: 11px 8px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 13px;
+}
+
+.grid-row--highlight {
+  background: var(--paper-tint);
+}
+
+.text-right {
+  text-align: right;
+}

@@ -1,0 +1,46 @@
+.sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  margin: 18px 0 6px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.sparkline__bar {
+  flex: 1;
+}
+
+.curve-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.curve-chart__col {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 100%;
+}
+
+.curve-chart__bar {
+  flex: 1;
+}
+
+.curve-chart__bar--prior {
+  background: var(--paper-tint);
+}
+
+.curve-chart__bar--green {
+  background: var(--herd-green);
+}
+
+.curve-chart__bar--yellow {
+  background: var(--hazard-yellow);
+}
+
+.curve-chart__bar--flat {
+  background: var(--page);
+}

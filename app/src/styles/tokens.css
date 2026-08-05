@@ -1,0 +1,38 @@
+/**
+ * Design tokens — "Herd" system.
+ *
+ * Flat paper aesthetic: no shadows, no rounded corners, hairline rules.
+ * Hazard yellow is reserved strictly for withdrawal — shortfalls and
+ * losses use ochre and red instead. See IMPLEMENTATION_PLAN.md.
+ */
+:root {
+  /* surfaces */
+  --page: #e8e4d8;
+  --paper: #efece3;
+  --paper-tint: #dfe0d3; /* highlighted rows, callout fills */
+
+  /* ink */
+  --ink: #191a16;
+  --ink-soft: #43443c;
+  --ink-muted: #767263;
+  --ink-faint: #a9a496;
+  --hairline: #d6d2c6;
+
+  /* accents */
+  --herd-green: #5c6248;
+  --ochre: #8a6a2e;
+  --red: #8a2f22;
+  --hazard-yellow: #f2c230;
+  --hazard-yellow-wash: rgba(242, 194, 48, 0.16);
+  --hazard-yellow-wash-strong: rgba(242, 194, 48, 0.22);
+
+  /* type */
+  --font-serif: "Newsreader", serif;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+
+  /* metrics */
+  --rail-width: 208px;
+  --topbar-height: 56px;
+  --radius: 0; /* the system has no rounded corners */
+}

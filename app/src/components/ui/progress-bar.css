@@ -1,0 +1,24 @@
+.progress-bar {
+  margin-bottom: 14px;
+}
+
+.progress-bar__row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.progress-bar__value {
+  font-weight: 500;
+}
+
+.progress-bar__track {
+  height: 6px;
+  background: var(--page);
+}
+
+.progress-bar__fill {
+  height: 100%;
+  background: var(--herd-green);
+}

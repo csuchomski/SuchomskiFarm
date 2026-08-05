@@ -1,0 +1,14 @@
+.callout {
+  padding: 14px 16px;
+  font-size: 13px;
+}
+
+.callout--herd {
+  border-left: 2px solid var(--herd-green);
+  background: var(--paper-tint);
+}
+
+.callout--dashed {
+  border: 1px dashed var(--hairline);
+  padding: 24px;
+}

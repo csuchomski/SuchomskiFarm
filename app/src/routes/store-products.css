@@ -1,0 +1,71 @@
+.product-panel {
+  border: 1px solid var(--ink);
+  background: var(--page);
+  padding: 20px;
+  margin-top: 24px;
+}
+
+.product-panel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.product-panel__desc {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-bottom: 20px;
+  max-width: 68ch;
+}
+
+.batch-entry {
+  display: grid;
+  grid-template-columns: 150px 1fr 120px 130px;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.batch-entry__field {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+}
+
+.batch-entry__action {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ink);
+  font: 500 13px/1 "IBM Plex Sans", sans-serif;
+}
+
+.batch-entry__action--filled {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.attribution-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+  margin-bottom: 14px;
+}
+
+.attribution-cell {
+  background: var(--paper);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.attribution-cell--excluded {
+  background: var(--hazard-yellow-wash-strong);
+}

@@ -1,0 +1,29 @@
+.ear-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border: 1px solid var(--ink);
+  border-left-width: 6px;
+  border-left-style: solid;
+  background: var(--page);
+  font-weight: 500;
+}
+
+.ear-tag--sm {
+  min-width: 40px;
+  height: 26px;
+  font-size: 11px;
+}
+
+.ear-tag--md {
+  min-width: 46px;
+  height: 34px;
+  font-size: 13px;
+}
+
+.ear-tag--lg {
+  min-width: 64px;
+  height: 46px;
+  font-size: 17px;
+}

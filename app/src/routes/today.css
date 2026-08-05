@@ -1,0 +1,40 @@
+.chain {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+}
+
+.chain__cell {
+  background: var(--paper);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 88px;
+  justify-content: center;
+}
+
+.chain__cell--dark {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.chain__cell--dark .chain__step {
+  color: var(--ink-faint);
+}
+
+.chain__title {
+  font-size: 17px;
+}
+
+.chain__detail {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.chain__cell--dark .chain__detail {
+  color: var(--ink-faint);
+}

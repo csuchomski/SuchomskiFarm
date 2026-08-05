@@ -130,8 +130,8 @@ export default function CustomerStore() {
             <>
               <p style={{ fontSize: 13, color: "var(--red)" }}>{actionError}</p>
               <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>
-                If this mentions a missing function, migration 011 hasn't been run — reserving goes through
-                reserve_product so the stock is actually held.
+                If this mentions choosing between candidate functions, there are two copies of{" "}
+                <code>reserve_product</code> and migration 012 removes the duplicate.
               </p>
             </>
           )}

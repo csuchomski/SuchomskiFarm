@@ -15,6 +15,24 @@ npm run build     # typecheck + production build
 npm run preview   # serve the production build
 ```
 
+## Deployment
+
+Live at **https://csuchomski.github.io/SuchomskiFarm/** — `.github/workflows/deploy.yml`
+builds and deploys `app/` to GitHub Pages on every push to `main` that
+touches `app/**`.
+
+Two things are set specifically for that host, both in a plain static-host
+sense rather than anything GitHub-Pages-specific — they'd carry over
+unchanged to Vercel, Netlify, or any static bucket:
+
+- `vite.config.ts` sets `base: '/SuchomskiFarm/'` — Pages serves the repo
+  under that subpath, not root.
+- `App.tsx` uses `HashRouter`, not `BrowserRouter`. A static host has no
+  server-side rewrite rule to send `/animals/1103` to `index.html` on a
+  hard refresh or shared link, so a clean path 404s. Hash paths
+  (`#/animals/1103`) resolve entirely client-side, so they survive a
+  refresh with zero server config.
+
 ## Routes
 
 | Route | Screen | Notes |

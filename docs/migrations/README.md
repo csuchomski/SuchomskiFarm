@@ -15,8 +15,31 @@ each carries its own verification queries and rollback.
 | **007** | Membership answers via business | **High** | Changes what 41 tables mean in two statements. Rehearse on a restored backup. |
 | 010 | Scope the store to a business | Medium | Retires the global farmer flag. Needs 006 and 009. |
 | 002 | Link books to per-animal costs | Low | Additive. Makes "Attributed to" possible. |
+| **012** | Drop the duplicate `reserve_product` | Low | **Run if 011 was run.** 011 created an overload that broke reserving. |
 | ~~001~~ | ~~`businesses.farm_id`~~ | — | **Superseded.** Pointed the link the wrong way; see `../business-as-tenant.md`. |
 | ~~003~~ | ~~Transaction types~~ | — | **Already run.** |
+| ~~009~~ | ~~Customer access~~ | — | **Already run.** |
+| ~~011~~ | ~~Reserve against inventory~~ | — | **Already run — superseded by 012.** |
+
+## Check for an existing function before writing one
+
+011 added `reserve_product(bigint, numeric)` without checking. The name was
+already taken by `reserve_product(bigint, numeric, uuid)`, which does the
+same job and also respects stock held for weekly schedules.
+
+`CREATE OR REPLACE FUNCTION` only replaces when the *entire* signature
+matches, so a different argument count silently creates an overload instead
+of erroring. PostgREST then had two candidates and resolved `rpc()` calls to
+the wrong one — reserving created an order, left inventory untouched, and
+reported no error. 012 removes the duplicate.
+
+Before adding any function:
+
+```sql
+select p.oid::regprocedure as signature
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public' and p.proname = '<name>';
+```
 
 ## Why 009 first
 

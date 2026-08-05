@@ -74,15 +74,27 @@ export async function fetchMyOrders(userId: string): Promise<CustomerOrder[]> {
 }
 
 /**
- * Reserving goes through a database function, not an insert. It has to
- * check availability, create the order and hold the stock as one operation
- * — done from here it's three round trips with no lock, so two people
- * reserving the last gallon would both succeed. See migration 011.
+ * Reserving goes through the database, not an insert: availability check,
+ * order creation and holding the stock have to be one operation, or two
+ * people reserving the last gallon both succeed.
+ *
+ * reserve_product(product, quantity, customer) predates this app and does
+ * more than an insert would — it won't sell stock already promised to an
+ * upcoming weekly schedule, and it lets a farmer reserve on someone else's
+ * behalf. All three arguments are passed explicitly: the third is what
+ * distinguishes it from the duplicate 011 mistakenly added, and passing it
+ * keeps the call unambiguous even if another overload appears.
  */
-export async function reserve(input: { productId: number; quantity: number }): Promise<number> {
+export async function reserve(input: {
+  productId: number;
+  quantity: number;
+  /** A farmer reserving for a customer. Null means "for me". */
+  forCustomerId?: string | null;
+}): Promise<number> {
   const { data, error } = await supabase.rpc("reserve_product", {
     p_product_id: input.productId,
     p_quantity: input.quantity,
+    p_customer: input.forCustomerId ?? null,
   });
   if (error) throw new Error(error.message);
   return data as number;

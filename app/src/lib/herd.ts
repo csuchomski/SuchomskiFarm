@@ -9,7 +9,8 @@ import { herdSchema } from "./supabase";
  * of UI that can only ever say "no data". See IMPLEMENTATION_PLAN.md.
  */
 
-const ANIMAL_COLUMNS = "id, ear_tag, barn_name, sex, class, status, birth_date, sire_id, dam_id, notes";
+const ANIMAL_COLUMNS =
+  "id, ear_tag, barn_name, sex, class, status, birth_date, sire_id, dam_id, notes, purpose, origin";
 
 export interface RealAnimal {
   id: string;
@@ -22,6 +23,8 @@ export interface RealAnimal {
   sire_id: string | null;
   dam_id: string | null;
   notes: string | null;
+  purpose: string;
+  origin: string;
 }
 
 export interface BreedShare {
@@ -56,6 +59,25 @@ export interface AnimalEdit {
   notes: string;
   dam_id: string | null;
   sire_id: string | null;
+  purpose: string;
+  origin: string;
+}
+
+/**
+ * Creating needs the six columns that are NOT NULL with no default —
+ * purpose, sex, class, birth_date, origin and farm_id. Everything else on
+ * the table defaults ('' , 'unknown', 'untested', 'herd', 'active'), so this
+ * deliberately sends nothing for them rather than inventing values.
+ */
+export async function createAnimal(farmId: string, patch: AnimalEdit): Promise<RealAnimal> {
+  const { data, error } = await herdSchema()
+    .from("animals")
+    .insert({ ...patch, farm_id: farmId, class_is_manual: true })
+    .select(ANIMAL_COLUMNS)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as RealAnimal;
 }
 
 export async function updateAnimal(id: string, patch: AnimalEdit): Promise<RealAnimal> {

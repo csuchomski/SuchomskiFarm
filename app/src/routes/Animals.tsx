@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, EarTag, GridRow, Pill } from "../components/ui";
 import {
@@ -10,6 +10,8 @@ import {
   type BreedShare,
   type RealAnimal,
 } from "../lib/herd";
+import { AnimalForm } from "../components/herd/AnimalForm";
+import { useWorkspace } from "../lib/workspace";
 import "./animals.css";
 
 type Fetch =
@@ -22,7 +24,10 @@ type SortKey = "name" | "tag" | "age" | "class";
 const COLS = "60px 1fr 110px 110px 96px";
 
 export default function Animals() {
+  const navigate = useNavigate();
+  const { farmId } = useWorkspace();
   const [result, setResult] = useState<Fetch>({ state: "loading" });
+  const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
   const [classFilter, setClassFilter] = useState("all");
   const [showInactive, setShowInactive] = useState(false);
@@ -83,11 +88,27 @@ export default function Animals() {
         eyebrow={result.state === "ok" ? `${all.length} on file · ${all.length - inactiveCount} active` : "Herd"}
         title="Animals"
         actions={
-          <Button variant="filled" disabled title="Needs the rest of the required columns mapped first">
-            Add animal
+          <Button variant="filled" onClick={() => setAdding((v) => !v)} disabled={result.state !== "ok"}>
+            {adding ? "Cancel" : "Add animal"}
           </Button>
         }
       />
+
+      {adding && result.state === "ok" && (
+        <div style={{ paddingTop: 16 }}>
+          <AnimalForm
+            herd={all}
+            farmId={farmId}
+            onCancel={() => setAdding(false)}
+            onSaved={(saved) => {
+              setAdding(false);
+              // Straight to the new animal's record — the next thing you
+              // want after adding one is usually to fill in the rest.
+              navigate(`/animals/${saved.ear_tag}`);
+            }}
+          />
+        </div>
+      )}
 
       <div className="animals-controls">
         <input

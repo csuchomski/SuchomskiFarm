@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useWorkspace } from "../lib/workspace";
 import { Button, Callout, EarTag, Pill, StatTile } from "../components/ui";
-import { AnimalEditForm } from "../components/herd/AnimalEditForm";
+import { AnimalForm } from "../components/herd/AnimalForm";
 import {
   describeBreeding,
   fetchAnimalByTag,
@@ -30,6 +31,7 @@ export default function AnimalRecord() {
   const { tag = "" } = useParams();
   const [result, setResult] = useState<Fetch>({ state: "loading" });
   const [editing, setEditing] = useState(false);
+  const { farmId } = useWorkspace();
 
   useEffect(() => {
     let cancelled = false;
@@ -152,9 +154,10 @@ export default function AnimalRecord() {
 
       {editing && (
         <div style={{ padding: "24px 32px 0" }}>
-          <AnimalEditForm
+          <AnimalForm
             animal={animal}
             herd={herd}
+            farmId={farmId}
             onCancel={() => setEditing(false)}
             onSaved={(updated) => {
               setEditing(false);

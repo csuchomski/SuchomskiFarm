@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, GridRow, StatTile } from "../components/ui";
 import {
   addTransaction,
-  fetchBooksData,
+  addTransactionType,
   directionOf,
+  fetchBooksData,
   summarise,
+  typeMap,
   type BooksData,
+  type Direction,
   type RealTransaction,
 } from "../lib/books-data";
 import "./books-transactions.css";
@@ -17,7 +20,7 @@ type Save = { state: "idle" } | { state: "saving" } | { state: "saved" } | { sta
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const money = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const COLS = "96px 1fr 150px 140px 130px 110px";
+const COLS = "96px 1fr 140px 120px 120px 120px 110px";
 
 export default function BooksTransactions() {
   const [result, setResult] = useState<Fetch>({ state: "loading" });
@@ -30,13 +33,20 @@ export default function BooksTransactions() {
   const [category, setCategory] = useState("");
   const [note, setNote] = useState("");
   const [account, setAccount] = useState("");
+  const [payer, setPayer] = useState("");
   const [amount, setAmount] = useState("");
+
+  const [showNewType, setShowNewType] = useState(false);
+  const [newTypeLabel, setNewTypeLabel] = useState("");
+  const [newTypeDirection, setNewTypeDirection] = useState<Exclude<Direction, "unknown">>("expense");
+  const [typeSave, setTypeSave] = useState<Save>({ state: "idle" });
 
   const load = useCallback(async () => {
     const data = await fetchBooksData();
     setResult({ state: "ok", data });
     setBusinessId((cur) => cur ?? data.businesses[0]?.id ?? null);
     setAccount((cur) => cur || data.accounts[0]?.name || "");
+    return data;
   }, []);
 
   useEffect(() => {
@@ -50,13 +60,19 @@ export default function BooksTransactions() {
   }, [load]);
 
   const data = result.state === "ok" ? result.data : null;
+  const types = useMemo(() => typeMap(data?.types ?? []), [data?.types]);
   const business = data?.businesses.find((b) => b.id === businessId) ?? null;
   const rows: RealTransaction[] = data ? data.transactions.filter((t) => t.business_id === businessId) : [];
-  const totals = summarise(rows);
+  const totals = summarise(rows, types);
 
   const amountNum = Number(amount);
   const canSave =
-    businessId !== null && date !== "" && amount.trim() !== "" && !Number.isNaN(amountNum) && amountNum !== 0;
+    businessId !== null &&
+    date !== "" &&
+    payer.trim() !== "" &&
+    amount.trim() !== "" &&
+    !Number.isNaN(amountNum) &&
+    amountNum !== 0;
 
   const handleSave = async () => {
     if (!canSave || businessId === null) return;
@@ -68,10 +84,8 @@ export default function BooksTransactions() {
         type,
         category: category.trim() || "Uncategorised",
         amount: Math.abs(amountNum),
-        // payer is NOT NULL in the schema but isn't in the mockup's form;
-        // empty string rather than inventing a value.
         note: note.trim() || null,
-        payer: "",
+        payer: payer.trim(),
         account: account.trim() || "",
       });
       setAmount("");
@@ -83,6 +97,26 @@ export default function BooksTransactions() {
       setTimeout(() => setSave((s) => (s.state === "saved" ? { state: "idle" } : s)), 4000);
     } catch (err) {
       setSave({ state: "error", message: err instanceof Error ? err.message : String(err) });
+    }
+  };
+
+  const handleAddType = async () => {
+    const label = newTypeLabel.trim();
+    if (!label) return;
+    setTypeSave({ state: "saving" });
+    try {
+      const created = await addTransactionType({
+        code: label.toLowerCase().replace(/\s+/g, "_"),
+        label,
+        direction: newTypeDirection,
+      });
+      await load();
+      setType(created.code);
+      setNewTypeLabel("");
+      setShowNewType(false);
+      setTypeSave({ state: "idle" });
+    } catch (err) {
+      setTypeSave({ state: "error", message: err instanceof Error ? err.message : String(err) });
     }
   };
 
@@ -132,19 +166,18 @@ export default function BooksTransactions() {
               label="Net"
               tone={totals.net < 0 ? "red" : "ink"}
             />
+            {totals.neutral > 0 && <StatTile value={money(totals.neutral)} label="Transfers" />}
             <StatTile value={rows.length} label="Entries" />
           </div>
 
           {totals.unknownTypes.length > 0 && (
             <div style={{ margin: "16px 0" }}>
               <Callout>
-                <strong style={{ fontWeight: 500 }}>
-                  {money(totals.unknown)} isn't counted in the totals above.
-                </strong>{" "}
-                {totals.unknownTypes.length === 1 ? "The type" : "The types"}{" "}
+                <strong style={{ fontWeight: 500 }}>{money(totals.unknown)} isn't counted above.</strong>{" "}
                 <span className="mono">{totals.unknownTypes.join(", ")}</span>{" "}
-                {totals.unknownTypes.length === 1 ? "isn't" : "aren't"} recognised as income or expense, and
-                guessing would make Net look authoritative while being wrong. Those rows are marked below.
+                {totals.unknownTypes.length === 1 ? "isn't a known type" : "aren't known types"}, so there's no way
+                to tell which direction {totals.unknownTypes.length === 1 ? "it moves" : "they move"} the books.
+                Add {totals.unknownTypes.length === 1 ? "it" : "them"} under Add entry → New type.
               </Callout>
             </div>
           )}
@@ -154,7 +187,7 @@ export default function BooksTransactions() {
               <div className="eyebrow" style={{ marginBottom: 10 }}>
                 New entry · {business?.name}
               </div>
-              <div className="entry-form__grid" style={{ gridTemplateColumns: "140px 110px 1fr 1fr 140px 130px 120px" }}>
+              <div className="entry-form__grid entry-form__grid--wide">
                 <input
                   className="entry-form__field mono"
                   type="date"
@@ -165,11 +198,20 @@ export default function BooksTransactions() {
                 <select
                   className="entry-form__field"
                   value={type}
-                  onChange={(e) => setType(e.target.value)}
+                  onChange={(e) => {
+                    if (e.target.value === "__new") setShowNewType(true);
+                    else setType(e.target.value);
+                  }}
                   aria-label="Type"
                 >
-                  <option value="expense">Expense</option>
-                  <option value="income">Income</option>
+                  {data.types
+                    .filter((t) => t.active)
+                    .map((t) => (
+                      <option key={t.code} value={t.code}>
+                        {t.label}
+                      </option>
+                    ))}
+                  <option value="__new">+ New type…</option>
                 </select>
                 <input
                   className="entry-form__field"
@@ -182,6 +224,14 @@ export default function BooksTransactions() {
                   placeholder="Category"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
+                />
+                <input
+                  className="entry-form__field"
+                  placeholder="Payer"
+                  value={payer}
+                  onChange={(e) => setPayer(e.target.value)}
+                  aria-label="Payer"
+                  required
                 />
                 <input
                   className="entry-form__field"
@@ -202,14 +252,70 @@ export default function BooksTransactions() {
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                 />
-                <button className="entry-form__submit" onClick={() => void handleSave()} disabled={!canSave || save.state === "saving"}>
+                <button
+                  className="entry-form__submit"
+                  onClick={() => void handleSave()}
+                  disabled={!canSave || save.state === "saving"}
+                >
                   {save.state === "saving" ? "Saving…" : "Post entry"}
                 </button>
               </div>
               <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 8 }}>
-                Amount is entered positive; income vs. expense is carried by the type, matching how the rows
-                already in the table are stored.
+                Amount is entered positive; the type carries the direction. Payer is required — the column doesn't
+                accept nulls.
               </p>
+
+              {showNewType && (
+                <div className="new-type-row">
+                  <div className="eyebrow" style={{ marginBottom: 8 }}>
+                    New transaction type
+                  </div>
+                  {!data.typesTableExists ? (
+                    <p style={{ fontSize: 13, color: "var(--ochre)" }}>
+                      Types can't be added yet — <code>public.transaction_types</code> doesn't exist. Run{" "}
+                      <code>docs/migrations/003-transaction-types-lookup.sql</code> first. Until then Income and
+                      Expense are built in.
+                    </p>
+                  ) : (
+                    <>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <input
+                          className="entry-form__field"
+                          placeholder="Name, e.g. Transfer"
+                          value={newTypeLabel}
+                          onChange={(e) => setNewTypeLabel(e.target.value)}
+                          style={{ flex: 1, minWidth: 180 }}
+                        />
+                        <select
+                          className="entry-form__field"
+                          value={newTypeDirection}
+                          onChange={(e) => setNewTypeDirection(e.target.value as Exclude<Direction, "unknown">)}
+                          aria-label="Direction"
+                        >
+                          <option value="expense">Counts as an expense</option>
+                          <option value="income">Counts as income</option>
+                          <option value="neutral">Neither — excluded from Net</option>
+                        </select>
+                        <button
+                          className="entry-form__submit"
+                          onClick={() => void handleAddType()}
+                          disabled={!newTypeLabel.trim() || typeSave.state === "saving"}
+                        >
+                          {typeSave.state === "saving" ? "Adding…" : "Add type"}
+                        </button>
+                        <Button size="sm" onClick={() => setShowNewType(false)}>
+                          Cancel
+                        </Button>
+                      </div>
+                      {typeSave.state === "error" && (
+                        <p className="mono" style={{ fontSize: 13, color: "var(--red)", marginTop: 8 }}>
+                          {typeSave.message}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -230,7 +336,7 @@ export default function BooksTransactions() {
           <div style={{ margin: "16px 0" }}>
             <Callout>
               <strong style={{ fontWeight: 500 }}>No "Attributed to" column yet.</strong> Nothing links a
-              transaction to an animal in the schema today — that needs the migration in{" "}
+              transaction to an animal in the schema today — that needs{" "}
               <code>docs/migrations/002-link-books-to-herd.sql</code>, which hasn't been run.
             </Callout>
           </div>
@@ -240,22 +346,25 @@ export default function BooksTransactions() {
             <span>Description</span>
             <span>Category</span>
             <span>Type</span>
+            <span>Payer</span>
             <span>Account</span>
             <span className="text-right">Amount</span>
           </GridRow>
 
           {rows.map((t) => {
-            const direction = directionOf(t);
+            const direction = directionOf(t, types);
             const sign = direction === "income" ? "+" : direction === "expense" ? "−" : "";
+            const label = types.get(t.type.trim())?.label ?? t.type ?? "(blank)";
             return (
               <GridRow cols={COLS} as="body" className="mono" key={t.id}>
                 <span>{t.date}</span>
                 <span style={{ fontFamily: "var(--font-sans)" }}>{t.note || "—"}</span>
                 <span>{t.category}</span>
                 <span style={{ color: direction === "unknown" ? "var(--ochre)" : "var(--ink-muted)" }}>
-                  {t.type || "(blank)"}
+                  {label}
                   {direction === "unknown" && " ?"}
                 </span>
+                <span style={{ color: "var(--ink-muted)" }}>{t.payer || "—"}</span>
                 <span style={{ color: "var(--ink-muted)" }}>{t.account || "—"}</span>
                 <span
                   className="text-right"

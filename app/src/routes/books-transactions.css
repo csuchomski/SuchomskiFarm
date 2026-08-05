@@ -49,6 +49,18 @@
   gap: 8px;
 }
 
+/* Eight fields don't fit one row at 1280 without squeezing the text
+   fields to uselessness, so this one wraps into two. */
+.entry-form__grid--wide {
+  grid-template-columns: 140px 150px minmax(180px, 2fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(140px, 1fr) 120px 120px;
+}
+
+.new-type-row {
+  border-top: 1px solid var(--hairline);
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
 .entry-form__field {
   min-height: 44px;
   min-width: 0;

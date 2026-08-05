@@ -65,13 +65,24 @@
   flex: none;
   width: 96px;
   min-height: 48px;
-  display: flex;
-  align-items: center;
   padding: 0 12px;
   border: 1px solid var(--hairline);
   background: var(--paper);
   font: 400 15px/1 "IBM Plex Mono", monospace;
+  color: var(--ink);
+}
+
+.shop-qty-field::placeholder {
   color: var(--ink-faint);
+}
+
+.shop-qty-field:focus-visible {
+  outline: 2px solid var(--herd-green);
+  outline-offset: 1px;
+}
+
+.shop-qty-field:disabled {
+  opacity: 0.5;
 }
 
 .shop-reserve-btn {
@@ -85,6 +96,7 @@
   color: var(--paper);
   font: 500 13px/1 "IBM Plex Sans", sans-serif;
   letter-spacing: 0.02em;
+  cursor: pointer;
 }
 
 .shop-weekly-link {

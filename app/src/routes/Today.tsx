@@ -1,22 +1,41 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, EarTag, GridRow, Pill, StatTile, WithdrawalBanner } from "../components/ui";
 import { herd } from "../lib/mockData";
+import { TODAY_LABEL, monthTotals, useAppState } from "../lib/store";
 import "./today.css";
-
-const chain = [
-  { step: "1 · Herd", title: "9 cows milked", detail: "18.4 gal, per animal", dark: false },
-  { step: "2 · Inventory", title: "Batch 04 Aug", detail: "pooled · raw milk", dark: false },
-  { step: "3 · Store", title: "11.0 gal claimed", detail: "7.4 open to shop", dark: false },
-  { step: "4 · Books", title: "+$88.00 posted", detail: "Milk sales · Dairy", dark: true },
-];
 
 function money(n: number) {
   const sign = n < 0 ? "−" : n > 0 ? "+" : "";
-  return `${sign}$${Math.abs(n).toLocaleString()}`;
+  return `${sign}$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
 export default function Today() {
+  const navigate = useNavigate();
+  const state = useAppState();
+  const totals = monthTotals(state);
+  const rawMilk = state.products.find((p) => p.id === "raw-milk");
+
+  const todaysBatches = state.batches.filter((b) => b.produced === TODAY_LABEL);
+  const milkToday = todaysBatches.reduce((s, b) => s + b.quantity, 0);
+
+  const chain = [
+    { step: "1 · Herd", title: "9 cows milked", detail: `${milkToday.toFixed(1)} gal, per animal`, dark: false },
+    {
+      step: "2 · Inventory",
+      title: todaysBatches.length > 1 ? `${todaysBatches.length} batches · ${TODAY_LABEL}` : `Batch ${TODAY_LABEL}`,
+      detail: "pooled · raw milk",
+      dark: false,
+    },
+    {
+      step: "3 · Store",
+      title: `${typeof rawMilk?.claimed === "number" ? rawMilk.claimed.toFixed(1) : rawMilk?.claimed} gal claimed`,
+      detail: `${typeof rawMilk?.openToShop === "number" ? rawMilk.openToShop.toFixed(1) : rawMilk?.openToShop} open to shop`,
+      dark: false,
+    },
+    { step: "4 · Books", title: "+$88.00 posted", detail: "Milk sales · Dairy", dark: true },
+  ];
+
   return (
     <OpsShell searchPlaceholder="Juniper, raw milk, feed invoice…">
       <PageHeader
@@ -24,17 +43,19 @@ export default function Today() {
         title="Today"
         actions={
           <>
-            <Button>Log milking</Button>
-            <Button variant="filled">Record pickup</Button>
+            <Button onClick={() => navigate("/store/products")}>Log milking</Button>
+            <Button variant="filled" onClick={() => navigate("/books/transactions")}>
+              Record pickup
+            </Button>
           </>
         }
       />
 
       <div className="stat-row">
-        <StatTile value="18.4" unit="gal" label="Milk today" />
+        <StatTile value={milkToday.toFixed(1)} unit="gal" label="Milk today" />
         <StatTile value="9" unit="/ 41" label="Cows in milk" />
         <StatTile value="6" label="Pickups due" />
-        <StatTile value="+$2,410" label="Net · July" />
+        <StatTile value={money(totals.net)} label="Net · July" />
         <StatTile value="$41.90" label="Cost / cow · MTD" />
       </div>
 

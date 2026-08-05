@@ -1,9 +1,37 @@
+import { useState } from "react";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, EarTag, GridRow, Pill } from "../components/ui";
-import { batches, milkAttributionToday, products } from "../lib/mockData";
+import { milkAttributionToday } from "../lib/mockData";
+import { TODAY_LABEL, useAppActions, useAppState } from "../lib/store";
 import "./store-products.css";
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "2026-08-05" -> "5 Aug" — matches the "4 Aug" / "3 Aug" style already
+ * seeded on batches, without a timezone-sensitive Date() round-trip. */
+function toDateLabel(iso: string): string {
+  const [, m, d] = iso.split("-").map(Number);
+  return `${d} ${MONTHS[m - 1]}`;
+}
+
 export default function StoreProducts() {
+  const { products, batches } = useAppState();
+  const { addBatch } = useAppActions();
+
+  const [date, setDate] = useState("2026-08-05");
+  const [quantity, setQuantity] = useState("18.400");
+  const [justAdded, setJustAdded] = useState(false);
+
+  const qtyNum = Number(quantity);
+  const canAdd = qtyNum > 0 && date;
+
+  const handleAddBatch = () => {
+    if (!canAdd) return;
+    addBatch(toDateLabel(date), qtyNum);
+    setJustAdded(true);
+    setTimeout(() => setJustAdded(false), 2500);
+  };
+
   return (
     <OpsShell>
       <PageHeader
@@ -44,7 +72,7 @@ export default function StoreProducts() {
             )}
           </span>
           <span className="mono text-right" style={{ fontSize: 15, color: p.soldOut ? "var(--ink-muted)" : undefined }}>
-            {p.onHand}
+            {typeof p.onHand === "number" ? p.onHand.toFixed(p.id === "raw-milk" ? 1 : 0) : p.onHand}
           </span>
           <span className="mono text-right" style={{ fontSize: 15, color: p.soldOut ? "var(--ink-muted)" : undefined }}>
             {p.claimed}
@@ -55,7 +83,7 @@ export default function StoreProducts() {
             </span>
           ) : (
             <span className="mono text-right" style={{ fontSize: 15, fontWeight: 500 }}>
-              {p.openToShop}
+              {typeof p.openToShop === "number" ? p.openToShop.toFixed(p.id === "raw-milk" ? 1 : 0) : p.openToShop}
             </span>
           )}
           <span
@@ -90,18 +118,39 @@ export default function StoreProducts() {
           Add this morning's milking
         </div>
         <div className="batch-entry">
-          <div className="batch-entry__field mono">
-            <span style={{ fontSize: 15 }}>2026-08-04</span>
-          </div>
+          <input
+            className="batch-entry__field mono batch-entry__input"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            aria-label="Milking date"
+          />
           <div className="batch-entry__field">
-            <span className="mono" style={{ fontSize: 15, fontWeight: 500 }}>
-              18.400
-            </span>
+            <input
+              className="mono batch-entry__qty-input"
+              type="number"
+              min="0"
+              step="0.001"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              aria-label="Gallons"
+            />
             <span style={{ fontSize: 13, color: "var(--ink-muted)", marginLeft: 8 }}>gallons from 9 animals</span>
           </div>
           <div className="batch-entry__action">Per animal</div>
-          <div className="batch-entry__action batch-entry__action--filled">Add batch</div>
+          <button
+            className="batch-entry__action batch-entry__action--filled"
+            onClick={handleAddBatch}
+            disabled={!canAdd}
+          >
+            Add batch
+          </button>
         </div>
+        {justAdded && (
+          <p style={{ fontSize: 13, color: "var(--herd-green)", marginTop: -8, marginBottom: 16 }}>
+            Batch added — Raw milk's on-hand and open-to-shop numbers above just moved.
+          </p>
+        )}
 
         <div className="attribution-grid">
           {milkAttributionToday.map((a) => (
@@ -122,7 +171,8 @@ export default function StoreProducts() {
         </div>
         <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 20 }}>
           Four more cows recorded. Hazel's 1.8 gal is held out of the batch and logged as fed to pigs — her
-          withdrawal runs to 9 August.
+          withdrawal runs to 9 August. This per-animal breakdown is fixed in this preview; only the batch total
+          above is live.
         </p>
 
         <div className="eyebrow" style={{ marginBottom: 10 }}>
@@ -140,7 +190,8 @@ export default function StoreProducts() {
             cols="130px 1fr 96px 96px 96px"
             as="body"
             className="mono"
-            key={b.produced}
+            key={`${b.produced}-${i}`}
+            highlight={b.produced === TODAY_LABEL && i === 0}
             style={i === batches.length - 1 ? { borderBottom: "none" } : undefined}
           >
             <span>{b.produced}</span>

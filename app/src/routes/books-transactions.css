@@ -35,3 +35,46 @@
   align-items: center;
   gap: 8px;
 }
+
+.entry-form {
+  border: 1px solid var(--ink);
+  background: var(--page);
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.entry-form__grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1.1fr 1.2fr 150px 150px 120px;
+  gap: 8px;
+}
+
+.entry-form__field {
+  min-height: 44px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 14px/1 "IBM Plex Sans", sans-serif;
+  text-overflow: ellipsis;
+}
+
+.entry-form__field:focus-visible {
+  outline: 2px solid var(--herd-green);
+  outline-offset: 1px;
+}
+
+.entry-form__submit {
+  min-height: 44px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  font: 500 13px/1 "IBM Plex Sans", sans-serif;
+  cursor: pointer;
+}
+
+.entry-form__submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

@@ -49,6 +49,44 @@
   color: var(--paper);
 }
 
+button.batch-entry__action {
+  cursor: pointer;
+}
+
+button.batch-entry__action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.batch-entry__input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  padding: 0;
+}
+
+.batch-entry__input:focus-visible {
+  outline: 2px solid var(--herd-green);
+  outline-offset: 2px;
+}
+
+.batch-entry__qty-input {
+  width: 88px;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 500;
+  padding: 0;
+}
+
+.batch-entry__qty-input:focus-visible {
+  outline: 2px solid var(--herd-green);
+  outline-offset: 2px;
+}
+
 .attribution-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

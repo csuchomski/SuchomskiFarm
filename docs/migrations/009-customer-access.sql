@@ -35,11 +35,25 @@ create policy "insert own profile as customer" on public.profiles
 -- become. Without the second, the new row is unchecked. Same escalation,
 -- through a door that is already open — worth closing whether or not the
 -- rest of this migration runs.
+--
+-- Closed with a column privilege rather than a policy. RLS gates rows, so
+-- expressing "may update this row but not this column" in a policy needs a
+-- subquery comparing new role to old — which means a policy on profiles that
+-- reads profiles. That resolves here, but it depends on is_farmer() being
+-- SECURITY DEFINER to avoid recursing through the SELECT policy, and a
+-- privilege escalation guard shouldn't rest on a detail like that.
+--
+-- REVOKE is unconditional and needs no reasoning about evaluation order:
+-- role simply cannot be written by these roles, whatever any policy says.
+revoke update (role) on public.profiles from authenticated, anon;
+
+-- The policy still needs its WITH CHECK so a customer can't reassign their
+-- row to a different id, which is a separate hole from the role column.
 drop policy if exists "update own profile" on public.profiles;
 create policy "update own profile" on public.profiles
   for update to authenticated
   using (auth.uid() = id)
-  with check (auth.uid() = id and role = (select p.role from public.profiles p where p.id = auth.uid()));
+  with check (auth.uid() = id);
 
 -- ---------------------------------------------------------------------------
 -- orders — reserving, and cancelling.
@@ -109,12 +123,23 @@ commit;
 -- business_id they currently don't have. That's its own migration.
 -- ---------------------------------------------------------------------------
 
+-- ---------------------------------------------------------------------------
+-- Note: after this, changing anyone's role — including legitimately making
+-- someone a farmer — cannot be done from the app. Do it in the Supabase
+-- dashboard (the service role bypasses column privileges), or add a
+-- SECURITY DEFINER function restricted to existing farmers if it needs to
+-- happen in the UI. Deliberately left out: role changes should be rare and
+-- deliberate, and the escalation this closes is exactly the "convenient"
+-- version of that feature.
+-- ---------------------------------------------------------------------------
+
 -- Rollback:
 --
+--   grant update (role) on public.profiles to authenticated;   -- reopens the escalation
 --   drop function if exists public.cancel_my_order(bigint);
---   drop policy if exists "farmer updates orders"        on public.orders;
---   drop policy if exists "insert own orders or farmer"  on public.orders;
+--   drop policy if exists "farmer updates orders"          on public.orders;
+--   drop policy if exists "insert own orders or farmer"    on public.orders;
 --   drop policy if exists "insert own profile as customer" on public.profiles;
---   drop policy if exists "update own profile"           on public.profiles;
+--   drop policy if exists "update own profile"             on public.profiles;
 --   create policy "update own profile" on public.profiles
 --     for update using (auth.uid() = id);

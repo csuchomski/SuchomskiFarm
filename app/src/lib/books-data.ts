@@ -65,24 +65,55 @@ export async function fetchBooksData(): Promise<BooksData> {
 }
 
 /**
- * `type` is free text in the schema rather than an enum, so rather than
- * trusting one spelling this treats anything that looks like income as
- * income and everything else as an expense — and exposes the raw value so
- * the UI can show what was actually stored.
+ * `type` is free text in the schema, not an enum or a CHECK, so the app has
+ * to interpret it. Three outcomes rather than two: an unrecognised value is
+ * reported as "unknown" instead of defaulting into either bucket, because
+ * silently filing a mystery row under expenses produces a total that looks
+ * authoritative and is wrong.
+ *
+ * See the options written up for making this unnecessary — the durable fix
+ * is a CHECK constraint on the column.
  */
-export function isIncome(t: RealTransaction): boolean {
-  return /^(income|revenue|sale|deposit|credit)/i.test(t.type.trim());
+export type Direction = "income" | "expense" | "unknown";
+
+const INCOME_WORDS = /^(income|revenue|sale|sales|deposit|credit)$/i;
+const EXPENSE_WORDS = /^(expense|expenses|cost|purchase|debit|bill)$/i;
+
+export function directionOf(t: RealTransaction): Direction {
+  const value = t.type.trim();
+  if (INCOME_WORDS.test(value)) return "income";
+  if (EXPENSE_WORDS.test(value)) return "expense";
+  return "unknown";
 }
 
 export function summarise(transactions: RealTransaction[]) {
   let income = 0;
   let expenses = 0;
+  let unknown = 0;
+  const unknownTypes = new Set<string>();
+
   for (const t of transactions) {
     const amount = Math.abs(Number(t.amount));
-    if (isIncome(t)) income += amount;
-    else expenses += amount;
+    switch (directionOf(t)) {
+      case "income":
+        income += amount;
+        break;
+      case "expense":
+        expenses += amount;
+        break;
+      default:
+        unknown += amount;
+        unknownTypes.add(t.type.trim() || "(blank)");
+    }
   }
-  return { income, expenses, net: income - expenses };
+
+  return {
+    income,
+    expenses,
+    net: income - expenses,
+    unknown,
+    unknownTypes: [...unknownTypes],
+  };
 }
 
 export async function addTransaction(input: {

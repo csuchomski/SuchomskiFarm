@@ -4,7 +4,7 @@ import { Button, Callout, GridRow, StatTile } from "../components/ui";
 import {
   addTransaction,
   fetchBooksData,
-  isIncome,
+  directionOf,
   summarise,
   type BooksData,
   type RealTransaction,
@@ -135,6 +135,20 @@ export default function BooksTransactions() {
             <StatTile value={rows.length} label="Entries" />
           </div>
 
+          {totals.unknownTypes.length > 0 && (
+            <div style={{ margin: "16px 0" }}>
+              <Callout>
+                <strong style={{ fontWeight: 500 }}>
+                  {money(totals.unknown)} isn't counted in the totals above.
+                </strong>{" "}
+                {totals.unknownTypes.length === 1 ? "The type" : "The types"}{" "}
+                <span className="mono">{totals.unknownTypes.join(", ")}</span>{" "}
+                {totals.unknownTypes.length === 1 ? "isn't" : "aren't"} recognised as income or expense, and
+                guessing would make Net look authoritative while being wrong. Those rows are marked below.
+              </Callout>
+            </div>
+          )}
+
           {showForm && (
             <div className="entry-form">
               <div className="eyebrow" style={{ marginBottom: 10 }}>
@@ -231,16 +245,27 @@ export default function BooksTransactions() {
           </GridRow>
 
           {rows.map((t) => {
-            const income = isIncome(t);
+            const direction = directionOf(t);
+            const sign = direction === "income" ? "+" : direction === "expense" ? "−" : "";
             return (
               <GridRow cols={COLS} as="body" className="mono" key={t.id}>
                 <span>{t.date}</span>
                 <span style={{ fontFamily: "var(--font-sans)" }}>{t.note || "—"}</span>
                 <span>{t.category}</span>
-                <span style={{ color: "var(--ink-muted)" }}>{t.type}</span>
+                <span style={{ color: direction === "unknown" ? "var(--ochre)" : "var(--ink-muted)" }}>
+                  {t.type || "(blank)"}
+                  {direction === "unknown" && " ?"}
+                </span>
                 <span style={{ color: "var(--ink-muted)" }}>{t.account || "—"}</span>
-                <span className="text-right" style={{ fontWeight: 500, color: income ? undefined : "var(--red)" }}>
-                  {income ? "+" : "−"}
+                <span
+                  className="text-right"
+                  style={{
+                    fontWeight: 500,
+                    color:
+                      direction === "expense" ? "var(--red)" : direction === "unknown" ? "var(--ochre)" : undefined,
+                  }}
+                >
+                  {sign}
                   {money(Math.abs(Number(t.amount)))}
                 </span>
               </GridRow>

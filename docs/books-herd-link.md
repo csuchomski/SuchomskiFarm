@@ -77,22 +77,45 @@ an entry and its allocation to disagree about which transaction they came
 from, with no cheap constraint to prevent it. Hence: one column, on the
 per-animal tables.
 
+## The SQL
+
+Both migrations are in [`migrations/`](./migrations/), unrun:
+
+- `001-farm-scope-public-schema.sql` — adds `businesses.farm_id` and RLS on
+  the ledger tables. **Read its warnings**: enabling RLS on tables that have
+  none today will break any app currently reading them anonymously.
+- `002-link-books-to-herd.sql` — the link columns themselves. Purely
+  additive.
+
 ## Three things to decide before running it
 
-**1. Tenancy hole — the important one.** `public.businesses` has no `farm_id`.
+**1. Tenancy hole — being fixed first.** `public.businesses` has no `farm_id`.
 The herd schema is multi-tenant (every table carries `farm_id`, every RLS
 policy checks `is_farm_member(farm_id)`); the ledger side is not scoped to a
 farm at all. Linking them lets a per-animal cost row on farm A reference a
 transaction belonging to a business that no farm owns. With one farm today
-this is invisible; it becomes a real leak the moment there are two. Consider
-adding `businesses.farm_id` and RLS on the ledger tables before, or alongside,
-this change.
+this is invisible; it becomes a real leak the moment there are two. Migration
+001 closes it.
 
-**2. Rounding.** Dollars-as-numeric on one side, integer cents on the other.
-`round(amount * 100)` is correct for reconciliation, but a split across 41
-head will not divide evenly — decide where the remainder cent goes (largest
-remainder to the biggest producer is the usual answer) rather than letting it
-silently vanish.
+While writing that: **the wider finding is that `public` may have no RLS at
+all.** Reads of `products`, `orders`, `ledger_transactions` and `profiles` all
+returned rows through the anon key, which wouldn't happen if RLS were on
+without policies. If that's right, `public.profiles` — names, emails, phone
+numbers — is readable by anyone who opens devtools on the deployed site, since
+the anon key ships in the bundle by design. Migration 001 covers the ledger
+tables; `profiles` and `orders` need a customer-access decision before they
+can be locked down, and that's the higher-priority half.
+
+**2. Rounding — decided.** Largest remainder: everyone gets their floored
+share, then leftover cents go out one at a time, largest fractional remainder
+first, ties broken by the caller's (stable) ordering. So $612 across 41 head
+is 28 animals at 1493¢ and 13 at 1492¢ — exactly $612.00, no cent invented or
+lost, and the same input always splits the same way.
+
+Implemented in [`app/src/lib/allocate.ts`](../app/src/lib/allocate.ts) with
+tests covering the reconciliation invariant across every herd size 1–60 and a
+range of amounts, plus refunds, zero-weight herds, and empty input. `npm test`
+in `app/`.
 
 **3. Write access.** The RLS policies shared so far cover only the `herd`
 schema. Whether the app can write `public.ledger_transactions` at all is

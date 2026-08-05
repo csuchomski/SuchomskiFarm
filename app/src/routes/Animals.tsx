@@ -1,61 +1,79 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { EarTag, GridRow, Pill } from "../components/ui";
-import { herd } from "../lib/mockData";
+import { fetchAnimals, formatAge, type RealAnimal } from "../lib/herd";
 
-function money(n: number) {
-  const sign = n < 0 ? "−" : n > 0 ? "+" : "";
-  return `${sign}$${Math.abs(n).toLocaleString()}`;
-}
+type Fetch = { state: "loading" } | { state: "error"; message: string } | { state: "ok"; rows: RealAnimal[] };
 
 export default function Animals() {
+  const [result, setResult] = useState<Fetch>({ state: "loading" });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAnimals()
+      .then((rows) => !cancelled && setResult({ state: "ok", rows }))
+      .catch((err) => !cancelled && setResult({ state: "error", message: err instanceof Error ? err.message : String(err) }));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const count = result.state === "ok" ? result.rows.length : undefined;
+
   return (
     <OpsShell>
-      <PageHeader eyebrow="Herd · 41 head · 9 in milk" title="Animals" />
+      <PageHeader eyebrow={count !== undefined ? `Herd · ${count} head` : "Herd"} title="Animals" />
       <div style={{ paddingTop: 16 }}>
-        <GridRow cols="60px 1fr 76px 76px 84px" as="header">
-          <span>Tag</span>
-          <span>Animal</span>
-          <span className="text-right">Gal</span>
-          <span className="text-right">Cost</span>
-          <span className="text-right">Net</span>
-        </GridRow>
-        {herd.map((a) => (
-          <Link key={a.tag} to={`/animals/${a.tag}`} style={{ color: "inherit", display: "contents" }}>
-            <GridRow cols="60px 1fr 76px 76px 84px" as="body" highlight={a.status === "withdrawal"}>
-              <EarTag tag={a.tag} accent={a.tagAccent} />
-              <span>
-                <span className="serif" style={{ fontSize: 17 }}>
-                  {a.name}
-                </span>
-                {a.status === "withdrawal" && (
-                  <>
-                    {" "}
-                    <Pill variant="withdrawal">Withdrawal</Pill>
-                  </>
-                )}
-                <br />
-                <span style={{ fontSize: 13, color: a.status === "at-risk" ? "var(--red)" : "var(--ink-muted)" }}>
-                  {a.note ?? `${a.breed} · ${a.lactationLabel}`}
-                </span>
-              </span>
-              <span className="mono text-right" style={{ fontSize: 15 }}>
-                {a.gallonsToDate.toLocaleString()}
-              </span>
-              <span className="mono text-right" style={{ fontSize: 15, color: "var(--red)" }}>
-                ${a.costToDate}
-              </span>
-              <span
-                className="mono text-right"
-                style={{ fontSize: 15, fontWeight: 500, color: a.netToDate < 0 ? "var(--red)" : undefined }}
-              >
-                {money(a.netToDate)}
-              </span>
+        {result.state === "loading" && (
+          <p style={{ fontSize: 14, color: "var(--ink-muted)", padding: "16px 8px" }}>Loading herd…</p>
+        )}
+
+        {result.state === "error" && (
+          <p style={{ fontSize: 14, color: "var(--red)", padding: "16px 8px" }}>Couldn't load the herd: {result.message}</p>
+        )}
+
+        {result.state === "ok" && (
+          <>
+            <GridRow cols="60px 1fr 120px 100px" as="header">
+              <span>Tag</span>
+              <span>Animal</span>
+              <span>Status</span>
+              <span className="text-right">Age</span>
             </GridRow>
-          </Link>
-        ))}
+            {result.rows.map((a) => (
+              <Link key={a.id} to={`/animals/${a.ear_tag}`} style={{ color: "inherit", display: "contents" }}>
+                <GridRow cols="60px 1fr 120px 100px" as="body">
+                  {/* Withdrawal/at-risk accent colors need herd.treatments, not wired yet — every
+                      real animal shows as plain "herd" green until that's in. */}
+                  <EarTag tag={a.ear_tag} accent="herd" />
+                  <span>
+                    <span className="serif" style={{ fontSize: 17 }}>
+                      {a.barn_name ?? `Tag ${a.ear_tag}`}
+                    </span>
+                    <br />
+                    <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+                      {a.sex} · {a.class}
+                    </span>
+                  </span>
+                  <span>
+                    <Pill variant={a.status === "active" ? "outline-green" : "outline"}>{a.status}</Pill>
+                  </span>
+                  <span className="mono text-right" style={{ fontSize: 15 }}>
+                    {formatAge(a.birth_date)}
+                  </span>
+                </GridRow>
+              </Link>
+            ))}
+            {result.rows.length === 0 && (
+              <p style={{ fontSize: 14, color: "var(--ink-muted)", padding: "16px 8px" }}>No animals recorded yet.</p>
+            )}
+          </>
+        )}
+
         <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 16 }}>
-          Showing 6 of 41 head — the animals drawn in the mockups. The rest of the herd list isn't designed yet.
+          Real herd data. Gal/Cost/Net aren't shown yet — those need lactations and cost/revenue entries, which
+          aren't wired up on this screen yet.
         </p>
       </div>
     </OpsShell>

@@ -51,6 +51,13 @@ export default function Today() {
         }
       />
 
+      <div style={{ margin: "16px 0" }}>
+        <Callout>
+          <strong style={{ fontWeight: 500 }}>These numbers are still placeholders.</strong> Animals and Store read
+          the real database now, so the milk and money figures below won't match what those screens show.
+        </Callout>
+      </div>
+
       <div className="stat-row">
         <StatTile value={milkToday.toFixed(1)} unit="gal" label="Milk today" />
         <StatTile value="9" unit="/ 41" label="Cows in milk" />

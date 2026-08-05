@@ -1,0 +1,42 @@
+.animal-form {
+  border: 1px solid var(--ink);
+  background: var(--page);
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.animal-form__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.animal-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.animal-form__input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 15px/1 "IBM Plex Sans", sans-serif;
+  width: 100%;
+}
+
+.animal-form__input:focus-visible {
+  outline: 2px solid var(--herd-green);
+  outline-offset: 1px;
+}
+
+.animal-form__textarea {
+  min-height: 72px;
+  padding: 10px 12px;
+  line-height: 1.5;
+  resize: vertical;
+  font-family: "IBM Plex Sans", sans-serif;
+}

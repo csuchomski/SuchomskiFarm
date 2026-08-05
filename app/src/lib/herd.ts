@@ -43,6 +43,40 @@ export async function fetchAnimalByTag(earTag: string): Promise<RealAnimal | nul
   return data as RealAnimal | null;
 }
 
+/** The fields this app lets you change. Everything else on herd.animals —
+ * tattoos, genotypes, registry numbers, the audit columns — is left alone,
+ * so an edit here can't quietly blank a column the form doesn't show. */
+export interface AnimalEdit {
+  barn_name: string;
+  ear_tag: string;
+  sex: string;
+  class: string;
+  status: string;
+  birth_date: string;
+  notes: string;
+  dam_id: string | null;
+  sire_id: string | null;
+}
+
+export async function updateAnimal(id: string, patch: AnimalEdit): Promise<RealAnimal> {
+  const { data, error } = await herdSchema()
+    .from("animals")
+    .update({
+      ...patch,
+      // class_is_manual records that a human set the class rather than it
+      // being derived from age — otherwise whatever computes it could
+      // silently revert this edit.
+      class_is_manual: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select(ANIMAL_COLUMNS)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as RealAnimal;
+}
+
 /** Breed shares for a set of animals, keyed by animal id. Sorted heaviest
  * first, so a display can take the first one as the dominant breed. */
 export async function fetchBreedComposition(animalIds: string[]): Promise<Map<string, BreedShare[]>> {

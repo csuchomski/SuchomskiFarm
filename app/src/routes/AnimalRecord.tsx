@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Button, Callout, EarTag, Pill, StatTile } from "../components/ui";
+import { AnimalEditForm } from "../components/herd/AnimalEditForm";
 import {
   describeBreeding,
   fetchAnimalByTag,
@@ -16,11 +17,19 @@ type Fetch =
   | { state: "loading" }
   | { state: "error"; message: string }
   | { state: "notfound" }
-  | { state: "ok"; animal: RealAnimal; breeds: BreedShare[]; dam: RealAnimal | null; sire: RealAnimal | null };
+  | {
+      state: "ok";
+      animal: RealAnimal;
+      breeds: BreedShare[];
+      dam: RealAnimal | null;
+      sire: RealAnimal | null;
+      herd: RealAnimal[];
+    };
 
 export default function AnimalRecord() {
   const { tag = "" } = useParams();
   const [result, setResult] = useState<Fetch>({ state: "loading" });
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +56,7 @@ export default function AnimalRecord() {
           breeds: composition.get(animal.id) ?? [],
           dam: animal.dam_id ? (byId.get(animal.dam_id) ?? null) : null,
           sire: animal.sire_id ? (byId.get(animal.sire_id) ?? null) : null,
+          herd: all,
         });
       } catch (err) {
         if (!cancelled) setResult({ state: "error", message: err instanceof Error ? err.message : String(err) });
@@ -90,7 +100,7 @@ export default function AnimalRecord() {
     );
   }
 
-  const { animal, breeds, dam, sire } = result;
+  const { animal, breeds, dam, sire, herd } = result;
   const name = animal.barn_name ?? `Tag ${animal.ear_tag}`;
   const breeding = describeBreeding(breeds);
 
@@ -126,8 +136,8 @@ export default function AnimalRecord() {
             <Button disabled title="Treatments aren't built yet">
               Log treatment
             </Button>
-            <Button variant="filled" disabled title="Milk is logged on Store · Products for now">
-              Log milking
+            <Button variant="filled" onClick={() => setEditing((v) => !v)}>
+              {editing ? "Close" : "Edit"}
             </Button>
           </div>
         </div>
@@ -139,6 +149,28 @@ export default function AnimalRecord() {
           <StatTile size="md" value={breeds.length || "—"} label="Breeds on file" />
         </div>
       </div>
+
+      {editing && (
+        <div style={{ padding: "24px 32px 0" }}>
+          <AnimalEditForm
+            animal={animal}
+            herd={herd}
+            onCancel={() => setEditing(false)}
+            onSaved={(updated) => {
+              setEditing(false);
+              const byId = new Map(herd.map((a) => [a.id, a]));
+              setResult({
+                state: "ok",
+                animal: updated,
+                breeds,
+                dam: updated.dam_id ? (byId.get(updated.dam_id) ?? null) : null,
+                sire: updated.sire_id ? (byId.get(updated.sire_id) ?? null) : null,
+                herd: herd.map((a) => (a.id === updated.id ? updated : a)),
+              });
+            }}
+          />
+        </div>
+      )}
 
       <div className="record-body">
         <div>

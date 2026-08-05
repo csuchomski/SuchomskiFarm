@@ -95,6 +95,15 @@ export default function Today() {
                 one entry, four places
               </span>
             </div>
+            {data.milkIdentifiedByName && (
+              <div style={{ marginBottom: 16 }}>
+                <Callout>
+                  Milk is being identified by product name, which miscounts both ways — a "milk soap" would be
+                  counted, a "Raw Jersey" wouldn't. Running{" "}
+                  <code>docs/migrations/008-product-types.sql</code> replaces the guess with a real type.
+                </Callout>
+              </div>
+            )}
             <div className="chain">
               <ChainCell
                 step="1 · Herd"

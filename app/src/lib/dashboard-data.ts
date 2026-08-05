@@ -36,9 +36,48 @@ export interface DashboardData {
   transactionsToday: RealTransaction[];
   profitPerHead: ProfitPerHead[];
   hasCostData: boolean;
+  /** True when products have no type_code yet and milk is being identified
+   * by name — see migration 008. */
+  milkIdentifiedByName: boolean;
 }
 
-const MILK_MATCH = /milk/i;
+/** Fallback only, for before migration 008 adds products.type_code. Matching
+ * a product by its name is wrong in both directions — "Milk soap" counts as
+ * production, "Raw Jersey" doesn't — which is why the column exists. */
+const MILK_NAME_FALLBACK = /\bmilk\b/i;
+
+interface ProductRow {
+  id: number;
+  name: string;
+  unit: string;
+  type_code?: string | null;
+}
+
+function milkProductIdsFrom(products: ProductRow[]): { ids: Set<number>; usedFallback: boolean } {
+  const typed = products.filter((p) => p.type_code != null);
+  if (typed.length > 0) {
+    return { ids: new Set(typed.filter((p) => p.type_code === "milk").map((p) => p.id)), usedFallback: false };
+  }
+  return { ids: new Set(products.filter((p) => MILK_NAME_FALLBACK.test(p.name)).map((p) => p.id)), usedFallback: true };
+}
+
+/**
+ * Selecting a column that doesn't exist is an error, not a null, so this
+ * asks for type_code and retries without it when migration 008 hasn't run.
+ * One wasted round trip in the un-migrated case, and none afterwards.
+ */
+async function fetchProducts(): Promise<ProductRow[]> {
+  const withType = await supabase.from("products").select("id, name, unit, price, type_code");
+  if (!withType.error) return (withType.data ?? []) as ProductRow[];
+
+  if (!/type_code|column|schema cache/i.test(withType.error.message)) {
+    throw new Error(`products: ${withType.error.message}`);
+  }
+
+  const without = await supabase.from("products").select("id, name, unit, price");
+  if (without.error) throw new Error(`products: ${without.error.message}`);
+  return (without.data ?? []) as ProductRow[];
+}
 
 export async function fetchDashboardData(todayIso: string): Promise<DashboardData> {
   const monthStart = `${todayIso.slice(0, 7)}-01`;
@@ -56,7 +95,7 @@ export async function fetchDashboardData(todayIso: string): Promise<DashboardDat
         .select("id, animal_id, product_id, product_name, quantity, unit, produced_date, batch_id")
         .eq("produced_date", todayIso),
       supabase.from("inventory_batches").select("id, product_id, produced_date, quantity, reserved"),
-      supabase.from("products").select("id, name, unit, price"),
+      fetchProducts(),
       supabase.from("orders").select("id, status, picked_up_date, cancelled_date"),
       supabase
         .from("ledger_transactions")
@@ -68,11 +107,12 @@ export async function fetchDashboardData(todayIso: string): Promise<DashboardDat
       supabase.schema("herd").from("revenue_entries").select("animal_id, amount_cents").is("deleted_at", null),
     ]);
 
+  // productsRes is already unwrapped — fetchProducts() throws on failure
+  // rather than returning a result object, because it has its own retry.
   for (const [label, res] of [
     ["herd.animals", animalsRes],
     ["herd.production_records", productionRes],
     ["inventory_batches", batchesRes],
-    ["products", productsRes],
     ["orders", ordersRes],
     ["ledger_transactions", txnRes],
     ["herd.cost_entries", costRes],
@@ -84,15 +124,14 @@ export async function fetchDashboardData(todayIso: string): Promise<DashboardDat
   const animals = (animalsRes.data ?? []) as RealAnimal[];
   const production = (productionRes.data ?? []) as { product_id: number; quantity: number; unit: string }[];
   const batches = (batchesRes.data ?? []) as { product_id: number; produced_date: string; quantity: number; reserved: number }[];
-  const products = (productsRes.data ?? []) as { id: number; name: string; unit: string }[];
+  const products = productsRes;
   const orders = (ordersRes.data ?? []) as { status: string; picked_up_date: string | null; cancelled_date: string | null }[];
   const transactions = (txnRes.data ?? []) as RealTransaction[];
 
   const types: TransactionType[] = typesRes.error ? FALLBACK_TYPES : ((typesRes.data ?? []) as TransactionType[]);
   const monthTotals = summarise(transactions, typeMap(types));
 
-  // Milk-ish products, so "milk today" doesn't silently include eggs.
-  const milkProductIds = new Set(products.filter((p) => MILK_MATCH.test(p.name)).map((p) => p.id));
+  const { ids: milkProductIds, usedFallback: milkByName } = milkProductIdsFrom(products);
   const milkProduction = production.filter((r) => milkProductIds.has(r.product_id));
   const milkTodayQuantity = round3(milkProduction.reduce((s, r) => s + Number(r.quantity), 0));
   const milkTodayUnit = milkProduction[0]?.unit ?? products.find((p) => milkProductIds.has(p.id))?.unit ?? null;
@@ -128,6 +167,7 @@ export async function fetchDashboardData(todayIso: string): Promise<DashboardDat
     transactionsToday: transactions.filter((t) => t.date === todayIso),
     profitPerHead,
     hasCostData: costByAnimal.size > 0 || revenueByAnimal.size > 0,
+    milkIdentifiedByName: milkByName,
   };
 }
 

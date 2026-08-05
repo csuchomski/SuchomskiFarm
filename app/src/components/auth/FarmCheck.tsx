@@ -1,39 +1,66 @@
 import { useEffect, useState } from "react";
 import { Button } from "../ui";
-import { herdSchema, supabase } from "../../lib/supabase";
+import { supabase } from "../../lib/supabase";
 import { signOut } from "../../lib/auth";
 import "./sign-in.css";
 
-interface AnimalRow {
-  id: string;
-  barn_name: string | null;
-  ear_tag: string;
-  birth_date: string;
-  class: string;
-  status: string;
-  sex: string;
+/** Tables worth knowing the size of before building UI against them.
+ * Counted with head:true so this pulls counts, not rows. */
+const HERD_TABLES = [
+  "animals",
+  "lactations",
+  "test_days",
+  "production_records",
+  "treatments",
+  "vaccinations",
+  "calvings",
+  "cost_entries",
+  "revenue_entries",
+  "breeds",
+  "breed_composition",
+  "animal_photos",
+  "meat_sales",
+];
+
+const PUBLIC_TABLES = [
+  "products",
+  "inventory_batches",
+  "orders",
+  "schedules",
+  "discards",
+  "ledger_transactions",
+  "ledger_accounts",
+  "businesses",
+  "profiles",
+];
+
+interface TableCount {
+  schema: "herd" | "public";
+  table: string;
+  count: number | null;
+  error: string | null;
 }
 
-type AnimalsResult =
-  | { state: "loading" }
-  | { state: "error"; message: string }
-  | { state: "ok"; rows: AnimalRow[]; count: number };
-
 type Result =
-  | { state: "loading" }
+  | { state: "loading"; note: string }
   | { state: "error"; message: string; step: string }
   | { state: "empty" }
-  | { state: "ok"; farmName: string; role: string; farmId: string; animals: AnimalsResult };
+  | { state: "ok"; farmName: string; role: string; counts: TableCount[] };
+
+async function countTable(schema: "herd" | "public", table: string): Promise<TableCount> {
+  const client = schema === "herd" ? supabase.schema("herd") : supabase;
+  const { count, error } = await client.from(table).select("*", { count: "exact", head: true });
+  return { schema, table, count: count ?? null, error: error?.message ?? null };
+}
 
 /**
- * The smallest possible checkable slice: log in, then prove the RLS-gated
- * read actually works by fetching the current user's farm membership, then
- * a raw sample of herd.animals — before mapping any real field onto a real
- * screen. Sits in front of the existing mock-data app; see
- * IMPLEMENTATION_PLAN.md for why.
+ * Connection check plus a data inventory: which tables actually have rows.
+ * Building screens against empty tables wastes a round trip each time
+ * (this sandbox has no network path to Supabase, so every query has to be
+ * verified by the user by hand) — one inventory up front is cheaper.
  */
 export function FarmCheck({ onContinue }: { onContinue: () => void }) {
-  const [result, setResult] = useState<Result>({ state: "loading" });
+  const [result, setResult] = useState<Result>({ state: "loading", note: "Querying herd.farm_members…" });
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +71,8 @@ export function FarmCheck({ onContinue }: { onContinue: () => void }) {
         return;
       }
 
-      const { data: memberRows, error: memberError } = await herdSchema()
+      const { data: memberRows, error: memberError } = await supabase
+        .schema("herd")
         .from("farm_members")
         .select("farm_id, role")
         .eq("user_id", userData.user.id);
@@ -59,7 +87,8 @@ export function FarmCheck({ onContinue }: { onContinue: () => void }) {
       }
 
       const { farm_id, role } = memberRows[0];
-      const { data: farm, error: farmError } = await herdSchema()
+      const { data: farm, error: farmError } = await supabase
+        .schema("herd")
         .from("farms")
         .select("name")
         .eq("id", farm_id)
@@ -71,38 +100,30 @@ export function FarmCheck({ onContinue }: { onContinue: () => void }) {
       }
       if (cancelled) return;
 
-      setResult({ state: "ok", farmName: farm.name, role, farmId: farm_id, animals: { state: "loading" } });
+      setResult({ state: "loading", note: "Counting rows across the schema…" });
 
-      const { data: animalRows, error: animalError, count } = await herdSchema()
-        .from("animals")
-        .select("id, barn_name, ear_tag, birth_date, class, status, sex", { count: "exact" })
-        .order("barn_name")
-        .limit(10);
+      const counts = await Promise.all([
+        ...HERD_TABLES.map((t) => countTable("herd", t)),
+        ...PUBLIC_TABLES.map((t) => countTable("public", t)),
+      ]);
 
-      if (cancelled) return;
-      if (animalError) {
-        setResult((prev) =>
-          prev.state === "ok" ? { ...prev, animals: { state: "error", message: animalError.message } } : prev,
-        );
-        return;
-      }
-      setResult((prev) =>
-        prev.state === "ok" ? { ...prev, animals: { state: "ok", rows: animalRows ?? [], count: count ?? 0 } } : prev,
-      );
+      if (!cancelled) setResult({ state: "ok", farmName: farm.name, role, counts });
     })();
     return () => {
       cancelled = true;
     };
   }, []);
 
+  const wide = result.state === "ok";
+
   return (
     <div className="sign-in-page">
-      <div className="sign-in-card" style={{ width: result.state === "ok" ? 640 : 420 }}>
+      <div className="sign-in-card" style={{ width: wide ? 620 : 420, maxHeight: "90vh", overflowY: "auto" }}>
         <div className="eyebrow" style={{ marginBottom: 12 }}>
           Supabase connection check
         </div>
 
-        {result.state === "loading" && <p style={{ fontSize: 14 }}>Querying herd.farm_members…</p>}
+        {result.state === "loading" && <p style={{ fontSize: 14 }}>{result.note}</p>}
 
         {result.state === "error" && (
           <>
@@ -120,73 +141,44 @@ export function FarmCheck({ onContinue }: { onContinue: () => void }) {
         {result.state === "empty" && (
           <p style={{ fontSize: 14 }}>
             Signed in, but no <code>farm_members</code> row came back for this user. RLS is working (it didn't
-            error) — there's just nothing to see yet, which shouldn't happen given what you showed me in the SQL
-            editor. Worth double-checking you're signed in as the right account.
+            error) — there's just nothing to see yet.
           </p>
         )}
 
         {result.state === "ok" && (
           <>
-            <p style={{ fontSize: 14, marginBottom: 4 }}>
+            <p style={{ fontSize: 14, marginBottom: 16 }}>
               ✅ Read <strong>{result.farmName}</strong> as <strong>{result.role}</strong> through Row Level
               Security.
             </p>
 
-            {result.animals.state === "loading" && (
-              <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 12 }}>Querying herd.animals…</p>
-            )}
-
-            {result.animals.state === "error" && (
-              <>
-                <p style={{ color: "var(--red)", fontSize: 14, marginTop: 16, marginBottom: 4 }}>
-                  <strong>herd.animals select</strong> failed:
-                </p>
-                <p style={{ color: "var(--red)", fontSize: 13, fontFamily: "var(--font-mono)" }}>
-                  {result.animals.message}
-                </p>
-              </>
-            )}
-
-            {result.animals.state === "ok" && (
-              <>
-                <p style={{ fontSize: 13, color: "var(--ink-muted)", margin: "12px 0 8px" }}>
-                  {result.animals.count} total animal{result.animals.count === 1 ? "" : "s"} — first {result.animals.rows.length} shown:
-                </p>
-                <table className="mono" style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr style={{ borderBottom: "1px solid var(--hairline)" }}>
-                      <th style={{ textAlign: "left", padding: "4px 6px" }}>ear_tag</th>
-                      <th style={{ textAlign: "left", padding: "4px 6px" }}>barn_name</th>
-                      <th style={{ textAlign: "left", padding: "4px 6px" }}>sex</th>
-                      <th style={{ textAlign: "left", padding: "4px 6px" }}>class</th>
-                      <th style={{ textAlign: "left", padding: "4px 6px" }}>status</th>
-                      <th style={{ textAlign: "left", padding: "4px 6px" }}>birth_date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.animals.rows.map((a) => (
-                      <tr key={a.id} style={{ borderBottom: "1px solid var(--hairline)" }}>
-                        <td style={{ padding: "4px 6px" }}>{a.ear_tag}</td>
-                        <td style={{ padding: "4px 6px" }}>{a.barn_name ?? "—"}</td>
-                        <td style={{ padding: "4px 6px" }}>{a.sex}</td>
-                        <td style={{ padding: "4px 6px" }}>{a.class}</td>
-                        <td style={{ padding: "4px 6px" }}>{a.status}</td>
-                        <td style={{ padding: "4px 6px" }}>{a.birth_date}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {result.animals.rows.length === 0 && (
-                  <p style={{ fontSize: 13, color: "var(--ink-muted)" }}>
-                    No rows came back — either there genuinely are no animals yet, or something's off.
-                  </p>
-                )}
-              </>
-            )}
-
-            <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 16 }}>
-              The 5 screens past this point are still on mock data — this table is just to see the real shape
-              before I map it onto them.
+            <div className="eyebrow" style={{ marginBottom: 8 }}>
+              What's actually populated
+            </div>
+            <table className="mono" style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+              <tbody>
+                {result.counts.map((c) => (
+                  <tr key={`${c.schema}.${c.table}`} style={{ borderBottom: "1px solid var(--hairline)" }}>
+                    <td style={{ padding: "3px 6px", color: "var(--ink-muted)" }}>{c.schema}</td>
+                    <td style={{ padding: "3px 6px" }}>{c.table}</td>
+                    <td
+                      style={{
+                        padding: "3px 6px",
+                        textAlign: "right",
+                        fontWeight: c.count ? 500 : 400,
+                        color: c.error ? "var(--red)" : c.count ? "var(--ink)" : "var(--ink-faint)",
+                      }}
+                    >
+                      {c.error ? "error" : c.count === 0 ? "—" : c.count}
+                    </td>
+                    <td style={{ padding: "3px 6px", color: "var(--red)", fontSize: 11 }}>{c.error ?? ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 12 }}>
+              Animals and the animal record read real data now. Everything else is still mock — this inventory is
+              to decide what's worth wiring next.
             </p>
           </>
         )}
@@ -194,7 +186,7 @@ export function FarmCheck({ onContinue }: { onContinue: () => void }) {
         <div style={{ display: "flex", gap: 8, marginTop: 24 }}>
           <Button onClick={() => void signOut()}>Sign out</Button>
           <Button variant="filled" onClick={onContinue} style={{ flex: 1 }}>
-            Continue to the app (mock data)
+            Continue to the app
           </Button>
         </div>
       </div>

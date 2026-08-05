@@ -43,9 +43,27 @@ create policy "insert own profile as customer" on public.profiles
 -- SECURITY DEFINER to avoid recursing through the SELECT policy, and a
 -- privilege escalation guard shouldn't rest on a detail like that.
 --
--- REVOKE is unconditional and needs no reasoning about evaluation order:
--- role simply cannot be written by these roles, whatever any policy says.
-revoke update (role) on public.profiles from authenticated, anon;
+-- Column privileges are unconditional and need no reasoning about
+-- evaluation order: role simply cannot be written by these roles, whatever
+-- any policy says.
+--
+-- ⚠️ The obvious form of this does nothing:
+--
+--     revoke update (role) on public.profiles from authenticated;
+--
+-- A column-level REVOKE cannot subtract from a table-level GRANT, and
+-- `authenticated` holds table-wide UPDATE. Postgres accepts the statement
+-- and it has no effect — no error, no warning. Verified the hard way: after
+-- running it, information_schema.column_privileges still listed UPDATE on
+-- role, because it was reporting the table grant expanded per column.
+--
+-- The working form drops the table-wide privilege and grants back only the
+-- columns a person should be able to edit. id, role and created_at are
+-- deliberately absent.
+revoke update on public.profiles from authenticated, anon;
+
+grant update (first_name, last_name, email, phone)
+  on public.profiles to authenticated;
 
 -- The policy still needs its WITH CHECK so a customer can't reassign their
 -- row to a different id, which is a separate hole from the role column.
@@ -133,9 +151,32 @@ commit;
 -- version of that feature.
 -- ---------------------------------------------------------------------------
 
+-- Verify the column privileges actually changed — this is the step that
+-- catches the table-vs-column GRANT trap above. Expect exactly four rows:
+-- first_name, last_name, email, phone.
+--
+--   select grantee, privilege_type, column_name
+--     from information_schema.column_privileges
+--    where table_schema = 'public' and table_name = 'profiles'
+--      and privilege_type = 'UPDATE'
+--    order by column_name;
+--
+-- And behaviourally, impersonating a signed-in user inside a transaction
+-- that rolls back, so nothing is written either way. Note the SQL editor
+-- runs as a superuser by default, where auth.uid() is null and column
+-- privileges don't apply — a test without these two SET LOCALs proves
+-- nothing:
+--
+--   begin;
+--   set local role authenticated;
+--   set local request.jwt.claims = '{"sub":"<your-uuid>","role":"authenticated"}';
+--   update profiles set role = 'farmer' where id = auth.uid();
+--   -- expect: ERROR: permission denied for column role
+--   rollback;
+
 -- Rollback:
 --
---   grant update (role) on public.profiles to authenticated;   -- reopens the escalation
+--   grant update on public.profiles to authenticated;   -- reopens the escalation
 --   drop function if exists public.cancel_my_order(bigint);
 --   drop policy if exists "farmer updates orders"          on public.orders;
 --   drop policy if exists "insert own orders or farmer"    on public.orders;

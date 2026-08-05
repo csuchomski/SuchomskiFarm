@@ -1,16 +1,24 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "../ui";
-import { createAnimal, updateAnimal, type AnimalEdit, type RealAnimal } from "../../lib/herd";
+import {
+  addAttributeOption,
+  createAnimal,
+  fetchAttributeOptions,
+  updateAnimal,
+  type AnimalEdit,
+  type AttributeOption,
+  type AttributeOptions,
+  type RealAnimal,
+} from "../../lib/herd";
 import "./animal-edit-form.css";
 
 /**
- * Suggestions only, and merged with whatever the herd already uses — so a
- * value someone entered that isn't in this list still shows up as an option
- * rather than looking like a mistake. Offered as datalists rather than
- * selects for the same reason: an unrecognised value on an existing record
- * stays editable instead of being replaced by whichever option came first.
+ * Last-resort fallback for before migration 013 creates
+ * herd.attribute_options. Once that table exists these lists are unused —
+ * vocabularies belong in the database, where adding a class doesn't need a
+ * deploy.
  */
-const SUGGESTED = {
+const FALLBACK = {
   sex: ["female", "male"],
   class: ["calf", "heifer", "cow", "bull", "steer"],
   status: ["active", "sold", "dead", "culled"],
@@ -72,16 +80,48 @@ export function AnimalForm({
 
   const set = <K extends keyof AnimalEdit>(key: K, value: AnimalEdit[K]) => setForm((f) => ({ ...f, [key]: value }));
 
-  const options = useMemo(
-    () => ({
-      sex: merge(SUGGESTED.sex, herd.map((a) => a.sex)),
-      class: merge(SUGGESTED.class, herd.map((a) => a.class)),
-      status: merge(SUGGESTED.status, herd.map((a) => a.status)),
-      purpose: merge(SUGGESTED.purpose, herd.map((a) => a.purpose)),
-      origin: merge(SUGGESTED.origin, herd.map((a) => a.origin)),
-    }),
-    [herd],
-  );
+  // Vocabularies come from herd.attribute_options. Until that exists, fall
+  // back to what the herd already uses merged with a built-in list, so the
+  // form works either side of migration 013.
+  const [dbOptions, setDbOptions] = useState<AttributeOptions | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    // A failure here isn't worth blocking the form for — the fallback
+    // options are still usable.
+    fetchAttributeOptions()
+      .then((o) => !cancelled && setDbOptions(o))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const options = useMemo(() => {
+    const fromHerd = (key: keyof typeof FALLBACK, pick: (a: RealAnimal) => string) =>
+      merge(FALLBACK[key], herd.map(pick)).map((code) => ({ code, label: code }));
+
+    const forAttr = (key: keyof typeof FALLBACK, pick: (a: RealAnimal) => string): AttributeOption[] => {
+      const fromDb = dbOptions?.[key];
+      if (!fromDb || fromDb.length === 0) return fromHerd(key, pick);
+      // A value already on this animal that has since been retired would
+      // otherwise vanish from its own form.
+      const current = (pick(animal ?? ({} as RealAnimal)) ?? "").trim();
+      return current && !fromDb.some((o) => o.code === current)
+        ? [...fromDb, { code: current, label: `${current} (not in list)` }]
+        : fromDb;
+    };
+
+    return {
+      sex: forAttr("sex", (a) => a.sex),
+      class: forAttr("class", (a) => a.class),
+      status: forAttr("status", (a) => a.status),
+      purpose: forAttr("purpose", (a) => a.purpose),
+      origin: forAttr("origin", (a) => a.origin),
+    };
+  }, [herd, dbOptions, animal]);
+
+  const canAddOptions = Boolean(dbOptions && farmId);
 
   const candidates = herd.filter((a) => a.id !== animal?.id);
   const dams = candidates.filter((a) => a.sex !== "male");
@@ -153,29 +193,21 @@ export function AnimalForm({
           )}
         </Field>
 
-        <ListField label="Sex" required value={form.sex} onChange={(v) => set("sex", v)} options={options.sex} />
-        <ListField label="Class" required value={form.class} onChange={(v) => set("class", v)} options={options.class} />
-        <ListField
-          label="Purpose"
-          required
-          value={form.purpose}
-          onChange={(v) => set("purpose", v)}
-          options={options.purpose}
-        />
-        <ListField
-          label="Origin"
-          required
-          value={form.origin}
-          onChange={(v) => set("origin", v)}
-          options={options.origin}
-        />
-        <ListField
-          label="Status"
-          required
-          value={form.status}
-          onChange={(v) => set("status", v)}
-          options={options.status}
-        />
+        {(["sex", "class", "purpose", "origin", "status"] as const).map((attr) => (
+          <ListField
+            key={attr}
+            label={LABELS[attr]}
+            attribute={attr}
+            required
+            value={form[attr]}
+            onChange={(v) => set(attr, v)}
+            options={options[attr]}
+            farmId={canAddOptions ? farmId : null}
+            onOptionAdded={(added) =>
+              setDbOptions((prev) => (prev ? { ...prev, [attr]: [...(prev[attr] ?? []), added] } : prev))
+            }
+          />
+        ))}
 
         <Field label="Born" required>
           <input
@@ -274,37 +306,111 @@ export function merge(suggested: string[], actual: string[]): string[] {
   return [...new Set([...suggested, ...actual.map((v) => (v ?? "").trim()).filter(Boolean)])];
 }
 
+const LABELS: Record<string, string> = {
+  sex: "Sex",
+  class: "Class",
+  purpose: "Purpose",
+  origin: "Origin",
+  status: "Status",
+};
+
+/**
+ * A picker over the vocabulary in the database, with an inline way to add to
+ * it — so a class nobody anticipated is one form away rather than a deploy.
+ * `farmId` null means the options table doesn't exist yet, in which case
+ * adding is hidden rather than offered and then failing.
+ */
 function ListField({
   label,
+  attribute,
   value,
   onChange,
   options,
   required,
+  farmId,
+  onOptionAdded,
 }: {
   label: string;
+  attribute: string;
   value: string;
   onChange: (v: string) => void;
-  options: string[];
+  options: AttributeOption[];
   required?: boolean;
+  farmId: string | null;
+  onOptionAdded: (added: AttributeOption) => void;
 }) {
-  const id = `list-${label.toLowerCase()}`;
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    const label = draft.trim();
+    if (!label || !farmId) return;
+    const code = label.toLowerCase().replace(/\s+/g, "_");
+    setBusy(true);
+    setError(null);
+    try {
+      const added = await addAttributeOption(farmId, attribute, code, label);
+      onOptionAdded(added);
+      onChange(added.code);
+      setDraft("");
+      setAdding(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <Field label={label} required={required}>
-      <input
+      <select
         className="animal-form__input"
-        list={id}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => (e.target.value === ADD_SENTINEL ? setAdding(true) : onChange(e.target.value))}
         required={required}
-      />
-      <datalist id={id}>
+      >
+        {value === "" && <option value="">Choose…</option>}
         {options.map((o) => (
-          <option key={o} value={o} />
+          <option key={o.code} value={o.code}>
+            {o.label}
+          </option>
         ))}
-      </datalist>
+        {farmId && <option value={ADD_SENTINEL}>+ Add {label.toLowerCase()}…</option>}
+      </select>
+
+      {adding && (
+        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+          <input
+            className="animal-form__input"
+            autoFocus
+            placeholder={`New ${label.toLowerCase()}`}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void save();
+              }
+              if (e.key === "Escape") setAdding(false);
+            }}
+          />
+          <Button type="button" size="sm" onClick={() => void save()} disabled={!draft.trim() || busy}>
+            {busy ? "…" : "Add"}
+          </Button>
+        </div>
+      )}
+      {error && (
+        <span className="mono" style={{ fontSize: 12, color: "var(--red)" }}>
+          {error}
+        </span>
+      )}
     </Field>
   );
 }
+
+const ADD_SENTINEL = "__add__";
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (

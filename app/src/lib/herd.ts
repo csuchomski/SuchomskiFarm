@@ -160,3 +160,56 @@ export function formatAge(birthDateIso: string, todayIso = new Date().toISOStrin
   if (days < 730) return `${Math.floor(days / 30.44)} months`;
   return `${Math.floor(days / 365.25)} years`;
 }
+
+// ─── attribute vocabularies ────────────────────────────────────────────
+
+export interface AttributeOption {
+  code: string;
+  label: string;
+}
+
+export type AttributeOptions = Record<string, AttributeOption[]>;
+
+/** Attributes the animal form offers. Others may exist in the table
+ * (horn_status, record_type…) and are ignored until something edits them. */
+export const ANIMAL_ATTRIBUTES = ["sex", "class", "purpose", "origin", "status"] as const;
+
+/**
+ * Vocabularies from herd.attribute_options. Returns null when the table
+ * doesn't exist yet — migration 013 hasn't run — so callers can fall back to
+ * deriving options from the herd rather than showing nothing.
+ */
+export async function fetchAttributeOptions(): Promise<AttributeOptions | null> {
+  const { data, error } = await herdSchema()
+    .from("attribute_options")
+    .select("attribute, code, label, sort_order")
+    .eq("active", true)
+    .is("deleted_at", null)
+    .order("sort_order");
+
+  if (error) {
+    if (/does not exist|schema cache|not find the table|relation/i.test(error.message)) return null;
+    throw new Error(`herd.attribute_options: ${error.message}`);
+  }
+
+  const out: AttributeOptions = {};
+  for (const row of (data ?? []) as { attribute: string; code: string; label: string }[]) {
+    (out[row.attribute] ??= []).push({ code: row.code, label: row.label });
+  }
+  return out;
+}
+
+export async function addAttributeOption(
+  farmId: string,
+  attribute: string,
+  code: string,
+  label: string,
+): Promise<AttributeOption> {
+  const { data, error } = await herdSchema()
+    .from("attribute_options")
+    .insert({ farm_id: farmId, attribute, code: code.trim(), label: label.trim() })
+    .select("code, label")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as AttributeOption;
+}

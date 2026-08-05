@@ -73,28 +73,19 @@ export async function fetchMyOrders(userId: string): Promise<CustomerOrder[]> {
   return (data ?? []) as CustomerOrder[];
 }
 
-export async function reserve(input: {
-  userId: string;
-  productId: number;
-  quantity: number;
-  unitPrice: number | null;
-}): Promise<CustomerOrder> {
-  const { data, error } = await supabase
-    .from("orders")
-    .insert({
-      customer_id: input.userId,
-      product_id: input.productId,
-      quantity: input.quantity,
-      status: "reserved",
-      reserved_date: new Date().toISOString(),
-      unit_price: input.unitPrice,
-      total_cost: input.unitPrice === null ? null : Math.round(input.unitPrice * input.quantity * 100) / 100,
-    })
-    .select("id, product_id, quantity, status, reserved_date, picked_up_date, cancelled_date, unit_price, total_cost")
-    .single();
-
+/**
+ * Reserving goes through a database function, not an insert. It has to
+ * check availability, create the order and hold the stock as one operation
+ * — done from here it's three round trips with no lock, so two people
+ * reserving the last gallon would both succeed. See migration 011.
+ */
+export async function reserve(input: { productId: number; quantity: number }): Promise<number> {
+  const { data, error } = await supabase.rpc("reserve_product", {
+    p_product_id: input.productId,
+    p_quantity: input.quantity,
+  });
   if (error) throw new Error(error.message);
-  return data as CustomerOrder;
+  return data as number;
 }
 
 /**
@@ -108,6 +99,10 @@ export async function cancelOrder(orderId: number): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+/** The role this database gives a shop customer. Not "customer" — the live
+ * rows use 'buyer', and is_farmer() keys off 'farmer'. */
+export const BUYER_ROLE = "buyer";
+
 export async function signUpCustomer(input: {
   email: string;
   password: string;
@@ -118,18 +113,30 @@ export async function signUpCustomer(input: {
   const { data, error } = await supabase.auth.signUp({ email: input.email, password: input.password });
   if (error) throw new Error(error.message);
 
-  // No session when email confirmation is on — the profile row has to wait
-  // until they confirm and sign in, or the insert fails RLS.
+  // No session when email confirmation is on, so nothing can be written as
+  // this user yet. Whatever creates profiles server-side will have done so.
   if (!data.session || !data.user) return { needsConfirmation: true };
 
-  const { error: profileError } = await supabase.from("profiles").insert({
-    id: data.user.id,
+  // A trigger on auth.users appears to create the profile already — the row
+  // for an account signed up through this form came back with role 'buyer',
+  // which this code never sends. So fill in the name and phone the form
+  // collected rather than inserting a duplicate, and treat a missing row as
+  // the case to insert.
+  const { data: existing } = await supabase.from("profiles").select("id").eq("id", data.user.id).maybeSingle();
+
+  const fields = {
     first_name: input.firstName,
     last_name: input.lastName,
     email: input.email,
     phone: input.phone || null,
-    role: "customer",
-  });
-  if (profileError) throw new Error(`profiles: ${profileError.message}`);
+  };
+
+  const { error: profileError } = existing
+    ? await supabase.from("profiles").update(fields).eq("id", data.user.id)
+    : await supabase.from("profiles").insert({ id: data.user.id, ...fields, role: BUYER_ROLE });
+
+  // Don't fail the signup over this — the account exists and works; the
+  // name is cosmetic and can be fixed later.
+  if (profileError) return { needsConfirmation: false, profileWarning: profileError.message };
   return { needsConfirmation: false };
 }

@@ -22,9 +22,13 @@ begin;
 -- privilege escalation.
 -- ---------------------------------------------------------------------------
 
-create policy "insert own profile as customer" on public.profiles
+-- 'buyer' is the vocabulary this database already uses — verified against
+-- the live rows, which hold 'buyer' and 'farmer'. An earlier draft pinned
+-- 'customer', which would have blocked every legitimate self-insert while
+-- looking correct.
+create policy "insert own profile as buyer" on public.profiles
   for insert to authenticated
-  with check (auth.uid() = id and role = 'customer');
+  with check (auth.uid() = id and role = 'buyer');
 
 -- The existing "update own profile" policy has a USING clause but no
 -- WITH CHECK, which means a customer can already promote themselves:

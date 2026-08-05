@@ -69,7 +69,7 @@ export default function CustomerStore() {
     setActionError(null);
     setNotice(null);
     try {
-      await reserve({ userId, productId: product.id, quantity, unitPrice: product.price });
+      await reserve({ productId: product.id, quantity });
       setQty((q) => ({ ...q, [product.id]: "" }));
       await load();
       setNotice(`Reserved ${quantity} ${product.unit} of ${product.name}.`);
@@ -130,8 +130,8 @@ export default function CustomerStore() {
             <>
               <p style={{ fontSize: 13, color: "var(--red)" }}>{actionError}</p>
               <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>
-                If this mentions row-level security, migration 009 hasn't been run — reserving needs an insert
-                policy on orders that doesn't exist yet.
+                If this mentions a missing function, migration 011 hasn't been run — reserving goes through
+                reserve_product so the stock is actually held.
               </p>
             </>
           )}

@@ -4,17 +4,33 @@ import { herdSchema, supabase } from "../../lib/supabase";
 import { signOut } from "../../lib/auth";
 import "./sign-in.css";
 
+interface AnimalRow {
+  id: string;
+  barn_name: string | null;
+  ear_tag: string;
+  birth_date: string;
+  class: string;
+  status: string;
+  sex: string;
+}
+
+type AnimalsResult =
+  | { state: "loading" }
+  | { state: "error"; message: string }
+  | { state: "ok"; rows: AnimalRow[]; count: number };
+
 type Result =
   | { state: "loading" }
   | { state: "error"; message: string; step: string }
   | { state: "empty" }
-  | { state: "ok"; farmName: string; role: string };
+  | { state: "ok"; farmName: string; role: string; farmId: string; animals: AnimalsResult };
 
 /**
  * The smallest possible checkable slice: log in, then prove the RLS-gated
- * read actually works by fetching the current user's farm membership. Sits
- * in front of the existing mock-data app rather than replacing any of its
- * 5 screens yet — see IMPLEMENTATION_PLAN.md for why.
+ * read actually works by fetching the current user's farm membership, then
+ * a raw sample of herd.animals — before mapping any real field onto a real
+ * screen. Sits in front of the existing mock-data app; see
+ * IMPLEMENTATION_PLAN.md for why.
  */
 export function FarmCheck({ onContinue }: { onContinue: () => void }) {
   const [result, setResult] = useState<Result>({ state: "loading" });
@@ -53,7 +69,26 @@ export function FarmCheck({ onContinue }: { onContinue: () => void }) {
         if (!cancelled) setResult({ state: "error", step: "herd.farms select", message: farmError.message });
         return;
       }
-      if (!cancelled) setResult({ state: "ok", farmName: farm.name, role });
+      if (cancelled) return;
+
+      setResult({ state: "ok", farmName: farm.name, role, farmId: farm_id, animals: { state: "loading" } });
+
+      const { data: animalRows, error: animalError, count } = await herdSchema()
+        .from("animals")
+        .select("id, barn_name, ear_tag, birth_date, class, status, sex", { count: "exact" })
+        .order("barn_name")
+        .limit(10);
+
+      if (cancelled) return;
+      if (animalError) {
+        setResult((prev) =>
+          prev.state === "ok" ? { ...prev, animals: { state: "error", message: animalError.message } } : prev,
+        );
+        return;
+      }
+      setResult((prev) =>
+        prev.state === "ok" ? { ...prev, animals: { state: "ok", rows: animalRows ?? [], count: count ?? 0 } } : prev,
+      );
     })();
     return () => {
       cancelled = true;
@@ -62,7 +97,7 @@ export function FarmCheck({ onContinue }: { onContinue: () => void }) {
 
   return (
     <div className="sign-in-page">
-      <div className="sign-in-card" style={{ width: 420 }}>
+      <div className="sign-in-card" style={{ width: result.state === "ok" ? 640 : 420 }}>
         <div className="eyebrow" style={{ marginBottom: 12 }}>
           Supabase connection check
         </div>
@@ -96,9 +131,62 @@ export function FarmCheck({ onContinue }: { onContinue: () => void }) {
               ✅ Read <strong>{result.farmName}</strong> as <strong>{result.role}</strong> through Row Level
               Security.
             </p>
-            <p style={{ fontSize: 13, color: "var(--ink-muted)" }}>
-              Auth and the herd schema are both working. The 5 screens past this point are still on mock data —
-              that's the next piece.
+
+            {result.animals.state === "loading" && (
+              <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 12 }}>Querying herd.animals…</p>
+            )}
+
+            {result.animals.state === "error" && (
+              <>
+                <p style={{ color: "var(--red)", fontSize: 14, marginTop: 16, marginBottom: 4 }}>
+                  <strong>herd.animals select</strong> failed:
+                </p>
+                <p style={{ color: "var(--red)", fontSize: 13, fontFamily: "var(--font-mono)" }}>
+                  {result.animals.message}
+                </p>
+              </>
+            )}
+
+            {result.animals.state === "ok" && (
+              <>
+                <p style={{ fontSize: 13, color: "var(--ink-muted)", margin: "12px 0 8px" }}>
+                  {result.animals.count} total animal{result.animals.count === 1 ? "" : "s"} — first {result.animals.rows.length} shown:
+                </p>
+                <table className="mono" style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid var(--hairline)" }}>
+                      <th style={{ textAlign: "left", padding: "4px 6px" }}>ear_tag</th>
+                      <th style={{ textAlign: "left", padding: "4px 6px" }}>barn_name</th>
+                      <th style={{ textAlign: "left", padding: "4px 6px" }}>sex</th>
+                      <th style={{ textAlign: "left", padding: "4px 6px" }}>class</th>
+                      <th style={{ textAlign: "left", padding: "4px 6px" }}>status</th>
+                      <th style={{ textAlign: "left", padding: "4px 6px" }}>birth_date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.animals.rows.map((a) => (
+                      <tr key={a.id} style={{ borderBottom: "1px solid var(--hairline)" }}>
+                        <td style={{ padding: "4px 6px" }}>{a.ear_tag}</td>
+                        <td style={{ padding: "4px 6px" }}>{a.barn_name ?? "—"}</td>
+                        <td style={{ padding: "4px 6px" }}>{a.sex}</td>
+                        <td style={{ padding: "4px 6px" }}>{a.class}</td>
+                        <td style={{ padding: "4px 6px" }}>{a.status}</td>
+                        <td style={{ padding: "4px 6px" }}>{a.birth_date}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {result.animals.rows.length === 0 && (
+                  <p style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+                    No rows came back — either there genuinely are no animals yet, or something's off.
+                  </p>
+                )}
+              </>
+            )}
+
+            <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 16 }}>
+              The 5 screens past this point are still on mock data — this table is just to see the real shape
+              before I map it onto them.
             </p>
           </>
         )}

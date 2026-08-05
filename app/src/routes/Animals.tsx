@@ -2,18 +2,32 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { EarTag, GridRow, Pill } from "../components/ui";
-import { fetchAnimals, formatAge, type RealAnimal } from "../lib/herd";
+import {
+  describeBreeding,
+  fetchAnimals,
+  fetchBreedComposition,
+  formatAge,
+  type BreedShare,
+  type RealAnimal,
+} from "../lib/herd";
 
-type Fetch = { state: "loading" } | { state: "error"; message: string } | { state: "ok"; rows: RealAnimal[] };
+type Fetch =
+  | { state: "loading" }
+  | { state: "error"; message: string }
+  | { state: "ok"; rows: RealAnimal[]; breeds: Map<string, BreedShare[]> };
 
 export default function Animals() {
   const [result, setResult] = useState<Fetch>({ state: "loading" });
 
   useEffect(() => {
     let cancelled = false;
-    fetchAnimals()
-      .then((rows) => !cancelled && setResult({ state: "ok", rows }))
-      .catch((err) => !cancelled && setResult({ state: "error", message: err instanceof Error ? err.message : String(err) }));
+    (async () => {
+      const rows = await fetchAnimals();
+      const breeds = await fetchBreedComposition(rows.map((r) => r.id));
+      if (!cancelled) setResult({ state: "ok", rows, breeds });
+    })().catch(
+      (err) => !cancelled && setResult({ state: "error", message: err instanceof Error ? err.message : String(err) }),
+    );
     return () => {
       cancelled = true;
     };
@@ -53,7 +67,7 @@ export default function Animals() {
                     </span>
                     <br />
                     <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
-                      {a.sex} · {a.class}
+                      {[describeBreeding(result.breeds.get(a.id)), a.sex, a.class].filter(Boolean).join(" · ")}
                     </span>
                   </span>
                   <span>

@@ -103,6 +103,25 @@
   color: var(--ink-muted);
 }
 
+.breed-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 3fr 56px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.breed-row__bar {
+  height: 6px;
+  background: var(--page);
+}
+
+.breed-row__fill {
+  height: 100%;
+  background: var(--herd-green);
+}
+
 .pedigree-grid {
   display: grid;
   grid-auto-flow: column;

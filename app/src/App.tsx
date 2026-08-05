@@ -5,7 +5,6 @@ import AnimalRecord from "./routes/AnimalRecord";
 import StoreProducts from "./routes/StoreProducts";
 import BooksTransactions from "./routes/BooksTransactions";
 import CustomerStore from "./routes/CustomerStore";
-import { AppStateProvider } from "./lib/store";
 import { AuthProvider } from "./lib/auth";
 import { FarmProvider } from "./lib/farm";
 import { RequireAuth } from "./components/auth/RequireAuth";
@@ -20,22 +19,20 @@ export default function App() {
   return (
     <AuthProvider>
       <FarmProvider>
-        <AppStateProvider>
-          <HashRouter>
-            <Routes>
-              <Route element={<RequireAuth />}>
-                <Route path="/" element={<Today />} />
-                <Route path="/animals" element={<Animals />} />
-                <Route path="/animals/:tag" element={<AnimalRecord />} />
-                <Route path="/store/products" element={<StoreProducts />} />
-                <Route path="/books/transactions" element={<BooksTransactions />} />
-              </Route>
-              {/* Customer store sits outside the auth gate — a customer isn't
-                  a farm_members row. See RequireAuth's comment. */}
-              <Route path="/shop" element={<CustomerStore />} />
-            </Routes>
-          </HashRouter>
-        </AppStateProvider>
+        <HashRouter>
+          <Routes>
+            <Route element={<RequireAuth />}>
+              <Route path="/" element={<Today />} />
+              <Route path="/animals" element={<Animals />} />
+              <Route path="/animals/:tag" element={<AnimalRecord />} />
+              <Route path="/store/products" element={<StoreProducts />} />
+              <Route path="/books/transactions" element={<BooksTransactions />} />
+            </Route>
+            {/* Customer store sits outside the auth gate — a customer isn't
+                a farm_members row. See RequireAuth's comment. */}
+            <Route path="/shop" element={<CustomerStore />} />
+          </Routes>
+        </HashRouter>
       </FarmProvider>
     </AuthProvider>
   );

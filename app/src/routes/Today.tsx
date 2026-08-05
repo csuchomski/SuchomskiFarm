@@ -1,207 +1,307 @@
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
-import { Button, Callout, EarTag, GridRow, Pill, StatTile, WithdrawalBanner } from "../components/ui";
-import { herd } from "../lib/mockData";
-import { TODAY_LABEL, monthTotals, useAppState } from "../lib/store";
+import { Button, Callout, EarTag, GridRow, StatTile } from "../components/ui";
+import { fetchDashboardData, type DashboardData } from "../lib/dashboard-data";
+import { formatAge } from "../lib/herd";
 import "./today.css";
 
-function money(n: number) {
-  const sign = n < 0 ? "−" : n > 0 ? "+" : "";
-  return `${sign}$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-}
+type Fetch = { state: "loading" } | { state: "error"; message: string } | { state: "ok"; data: DashboardData };
+
+const money = (cents: number) => {
+  const sign = cents < 0 ? "−" : cents > 0 ? "+" : "";
+  return `${sign}$${(Math.abs(cents) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+const dollars = (n: number) =>
+  `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
+const longDate = (iso: string) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 
 export default function Today() {
   const navigate = useNavigate();
-  const state = useAppState();
-  const totals = monthTotals(state);
-  const rawMilk = state.products.find((p) => p.id === "raw-milk");
+  const [result, setResult] = useState<Fetch>({ state: "loading" });
 
-  const todaysBatches = state.batches.filter((b) => b.produced === TODAY_LABEL);
-  const milkToday = todaysBatches.reduce((s, b) => s + b.quantity, 0);
+  useEffect(() => {
+    let cancelled = false;
+    fetchDashboardData(todayIso())
+      .then((data) => !cancelled && setResult({ state: "ok", data }))
+      .catch(
+        (err) => !cancelled && setResult({ state: "error", message: err instanceof Error ? err.message : String(err) }),
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const chain = [
-    { step: "1 · Herd", title: "9 cows milked", detail: `${milkToday.toFixed(1)} gal, per animal`, dark: false },
-    {
-      step: "2 · Inventory",
-      title: todaysBatches.length > 1 ? `${todaysBatches.length} batches · ${TODAY_LABEL}` : `Batch ${TODAY_LABEL}`,
-      detail: "pooled · raw milk",
-      dark: false,
-    },
-    {
-      step: "3 · Store",
-      title: `${typeof rawMilk?.claimed === "number" ? rawMilk.claimed.toFixed(1) : rawMilk?.claimed} gal claimed`,
-      detail: `${typeof rawMilk?.openToShop === "number" ? rawMilk.openToShop.toFixed(1) : rawMilk?.openToShop} open to shop`,
-      dark: false,
-    },
-    { step: "4 · Books", title: "+$88.00 posted", detail: "Milk sales · Dairy", dark: true },
-  ];
+  const data = result.state === "ok" ? result.data : null;
 
   return (
-    <OpsShell searchPlaceholder="Juniper, raw milk, feed invoice…">
+    <OpsShell searchPlaceholder="An animal, a product, an invoice…">
       <PageHeader
-        eyebrow="Wednesday 4 August 2026"
+        eyebrow={longDate(todayIso())}
         title="Today"
         actions={
           <>
             <Button onClick={() => navigate("/store/products")}>Log milking</Button>
             <Button variant="filled" onClick={() => navigate("/books/transactions")}>
-              Record pickup
+              Add entry
             </Button>
           </>
         }
       />
 
-      <div style={{ margin: "16px 0" }}>
-        <Callout>
-          <strong style={{ fontWeight: 500 }}>These numbers are still placeholders.</strong> Animals and Store read
-          the real database now, so the milk and money figures below won't match what those screens show.
-        </Callout>
-      </div>
+      {result.state === "loading" && (
+        <p style={{ fontSize: 14, color: "var(--ink-muted)", padding: "16px 8px" }}>Loading…</p>
+      )}
+      {result.state === "error" && (
+        <p style={{ fontSize: 14, color: "var(--red)", padding: "16px 8px" }}>Couldn't load today: {result.message}</p>
+      )}
 
-      <div className="stat-row">
-        <StatTile value={milkToday.toFixed(1)} unit="gal" label="Milk today" />
-        <StatTile value="9" unit="/ 41" label="Cows in milk" />
-        <StatTile value="6" label="Pickups due" />
-        <StatTile value={money(totals.net)} label="Net · July" />
-        <StatTile value="$41.90" label="Cost / cow · MTD" />
-      </div>
-
-      <div className="section">
-        <div className="section__head">
-          <div className="serif" style={{ fontSize: 21 }}>
-            This morning, end to end
+      {data && (
+        <>
+          <div className="stat-row">
+            <StatTile
+              value={data.milkTodayQuantity > 0 ? data.milkTodayQuantity : "—"}
+              unit={data.milkTodayQuantity > 0 ? (data.milkTodayUnit ?? undefined) : undefined}
+              label="Milk today"
+            />
+            <StatTile value={data.animals.length} label="Head" />
+            <StatTile value={data.openOrders} label="Orders open" />
+            <StatTile
+              value={dollars(data.monthNet).replace("$-", "−$")}
+              label={`Net · ${new Date(`${data.today}T00:00:00`).toLocaleDateString(undefined, { month: "long" })}`}
+              tone={data.monthNet < 0 ? "red" : "ink"}
+            />
+            <StatTile value={data.monthEntries} label="Entries this month" />
           </div>
-          <span className="mono" style={{ fontSize: 13, color: "var(--ink-muted)" }}>
-            one entry, four places
-          </span>
-        </div>
-        <div className="chain">
-          {chain.map((c) => (
-            <div key={c.step} className={`chain__cell ${c.dark ? "chain__cell--dark" : ""}`}>
-              <div className="eyebrow chain__step">{c.step}</div>
-              <div className="serif chain__title">{c.title}</div>
-              <div className="mono chain__detail">{c.detail}</div>
-            </div>
-          ))}
-        </div>
-      </div>
 
-      <div className="two-col" style={{ paddingTop: 24 }}>
-        <div>
-          <div className="section__head" style={{ marginBottom: 12 }}>
-            <div className="serif" style={{ fontSize: 21 }}>
-              Profit per head
+          {/* The chain the whole design is built around: one milking becomes a
+              batch, a claim, and a ledger line. Shown with real counts, and
+              honest about the steps that have nothing in them today. */}
+          <div className="section">
+            <div className="section__head">
+              <div className="serif" style={{ fontSize: 21 }}>
+                Today, end to end
+              </div>
+              <span className="mono" style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+                one entry, four places
+              </span>
             </div>
-            <Link to="/animals" className="mono" style={{ fontSize: 13 }}>
-              all 41 →
-            </Link>
+            <div className="chain">
+              <ChainCell
+                step="1 · Herd"
+                title={data.milkTodayQuantity > 0 ? `${data.milkTodayQuantity} ${data.milkTodayUnit ?? ""}`.trim() : "Nothing logged"}
+                detail={data.milkTodayQuantity > 0 ? "recorded per animal" : "no production today"}
+                empty={data.milkTodayQuantity === 0}
+              />
+              <ChainCell
+                step="2 · Inventory"
+                title={data.batchesToday > 0 ? `${data.batchesToday} batch${data.batchesToday === 1 ? "" : "es"}` : "No batch"}
+                detail={data.batchesToday > 0 ? `produced ${data.today}` : "nothing added today"}
+                empty={data.batchesToday === 0}
+              />
+              <ChainCell
+                step="3 · Store"
+                title={`${data.claimed} claimed`}
+                detail={`${data.openToShop} open to shop`}
+                empty={data.claimed === 0 && data.openToShop === 0}
+              />
+              <ChainCell
+                step="4 · Books"
+                title={
+                  data.transactionsToday.length > 0
+                    ? `${data.transactionsToday.length} entr${data.transactionsToday.length === 1 ? "y" : "ies"}`
+                    : "Nothing posted"
+                }
+                detail={data.transactionsToday.length > 0 ? "posted today" : "no entries today"}
+                dark
+                empty={data.transactionsToday.length === 0}
+              />
+            </div>
           </div>
-          <GridRow cols="60px 1fr 76px 76px 84px" as="header">
-            <span>Tag</span>
-            <span>Animal</span>
-            <span className="text-right">Gal</span>
-            <span className="text-right">Cost</span>
-            <span className="text-right">Net</span>
-          </GridRow>
-          {herd.map((a) => (
-            <GridRow
-              cols="60px 1fr 76px 76px 84px"
-              as="body"
-              key={a.tag}
-              highlight={a.status === "withdrawal"}
-            >
-              <EarTag tag={a.tag} accent={a.tagAccent} />
-              <span>
-                <Link to={`/animals/${a.tag}`} className="serif" style={{ fontSize: 17, color: "var(--ink)" }}>
-                  {a.name}
+
+          <div className="two-col" style={{ paddingTop: 24 }}>
+            <div>
+              <div className="section__head" style={{ marginBottom: 12 }}>
+                <div className="serif" style={{ fontSize: 21 }}>
+                  Profit per head
+                </div>
+                <Link to="/animals" className="mono" style={{ fontSize: 13 }}>
+                  all {data.animals.length} →
                 </Link>
-                {a.status === "withdrawal" && (
-                  <>
-                    {" "}
-                    <Pill variant="withdrawal">Withdrawal</Pill>
-                  </>
-                )}
-                <br />
-                <span style={{ fontSize: 13, color: a.status === "at-risk" ? "var(--red)" : "var(--ink-muted)" }}>
-                  {a.note ?? `${a.breed} · ${a.lactationLabel}`}
-                </span>
-              </span>
-              <span className="mono text-right" style={{ fontSize: 15 }}>
-                {a.gallonsToDate.toLocaleString()}
-              </span>
-              <span className="mono text-right" style={{ fontSize: 15, color: "var(--red)" }}>
-                ${a.costToDate}
-              </span>
-              <span
-                className="mono text-right"
-                style={{ fontSize: 15, fontWeight: 500, color: a.netToDate < 0 ? "var(--red)" : undefined }}
-              >
-                {money(a.netToDate)}
-              </span>
-            </GridRow>
-          ))}
-        </div>
+              </div>
 
-        <div>
-          <div className="serif" style={{ fontSize: 21, marginBottom: 12 }}>
-            Needs you
+              {!data.hasCostData && (
+                <div style={{ marginBottom: 12 }}>
+                  <Callout>
+                    Costs and revenue aren't attributed to animals yet, so every line below is zero. That's what
+                    the migrations in <code>docs/</code> are for — until a ledger entry can point at an animal,
+                    there's nothing to divide.
+                  </Callout>
+                </div>
+              )}
+
+              <GridRow cols="60px 1fr 92px 92px 100px" as="header">
+                <span>Tag</span>
+                <span>Animal</span>
+                <span className="text-right">Revenue</span>
+                <span className="text-right">Cost</span>
+                <span className="text-right">Net</span>
+              </GridRow>
+              {data.profitPerHead.map(({ animal, costCents, revenueCents, netCents }) => (
+                <Link key={animal.id} to={`/animals/${animal.ear_tag}`} style={{ color: "inherit", display: "contents" }}>
+                  <GridRow cols="60px 1fr 92px 92px 100px" as="body">
+                    <EarTag tag={animal.ear_tag} accent="herd" />
+                    <span>
+                      <span className="serif" style={{ fontSize: 17 }}>
+                        {animal.barn_name ?? `Tag ${animal.ear_tag}`}
+                      </span>
+                      <br />
+                      <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+                        {animal.class} · {formatAge(animal.birth_date)}
+                      </span>
+                    </span>
+                    <span className="mono text-right" style={{ fontSize: 15 }}>
+                      {revenueCents ? money(revenueCents) : "—"}
+                    </span>
+                    <span className="mono text-right" style={{ fontSize: 15, color: costCents ? "var(--red)" : undefined }}>
+                      {costCents ? dollars(costCents / 100) : "—"}
+                    </span>
+                    <span
+                      className="mono text-right"
+                      style={{ fontSize: 15, fontWeight: 500, color: netCents < 0 ? "var(--red)" : undefined }}
+                    >
+                      {netCents ? money(netCents) : "—"}
+                    </span>
+                  </GridRow>
+                </Link>
+              ))}
+            </div>
+
+            <div>
+              <div className="serif" style={{ fontSize: 21, marginBottom: 12 }}>
+                Needs you
+              </div>
+              <NeedsList data={data} />
+            </div>
           </div>
-
-          <WithdrawalBanner
-            eyebrow="Withdrawal · until 9 Aug"
-            title="Hazel · 1103"
-            facts={["Excede · 5 days left", "Milk excluded from batches"]}
-          />
-
-          <div style={{ marginBottom: 16 }}>
-            <Callout>
-              <strong style={{ fontWeight: 500 }}>4 pickups are uncategorised.</strong> $164.50 is sitting in the
-              store, waiting for a category before it reaches the books.
-            </Callout>
-          </div>
-
-          <NeedsRow dot="ochre" title="Eggs short by 3 dozen Friday" detail="Weekly pickups exceed forecast supply" />
-          <NeedsRow dot="red" title="Pepper is below feed cost" detail="Third month running · review or cull" />
-          <NeedsRow
-            dot="herd"
-            title="Feed invoice unallocated"
-            detail="$612 · split across 41 head?"
-            border="both"
-          />
-        </div>
-      </div>
+        </>
+      )}
     </OpsShell>
   );
 }
 
-function NeedsRow({
-  dot,
+function ChainCell({
+  step,
   title,
   detail,
-  border = "top",
+  dark,
+  empty,
 }: {
-  dot: "ochre" | "red" | "herd";
+  step: string;
   title: string;
   detail: string;
-  border?: "top" | "both";
+  dark?: boolean;
+  empty?: boolean;
 }) {
-  const dotColor = dot === "ochre" ? "var(--ochre)" : dot === "red" ? "var(--red)" : "var(--herd-green)";
   return (
-    <div
-      style={{
-        borderTop: "1px solid var(--hairline)",
-        borderBottom: border === "both" ? "1px solid var(--hairline)" : undefined,
-        padding: "12px 8px",
-        display: "flex",
-        gap: 12,
-        alignItems: "flex-start",
-      }}
-    >
-      <span style={{ width: 9, height: 9, background: dotColor, marginTop: 6, flex: "none" }} />
-      <div>
-        <div style={{ fontSize: 15 }}>{title}</div>
-        <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>{detail}</div>
+    <div className={`chain__cell ${dark ? "chain__cell--dark" : ""}`}>
+      <div className="eyebrow chain__step">{step}</div>
+      <div className="serif chain__title" style={empty && !dark ? { color: "var(--ink-faint)" } : undefined}>
+        {title}
       </div>
+      <div className="mono chain__detail">{detail}</div>
     </div>
+  );
+}
+
+/** Alerts derived from what's actually in the database, rather than a fixed
+ * list. An empty list here is a real answer — nothing needs attention. */
+function NeedsList({ data }: { data: DashboardData }) {
+  const items: { tone: "ochre" | "red" | "herd"; title: string; detail: string; to?: string }[] = [];
+
+  if (data.openOrders > 0) {
+    items.push({
+      tone: "herd",
+      title: `${data.openOrders} order${data.openOrders === 1 ? "" : "s"} not picked up`,
+      detail: "Neither collected nor cancelled",
+      to: "/store/products",
+    });
+  }
+
+  if (data.openToShop <= 0 && data.claimed > 0) {
+    items.push({
+      tone: "ochre",
+      title: "Nothing open to shop",
+      detail: "Every batch on hand is already claimed",
+      to: "/store/products",
+    });
+  }
+
+  if (data.milkTodayQuantity === 0) {
+    items.push({
+      tone: "ochre",
+      title: "No milking logged today",
+      detail: "Nothing recorded against any animal",
+      to: "/store/products",
+    });
+  }
+
+  if (!data.hasCostData) {
+    items.push({
+      tone: "herd",
+      title: "No costs attributed to animals",
+      detail: "Cost per head can't be calculated yet",
+    });
+  }
+
+  if (items.length === 0) {
+    return (
+      <p style={{ fontSize: 14, color: "var(--ink-muted)", padding: "12px 8px", borderTop: "1px solid var(--hairline)" }}>
+        Nothing needs your attention.
+      </p>
+    );
+  }
+
+  return (
+    <>
+      {items.map((item, i) => {
+        const dotColor =
+          item.tone === "ochre" ? "var(--ochre)" : item.tone === "red" ? "var(--red)" : "var(--herd-green)";
+        const body = (
+          <div
+            style={{
+              borderTop: "1px solid var(--hairline)",
+              borderBottom: i === items.length - 1 ? "1px solid var(--hairline)" : undefined,
+              padding: "12px 8px",
+              display: "flex",
+              gap: 12,
+              alignItems: "flex-start",
+            }}
+          >
+            <span style={{ width: 9, height: 9, background: dotColor, marginTop: 6, flex: "none" }} />
+            <div>
+              <div style={{ fontSize: 15 }}>{item.title}</div>
+              <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>{item.detail}</div>
+            </div>
+          </div>
+        );
+        return item.to ? (
+          <Link key={item.title} to={item.to} style={{ color: "inherit", display: "block" }}>
+            {body}
+          </Link>
+        ) : (
+          <div key={item.title}>{body}</div>
+        );
+      })}
+    </>
   );
 }

@@ -1,0 +1,80 @@
+/* Generational chart: one column per generation, hairline gaps doing the
+   ruling. Class names follow the original Herd app's stylesheet. */
+.pedigree {
+  display: grid;
+  gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+  overflow-x: auto;
+}
+
+.ped-col {
+  display: grid;
+  /* The header is its own fixed row; only the cells below share the 1fr
+     rhythm, so a parent lines up against the two grandparents it produced. */
+  grid-template-rows: auto;
+  grid-auto-rows: minmax(68px, 1fr);
+  gap: 1px;
+  background: var(--hairline);
+}
+
+.ped-col__head {
+  background: var(--page);
+  padding: 8px 12px;
+}
+
+.ped-cell {
+  background: var(--paper);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  color: var(--ink);
+  min-width: 0;
+}
+
+.ped-cell--link:hover {
+  background: var(--page);
+}
+
+/* Hatched, matching how an unknown sire has read since the mockups. */
+.ped-cell--unknown {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--paper),
+    var(--paper) 6px,
+    var(--page) 6px,
+    var(--page) 12px
+  );
+}
+
+.ped-cell__role {
+  font-size: 10px;
+}
+
+.ped-cell__body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ped-cell__name {
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ped-cell__name--empty {
+  color: var(--ink-muted);
+}
+
+.ped-cell__meta {
+  font-size: 11px;
+  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

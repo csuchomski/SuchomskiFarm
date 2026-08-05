@@ -184,3 +184,22 @@
 .relative-row:hover {
   background: var(--page);
 }
+
+.link-button {
+  background: none;
+  border: none;
+  color: var(--herd-green);
+  font-size: 13px;
+  padding: 0;
+}
+
+.link-button:hover {
+  color: var(--ink);
+}
+
+.offspring-editor {
+  border: 1px solid var(--hairline);
+  background: var(--page);
+  padding: 12px;
+  margin-bottom: 12px;
+}

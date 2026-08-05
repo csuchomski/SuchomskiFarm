@@ -3,6 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import { useWorkspace } from "../lib/workspace";
 import { Button, Callout, EarTag, Pill, StatTile } from "../components/ui";
 import { AnimalForm } from "../components/herd/AnimalForm";
+import { Pedigree } from "../components/herd/Pedigree";
+import { OffspringEditor } from "../components/herd/OffspringEditor";
 import {
   describeBreeding,
   fetchAnimalByTag,
@@ -22,8 +24,9 @@ type Fetch =
       state: "ok";
       animal: RealAnimal;
       breeds: BreedShare[];
+      /** Composition for the whole herd, so the pedigree can label ancestors. */
+      allBreeds: Map<string, BreedShare[]>;
       dam: RealAnimal | null;
-      sire: RealAnimal | null;
       herd: RealAnimal[];
     };
 
@@ -31,6 +34,7 @@ export default function AnimalRecord() {
   const { tag = "" } = useParams();
   const [result, setResult] = useState<Fetch>({ state: "loading" });
   const [editing, setEditing] = useState(false);
+  const [linking, setLinking] = useState(false);
   const { farmId } = useWorkspace();
 
   useEffect(() => {
@@ -46,9 +50,10 @@ export default function AnimalRecord() {
           return;
         }
 
-        // The herd is small enough that fetching all of it to resolve two
-        // parents costs less than two more round trips.
-        const [composition, all] = await Promise.all([fetchBreedComposition([animal.id]), fetchAnimals()]);
+        // The herd is small enough to fetch whole — it resolves parents,
+        // offspring and every ancestor in the chart from one read.
+        const all = await fetchAnimals();
+        const composition = await fetchBreedComposition(all.map((a) => a.id));
         if (cancelled) return;
 
         const byId = new Map(all.map((a) => [a.id, a]));
@@ -56,8 +61,8 @@ export default function AnimalRecord() {
           state: "ok",
           animal,
           breeds: composition.get(animal.id) ?? [],
+          allBreeds: composition,
           dam: animal.dam_id ? (byId.get(animal.dam_id) ?? null) : null,
-          sire: animal.sire_id ? (byId.get(animal.sire_id) ?? null) : null,
           herd: all,
         });
       } catch (err) {
@@ -102,7 +107,7 @@ export default function AnimalRecord() {
     );
   }
 
-  const { animal, breeds, dam, sire, herd } = result;
+  const { animal, breeds, allBreeds, dam, herd } = result;
   const name = animal.barn_name ?? `Tag ${animal.ear_tag}`;
   const breeding = describeBreeding(breeds);
 
@@ -173,14 +178,15 @@ export default function AnimalRecord() {
             onCancel={() => setEditing(false)}
             onSaved={(updated) => {
               setEditing(false);
-              const byId = new Map(herd.map((a) => [a.id, a]));
+              const nextHerd = herd.map((a) => (a.id === updated.id ? updated : a));
+              const byId = new Map(nextHerd.map((a) => [a.id, a]));
               setResult({
                 state: "ok",
                 animal: updated,
                 breeds,
+                allBreeds,
                 dam: updated.dam_id ? (byId.get(updated.dam_id) ?? null) : null,
-                sire: updated.sire_id ? (byId.get(updated.sire_id) ?? null) : null,
-                herd: herd.map((a) => (a.id === updated.id ? updated : a)),
+                herd: nextHerd,
               });
             }}
           />
@@ -237,14 +243,30 @@ export default function AnimalRecord() {
           <div className="serif" style={{ fontSize: 21, margin: "0 0 12px" }}>
             Pedigree
           </div>
-          <div className="pedigree-grid">
-            <ParentCell label="Dam" parent={dam} recorded={Boolean(animal.dam_id)} />
-            <ParentCell label="Sire" parent={sire} recorded={Boolean(animal.sire_id)} />
+          <Pedigree animal={animal} herd={herd} breeds={allBreeds} />
+
+          <div className="section__head" style={{ margin: "24px 0 12px" }}>
+            <div className="serif" style={{ fontSize: 21 }}>
+              Offspring
+              {offspring.length > 0 && (
+                <span className="mono" style={{ fontSize: 13, color: "var(--ink-muted)" }}> · {offspring.length}</span>
+              )}
+            </div>
+            <button type="button" className="link-button mono" onClick={() => setLinking((v) => !v)}>
+              {linking ? "Cancel" : "+ Record one"}
+            </button>
           </div>
 
-          <div className="serif" style={{ fontSize: 21, margin: "24px 0 12px" }}>
-            Offspring{offspring.length > 0 && <span className="mono" style={{ fontSize: 13, color: "var(--ink-muted)" }}> · {offspring.length}</span>}
-          </div>
+          {linking && (
+            <OffspringEditor
+              parent={animal}
+              herd={herd}
+              onClose={() => setLinking(false)}
+              onChanged={(child) =>
+                setResult({ ...result, herd: herd.map((a) => (a.id === child.id ? child : a)) })
+              }
+            />
+          )}
           {offspring.length > 0 ? (
             offspring.map((child) => (
               <RelativeRow
@@ -273,37 +295,6 @@ export default function AnimalRecord() {
         </div>
       </div>
     </Frame>
-  );
-}
-
-/** Three states worth distinguishing: no parent on file, a parent on file
- * that isn't in this herd, and one you can click through to. */
-function ParentCell({ label, parent, recorded }: { label: string; parent: RealAnimal | null; recorded: boolean }) {
-  return (
-    <div className={`pedigree-cell ${recorded ? "" : "pedigree-cell--unknown"}`}>
-      <div className="eyebrow" style={{ fontSize: 10 }}>
-        {label}
-      </div>
-      {parent ? (
-        <>
-          <Link to={`/animals/${parent.ear_tag}`} className="serif" style={{ fontSize: 15, color: "var(--ink)" }}>
-            {parent.barn_name ?? `Tag ${parent.ear_tag}`}
-          </Link>
-          <div className="mono" style={{ fontSize: 11, color: "var(--ink-muted)" }}>
-            tag {parent.ear_tag}
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="serif" style={{ fontSize: 15, color: "var(--ink-muted)" }}>
-            {recorded ? "Outside the herd" : "Not recorded"}
-          </div>
-          <div className="mono" style={{ fontSize: 11, color: "var(--ink-muted)" }}>
-            {recorded ? "id on file, no record" : "no id on file"}
-          </div>
-        </>
-      )}
-    </div>
   );
 }
 

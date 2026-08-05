@@ -237,3 +237,60 @@ export async function addAttributeOption(
   if (error) throw new Error(error.message);
   return data as AttributeOption;
 }
+
+// ─── pedigree ──────────────────────────────────────────────────────────
+
+export interface PedigreeNode {
+  /** null when no parent is recorded, or the record isn't in this herd. */
+  animal: RealAnimal | null;
+  /** True when an id is on file but the animal isn't in the herd — an
+   * outside sire, say. Distinct from simply not knowing. */
+  offHerd: boolean;
+  role: "dam" | "sire";
+}
+
+/**
+ * Generations of ancestors, widest-first per generation: [dam, sire], then
+ * [dam's dam, dam's sire, sire's dam, sire's sire], and so on. Slots are
+ * always 2^n so the grid stays aligned even where ancestry is unknown —
+ * a chart with holes still has to line up.
+ */
+export function buildPedigree(animal: RealAnimal, herd: RealAnimal[], generations = 3): PedigreeNode[][] {
+  const byId = new Map(herd.map((a) => [a.id, a]));
+  const out: PedigreeNode[][] = [];
+  let level: (RealAnimal | null)[] = [animal];
+
+  for (let g = 0; g < generations; g++) {
+    const nodes: PedigreeNode[] = [];
+    const next: (RealAnimal | null)[] = [];
+
+    for (const current of level) {
+      for (const role of ["dam", "sire"] as const) {
+        const id = current ? (role === "dam" ? current.dam_id : current.sire_id) : null;
+        const found = id ? (byId.get(id) ?? null) : null;
+        nodes.push({ animal: found, offHerd: Boolean(id) && !found, role });
+        next.push(found);
+      }
+    }
+
+    out.push(nodes);
+    level = next;
+    // Nothing known at this depth, so deeper generations are all blank.
+    if (nodes.every((n) => !n.animal)) break;
+  }
+
+  return out;
+}
+
+/** Point an existing animal at a parent — the "this calf is hers" case,
+ * done from the parent's record rather than by editing the calf. */
+export async function setParent(childId: string, role: "dam" | "sire", parentId: string | null): Promise<RealAnimal> {
+  const { data, error } = await herdSchema()
+    .from("animals")
+    .update({ [role === "dam" ? "dam_id" : "sire_id"]: parentId, updated_at: new Date().toISOString() })
+    .eq("id", childId)
+    .select(ANIMAL_COLUMNS)
+    .single();
+  if (error) throw new Error(error.message);
+  return data as RealAnimal;
+}

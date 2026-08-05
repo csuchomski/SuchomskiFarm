@@ -1,28 +1,28 @@
--- 001 — Scope the public (store/books) schema to a farm, and lock it down.
+-- 001 — Scope the public (store/books) schema to a farm.
 --
--- STATUS: PROPOSAL. Not run. Read the warnings before executing.
+-- STATUS: PROPOSAL. Not run.
 --
 -- Why: herd.* is multi-tenant — every table carries farm_id and every RLS
--- policy checks herd.is_farm_member(farm_id). public.* is not scoped to a
--- farm at all. Linking per-animal costs to ledger transactions (migration
--- 002) across that boundary would let one farm's records reference another's.
+-- policy checks herd.is_farm_member(farm_id). public.* has RLS enabled and
+-- policies on every table, but public.businesses has no farm_id, so the
+-- ledger side has no farm to scope to. Migration 002 links per-animal costs
+-- across that boundary; this gives the boundary something to check.
 --
--- ⚠️ READ FIRST — this is the risky migration of the pair.
+-- ⚠️ BEFORE RUNNING: this migration is only necessary if the existing
+-- policies on the ledger tables don't already scope access adequately. Dump
+-- them first:
 --
---   1. Enabling RLS on a table that currently has none immediately blocks
---      ALL access except through the policies below. The existing
---      FarmFinanceTracker / farm-app deployments read these tables. If they
---      authenticate as anon WITHOUT a signed-in user, they will break the
---      moment step 3 runs. Verify how those apps authenticate first.
+--   select tablename, policyname, cmd, qual, with_check
+--     from pg_policies where schemaname = 'public' order by tablename;
 --
---   2. Run this in a transaction, off-hours, against a backup you've
---      actually restored once. Steps 1-2 are safe and additive; step 3 is
---      the breaking one and can be deferred.
+-- If ledger_transactions' policy is farm-equivalent already, skip this
+-- migration. If it's `using (auth.role() = 'authenticated')` or similar,
+-- every signed-in user sees every farm's books and this closes that.
 --
---   3. The customer storefront needs read access to products and its own
---      orders. Those policies are NOT written here — customers aren't
---      farm_members, so they need a separate design. Until that exists,
---      enabling RLS on public.products breaks the storefront.
+-- An earlier draft of this file also enabled RLS on these tables. That was
+-- based on a wrong inference — RLS is already on, verified against
+-- pg_class.relrowsecurity. Those statements have been removed; adding
+-- farm_id is what's actually missing.
 
 begin;
 
@@ -33,7 +33,7 @@ begin;
 alter table public.businesses
   add column if not exists farm_id uuid references herd.farms(id);
 
--- Backfill. Safe only while exactly one farm exists — verify before running:
+-- Backfill. Safe only while exactly one farm exists — verify first:
 --   select count(*) from herd.farms;  -- must be 1
 update public.businesses
    set farm_id = (select id from herd.farms limit 1)
@@ -63,72 +63,26 @@ as $$
   );
 $$;
 
--- ---------------------------------------------------------------------------
--- Step 3 — turn on RLS. ⚠️ THIS IS THE BREAKING STEP. Defer if unsure.
--- ---------------------------------------------------------------------------
-
-alter table public.businesses          enable row level security;
-alter table public.ledger_transactions enable row level security;
-alter table public.ledger_accounts     enable row level security;
-alter table public.ledger_assets       enable row level security;
-
-create policy businesses_select on public.businesses
-  for select using (herd.is_farm_member(farm_id));
-create policy businesses_write on public.businesses
-  for all using (herd.can_write_farm(farm_id))
-          with check (herd.can_write_farm(farm_id));
-
-create policy ledger_transactions_select on public.ledger_transactions
-  for select using (public.is_business_member(business_id));
-create policy ledger_transactions_write on public.ledger_transactions
-  for all using (public.is_business_member(business_id))
-          with check (public.is_business_member(business_id));
-
-create policy ledger_accounts_select on public.ledger_accounts
-  for select using (business_id is null or public.is_business_member(business_id));
-create policy ledger_accounts_write on public.ledger_accounts
-  for all using (business_id is null or public.is_business_member(business_id))
-          with check (business_id is null or public.is_business_member(business_id));
-
-create policy ledger_assets_select on public.ledger_assets
-  for select using (public.is_business_member(business_id));
-create policy ledger_assets_write on public.ledger_assets
-  for all using (public.is_business_member(business_id))
-          with check (public.is_business_member(business_id));
-
 commit;
 
 -- ---------------------------------------------------------------------------
--- Still unprotected after this migration, deliberately — each needs a
--- decision about customer access before it can be locked down:
+-- Step 3 — tighten the existing policies. NOT WRITTEN.
 --
---   public.profiles          -- ⚠️ names, emails, phone numbers. Highest
---                            -- priority: readable by anyone holding the
---                            -- anon key if RLS is currently off.
---   public.orders            -- customer_id, payment_method, amount_paid
---   public.schedules         -- customer standing orders
---   public.products          -- storefront needs anonymous read
---   public.inventory_batches -- storefront needs anonymous read for stock
---   public.discards
+-- Deliberately left out until the current policy definitions are known:
+-- replacing a policy you haven't read is how you lock yourself out of your
+-- own books, or quietly widen access while believing you narrowed it.
 --
--- Suggested shape for the customer-facing ones: products and
--- inventory_batches get a permissive read-only policy (`using (true)` for
--- select only, no write); orders and profiles get
--- `using (customer_id = auth.uid())` so a customer sees only their own,
--- plus the farm-member policy for staff.
+-- Once dumped, the shape to aim for on the ledger tables is:
+--
+--   alter policy <existing_name> on public.ledger_transactions
+--     using (public.is_business_member(business_id));
+--
+-- ALTER POLICY rather than DROP + CREATE, so there's no window where the
+-- table sits unprotected.
 -- ---------------------------------------------------------------------------
 
--- Rollback for step 3 (steps 1-2 are additive and can stay):
+-- Rollback (steps 1-2):
 --
---   drop policy ledger_assets_write        on public.ledger_assets;
---   drop policy ledger_assets_select       on public.ledger_assets;
---   drop policy ledger_accounts_write      on public.ledger_accounts;
---   drop policy ledger_accounts_select     on public.ledger_accounts;
---   drop policy ledger_transactions_write  on public.ledger_transactions;
---   drop policy ledger_transactions_select on public.ledger_transactions;
---   drop policy businesses_write           on public.businesses;
---   drop policy businesses_select          on public.businesses;
---   alter table public.ledger_assets       disable row level security;
---   alter table public.ledger_accounts     disable row level security;
---   alter table public.ledger_transactions disable row level security;
---   alter table public.businesses          disable row level security;
+--   drop function if exists public.is_business_member(bigint);
+--   drop index if exists public.businesses_farm_id_idx;
+--   alter table public.businesses drop column if exists farm_id;

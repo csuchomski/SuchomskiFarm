@@ -1,257 +1,259 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
-import { Button, Callout, EarTag, GridRow, ProgressBar, StatTile } from "../components/ui";
-import { spendBreakdown } from "../lib/mockData";
-import { TODAY_LABEL, monthTotals, useAppActions, useAppState } from "../lib/store";
+import { Button, Callout, GridRow, StatTile } from "../components/ui";
+import {
+  addTransaction,
+  fetchBooksData,
+  isIncome,
+  summarise,
+  type BooksData,
+  type RealTransaction,
+} from "../lib/books-data";
 import "./books-transactions.css";
 
-const CASH_ON_HAND = 14062;
+type Fetch = { state: "loading" } | { state: "error"; message: string } | { state: "ok"; data: BooksData };
+type Save = { state: "idle" } | { state: "saving" } | { state: "saved" } | { state: "error"; message: string };
+
+const todayIso = () => new Date().toISOString().slice(0, 10);
+const money = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const COLS = "96px 1fr 150px 140px 130px 110px";
 
 export default function BooksTransactions() {
-  const state = useAppState();
-  const { ledger, arriving, awaitingCategory, splitRule } = state;
-  const { postArrivingAsMilkSales, addLedgerEntry, setSplitRule } = useAppActions();
-  const totals = monthTotals(state);
+  const [result, setResult] = useState<Fetch>({ state: "loading" });
+  const [businessId, setBusinessId] = useState<number | null>(null);
 
-  const [reviewNote, setReviewNote] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [description, setDescription] = useState("");
+  const [save, setSave] = useState<Save>({ state: "idle" });
+  const [date, setDate] = useState(todayIso);
+  const [type, setType] = useState("expense");
   const [category, setCategory] = useState("");
-  const [attributedTo, setAttributedTo] = useState("");
-  const [account, setAccount] = useState("Chase Checking");
+  const [note, setNote] = useState("");
+  const [account, setAccount] = useState("");
   const [amount, setAmount] = useState("");
 
-  const canSubmit = description.trim() !== "" && amount.trim() !== "" && !Number.isNaN(Number(amount));
+  const load = useCallback(async () => {
+    const data = await fetchBooksData();
+    setResult({ state: "ok", data });
+    setBusinessId((cur) => cur ?? data.businesses[0]?.id ?? null);
+    setAccount((cur) => cur || data.accounts[0]?.name || "");
+  }, []);
 
-  const submitEntry = () => {
-    if (!canSubmit) return;
-    addLedgerEntry({
-      date: TODAY_LABEL,
-      description: description.trim(),
-      category: category.trim() || "Uncategorised",
-      categoryPending: category.trim() === "",
-      attribution: { label: attributedTo.trim() || "Unattributed" },
-      account,
-      amount: Number(amount),
-      highlight: true,
-    });
-    setDescription("");
-    setCategory("");
-    setAttributedTo("");
-    setAmount("");
-    setShowForm(false);
+  useEffect(() => {
+    let cancelled = false;
+    load().catch(
+      (err) => !cancelled && setResult({ state: "error", message: err instanceof Error ? err.message : String(err) }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
+
+  const data = result.state === "ok" ? result.data : null;
+  const business = data?.businesses.find((b) => b.id === businessId) ?? null;
+  const rows: RealTransaction[] = data ? data.transactions.filter((t) => t.business_id === businessId) : [];
+  const totals = summarise(rows);
+
+  const amountNum = Number(amount);
+  const canSave =
+    businessId !== null && date !== "" && amount.trim() !== "" && !Number.isNaN(amountNum) && amountNum !== 0;
+
+  const handleSave = async () => {
+    if (!canSave || businessId === null) return;
+    setSave({ state: "saving" });
+    try {
+      await addTransaction({
+        businessId,
+        date,
+        type,
+        category: category.trim() || "Uncategorised",
+        amount: Math.abs(amountNum),
+        // payer is NOT NULL in the schema but isn't in the mockup's form;
+        // empty string rather than inventing a value.
+        note: note.trim() || null,
+        payer: "",
+        account: account.trim() || "",
+      });
+      setAmount("");
+      setNote("");
+      setCategory("");
+      await load();
+      setSave({ state: "saved" });
+      setShowForm(false);
+      setTimeout(() => setSave((s) => (s.state === "saved" ? { state: "idle" } : s)), 4000);
+    } catch (err) {
+      setSave({ state: "error", message: err instanceof Error ? err.message : String(err) });
+    }
   };
 
   return (
     <OpsShell>
       <PageHeader
-        eyebrow="Dairy & farm store · July 2026"
+        eyebrow={business ? `${business.name} · ${business.type}` : "Books"}
         title="Transactions"
         actions={
           <>
-            <Button className="mono">July 2026 ▾</Button>
-            <Button variant="filled" onClick={() => setShowForm((v) => !v)}>
+            {data && data.businesses.length > 1 && (
+              <select
+                className="entry-form__field mono"
+                value={businessId ?? ""}
+                onChange={(e) => setBusinessId(Number(e.target.value))}
+                aria-label="Business"
+                style={{ minHeight: 44 }}
+              >
+                {data.businesses.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <Button variant="filled" onClick={() => setShowForm((v) => !v)} disabled={!data}>
               {showForm ? "Cancel" : "Add entry"}
             </Button>
           </>
         }
       />
 
-      <div className="stat-row">
-        <StatTile value={`$${totals.income.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} label="Income" />
-        <StatTile
-          value={`$${totals.expenses.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-          tone="red"
-          label="Expenses"
-        />
-        <StatTile value={`+$${totals.net.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} label="Net" />
-        <StatTile value={`$${CASH_ON_HAND.toLocaleString()}`} label="Cash on hand" />
-        <StatTile value={awaitingCategory} label="Awaiting category" />
-      </div>
-
-      {showForm && (
-        <div className="entry-form">
-          <div className="eyebrow" style={{ marginBottom: 10 }}>
-            New entry — posts to {TODAY_LABEL} · category and attribution default to Uncategorised / Unattributed if
-            left blank
-          </div>
-          <div className="entry-form__grid">
-            <input
-              className="entry-form__field"
-              placeholder="Description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-            <input
-              className="entry-form__field"
-              placeholder="Category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-            />
-            <input
-              className="entry-form__field"
-              placeholder="Attributed to"
-              value={attributedTo}
-              onChange={(e) => setAttributedTo(e.target.value)}
-            />
-            <select className="entry-form__field" value={account} onChange={(e) => setAccount(e.target.value)}>
-              <option>Chase Checking</option>
-              <option>Farm Visa</option>
-              <option>Venmo</option>
-              <option>Cash box</option>
-            </select>
-            <input
-              className="entry-form__field mono"
-              placeholder="Amount, − = expense"
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-            <button className="entry-form__submit" onClick={submitEntry} disabled={!canSubmit}>
-              Post entry
-            </button>
-          </div>
-        </div>
+      {result.state === "loading" && (
+        <p style={{ fontSize: 14, color: "var(--ink-muted)", padding: "16px 8px" }}>Loading the books…</p>
+      )}
+      {result.state === "error" && (
+        <p style={{ fontSize: 14, color: "var(--red)", padding: "16px 8px" }}>Couldn't load the books: {result.message}</p>
       )}
 
-      <div className="arriving-panel">
-        <div className="arriving-panel__head">
-          <span className="eyebrow" style={{ color: "var(--ink-soft)" }}>
-            Arriving from the store
-          </span>
-          <span className="mono" style={{ fontSize: 13 }}>
-            {arriving.count > 0 ? `$${arriving.amount.toFixed(2)} · ${arriving.count} pickups` : "All caught up"}
-          </span>
-        </div>
-        {arriving.count > 0 ? (
-          <>
-            <p className="arriving-panel__body text-wrap-pretty">
-              Every completed pickup lands here already priced and dated. Confirm the category once and it posts —
-              nothing is re-typed from the store.
-            </p>
-            <div className="action-row">
-              <Button variant="filled" size="sm" onClick={postArrivingAsMilkSales}>
-                Post all as Milk sales
-              </Button>
-              <Button size="sm" onClick={() => setReviewNote(true)}>
-                Review one by one
-              </Button>
-            </div>
-            {reviewNote && (
-              <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 10 }}>
-                One-by-one review isn't built in this preview — use "Post all as Milk sales" instead.
+      {data && (
+        <>
+          <div className="stat-row">
+            <StatTile value={money(totals.income)} label="Income" />
+            <StatTile value={money(totals.expenses)} tone="red" label="Expenses" />
+            <StatTile
+              value={`${totals.net < 0 ? "−" : "+"}${money(Math.abs(totals.net))}`}
+              label="Net"
+              tone={totals.net < 0 ? "red" : "ink"}
+            />
+            <StatTile value={rows.length} label="Entries" />
+          </div>
+
+          {showForm && (
+            <div className="entry-form">
+              <div className="eyebrow" style={{ marginBottom: 10 }}>
+                New entry · {business?.name}
+              </div>
+              <div className="entry-form__grid" style={{ gridTemplateColumns: "140px 110px 1fr 1fr 140px 130px 120px" }}>
+                <input
+                  className="entry-form__field mono"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  aria-label="Date"
+                />
+                <select
+                  className="entry-form__field"
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
+                  aria-label="Type"
+                >
+                  <option value="expense">Expense</option>
+                  <option value="income">Income</option>
+                </select>
+                <input
+                  className="entry-form__field"
+                  placeholder="Description"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+                <input
+                  className="entry-form__field"
+                  placeholder="Category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                />
+                <input
+                  className="entry-form__field"
+                  placeholder="Account"
+                  value={account}
+                  onChange={(e) => setAccount(e.target.value)}
+                  list="ledger-accounts"
+                />
+                <datalist id="ledger-accounts">
+                  {data.accounts.map((a) => (
+                    <option key={a.id} value={a.name} />
+                  ))}
+                </datalist>
+                <input
+                  className="entry-form__field mono"
+                  placeholder="Amount"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+                <button className="entry-form__submit" onClick={() => void handleSave()} disabled={!canSave || save.state === "saving"}>
+                  {save.state === "saving" ? "Saving…" : "Post entry"}
+                </button>
+              </div>
+              <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 8 }}>
+                Amount is entered positive; income vs. expense is carried by the type, matching how the rows
+                already in the table are stored.
               </p>
-            )}
-          </>
-        ) : (
-          <p className="arriving-panel__body text-wrap-pretty">
-            Nothing waiting on a category — the last batch of pickups posted to the ledger below.
-          </p>
-        )}
-      </div>
-
-      <GridRow cols="88px 1fr 150px 178px 130px 104px" as="header">
-        <span>Date</span>
-        <span>Description</span>
-        <span>Category</span>
-        <span>Attributed to</span>
-        <span>Account</span>
-        <span className="text-right">Amount</span>
-      </GridRow>
-
-      {ledger.map((row, i) => (
-        <GridRow
-          cols="88px 1fr 150px 178px 130px 104px"
-          as="body"
-          className="mono"
-          key={`${row.date}-${row.description}-${i}`}
-          highlight={row.highlight}
-        >
-          <span>{row.date}</span>
-          <span style={{ fontFamily: "var(--font-sans)" }}>{row.description}</span>
-          <span style={{ color: row.categoryPending ? "var(--ink-muted)" : undefined }}>{row.category}</span>
-          <span>
-            {row.attribution.tag ? (
-              <span className="attribution-tag">
-                <EarTag tag={row.attribution.tag} accent={row.attribution.tagAccent ?? "herd"} size="sm" />
-                <span style={{ fontFamily: "var(--font-sans)" }}>{row.attribution.name}</span>
-              </span>
-            ) : (
-              <span
-                style={{
-                  color: row.attribution.emphasis
-                    ? "var(--herd-green)"
-                    : row.categoryPending
-                      ? "var(--ink-muted)"
-                      : "var(--ink-muted)",
-                }}
-              >
-                {row.attribution.label}
-              </span>
-            )}
-          </span>
-          <span style={{ color: "var(--ink-muted)" }}>{row.account}</span>
-          <span
-            className="text-right"
-            style={{ fontWeight: 500, color: row.amount < 0 ? "var(--red)" : undefined }}
-          >
-            {row.amount < 0 ? "−" : "+"}${Math.abs(row.amount).toFixed(2)}
-          </span>
-        </GridRow>
-      ))}
-      <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 12 }}>
-        Showing {ledger.length} entries — the 8 drawn in the mockup{ledger.length > 8 ? `, plus ${ledger.length - 8} added this session` : ""}, out of July's full ledger.
-      </p>
-
-      <div className="ledger-footer">
-        <div>
-          <div className="serif" style={{ fontSize: 21, marginBottom: 12 }}>
-            Where July went
-          </div>
-          {spendBreakdown.map((c) => (
-            <ProgressBar key={c.label} label={c.label} valueLabel={`$${c.amount.toLocaleString()} · ${c.pct}%`} pct={c.pct} />
-          ))}
-        </div>
-        <div>
-          <div className="serif" style={{ fontSize: 21, marginBottom: 12 }}>
-            Unallocated
-          </div>
-          <Callout tone="dashed">
-            <div className="serif" style={{ fontSize: 21, marginBottom: 8 }}>
-              One entry needs a home
             </div>
-            <p style={{ fontSize: 13, color: "var(--ink-muted)", marginBottom: 12, maxWidth: "52ch" }} className="text-wrap-pretty">
-              The 24 July feed invoice is set to split {splitRule === "evenly" ? "evenly across 41 head" : "by production"}.
-              {splitRule === "evenly" ? (
-                <>
-                  {" "}
-                  Weight it by production instead and the per-cow numbers on{" "}
-                  <Link to="/animals/1103">every animal record</Link> change with it.
-                </>
-              ) : (
-                <> Per-cow numbers now reflect production share.</>
-              )}
+          )}
+
+          {save.state === "saved" && (
+            <p style={{ fontSize: 13, color: "var(--herd-green)", margin: "12px 0" }}>
+              Posted — the table below is re-read from the database.
             </p>
-            <div className="action-row">
-              <Button
-                size="sm"
-                variant={splitRule === "evenly" ? "filled" : "outline"}
-                onClick={() => setSplitRule("evenly")}
-              >
-                Split evenly
-              </Button>
-              <Button
-                size="sm"
-                variant={splitRule === "production" ? "filled" : "outline"}
-                onClick={() => setSplitRule("production")}
-              >
-                By production
-              </Button>
+          )}
+          {save.state === "error" && (
+            <div style={{ margin: "12px 0" }}>
+              <p style={{ fontSize: 13, color: "var(--red)", marginBottom: 2 }}>Insert failed:</p>
+              <p className="mono" style={{ fontSize: 13, color: "var(--red)" }}>
+                {save.message}
+              </p>
             </div>
-          </Callout>
-        </div>
-      </div>
+          )}
+
+          <div style={{ margin: "16px 0" }}>
+            <Callout>
+              <strong style={{ fontWeight: 500 }}>No "Attributed to" column yet.</strong> Nothing links a
+              transaction to an animal in the schema today — that needs the migration in{" "}
+              <code>docs/migrations/002-link-books-to-herd.sql</code>, which hasn't been run.
+            </Callout>
+          </div>
+
+          <GridRow cols={COLS} as="header">
+            <span>Date</span>
+            <span>Description</span>
+            <span>Category</span>
+            <span>Type</span>
+            <span>Account</span>
+            <span className="text-right">Amount</span>
+          </GridRow>
+
+          {rows.map((t) => {
+            const income = isIncome(t);
+            return (
+              <GridRow cols={COLS} as="body" className="mono" key={t.id}>
+                <span>{t.date}</span>
+                <span style={{ fontFamily: "var(--font-sans)" }}>{t.note || "—"}</span>
+                <span>{t.category}</span>
+                <span style={{ color: "var(--ink-muted)" }}>{t.type}</span>
+                <span style={{ color: "var(--ink-muted)" }}>{t.account || "—"}</span>
+                <span className="text-right" style={{ fontWeight: 500, color: income ? undefined : "var(--red)" }}>
+                  {income ? "+" : "−"}
+                  {money(Math.abs(Number(t.amount)))}
+                </span>
+              </GridRow>
+            );
+          })}
+
+          {rows.length === 0 && (
+            <p style={{ fontSize: 14, color: "var(--ink-muted)", padding: "16px 8px" }}>
+              No transactions recorded for {business?.name ?? "this business"}.
+            </p>
+          )}
+        </>
+      )}
     </OpsShell>
   );
 }

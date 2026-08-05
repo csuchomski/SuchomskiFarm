@@ -97,14 +97,17 @@ transaction belonging to a business that no farm owns. With one farm today
 this is invisible; it becomes a real leak the moment there are two. Migration
 001 closes it.
 
-While writing that: **the wider finding is that `public` may have no RLS at
-all.** Reads of `products`, `orders`, `ledger_transactions` and `profiles` all
-returned rows through the anon key, which wouldn't happen if RLS were on
-without policies. If that's right, `public.profiles` — names, emails, phone
-numbers — is readable by anyone who opens devtools on the deployed site, since
-the anon key ships in the bundle by design. Migration 001 covers the ledger
-tables; `profiles` and `orders` need a customer-access decision before they
-can be locked down, and that's the higher-priority half.
+> **Correction.** An earlier version of this document claimed `public` might
+> have no RLS, on the reasoning that reads succeeded through the anon key.
+> That inference was wrong: those reads were made by a *signed-in* user — the
+> anon key is only the API key, the session JWT carries the identity, and the
+> policies were allowing the reads correctly. Verified: RLS is enabled on all
+> ten `public` tables, each with policies. There is no exposure.
+
+What remains is narrower than a missing-RLS problem: `public.businesses` still
+has no `farm_id`, so the ledger side has nothing to scope *to*. Whether that's
+a live cross-tenant issue depends on what the existing policies check —
+see "Still to confirm" below.
 
 **2. Rounding — decided.** Largest remainder: everyone gets their floored
 share, then leftover cents go out one at a time, largest fractional remainder
@@ -117,10 +120,25 @@ tests covering the reconciliation invariant across every herd size 1–60 and a
 range of amounts, plus refunds, zero-weight herds, and empty input. `npm test`
 in `app/`.
 
-**3. Write access.** The RLS policies shared so far cover only the `herd`
-schema. Whether the app can write `public.ledger_transactions` at all is
-still unknown — the inventory-batch insert on Store · Products is the live
-test of that.
+**3. Write access — confirmed.** The inventory-batch insert on Store ·
+Products works against the live database, so authenticated writes to `public`
+are permitted by the existing policies.
+
+## Still to confirm
+
+RLS is on everywhere, but *what the policies check* decides whether the
+tenancy gap is live or theoretical. `public.ledger_transactions` has one
+policy; if it reads `using (auth.role() = 'authenticated')` then any
+signed-in user of any farm sees every farm's books, and migration 001 matters.
+If it already scopes by something farm-equivalent, 001 is unnecessary. To
+find out:
+
+```sql
+select tablename, policyname, cmd, qual, with_check
+from pg_policies
+where schemaname = 'public'
+order by tablename, policyname;
+```
 
 ## Rollback
 

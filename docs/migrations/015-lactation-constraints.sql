@@ -1,7 +1,18 @@
 -- 015 — Let the database enforce what a lactation can be.
 --
--- STATUS: PROPOSAL. Not run. Additive; safe while herd.lactations is empty.
+-- STATUS: RUN, 2026-08-06, on an empty herd.lactations.
 -- Depends on: nothing beyond the existing herd schema.
+--
+-- The check constraint was also validated after running (zero violating
+-- rows, the table being empty), so convalidated is true rather than the
+-- NOT VALID state it starts in below.
+--
+-- Verified after running — each rejection carries the constraint's name:
+--   duplicate parity for one cow      -> 23505 lactations_animal_parity_uniq
+--   second open lactation for one cow -> 23505 lactations_one_open_per_animal
+--   dry_off_date before fresh_date    -> 23514 lactations_dry_after_fresh
+-- and the two cases that must still work do: the same parity for a
+-- different cow, and a new lactation once the previous one is dried off.
 --
 -- The app (app/src/lib/lactations.ts, validateFreshening) refuses to record
 -- a duplicate parity for a cow, or a second lactation while one is still

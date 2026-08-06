@@ -13,9 +13,19 @@ permissions:
   pages: write
   id-token: write
 
+# One deployment at a time, but never cancel one that's already going.
+#
+# This was `cancel-in-progress: true`, which assumes a deploy is quick
+# enough that killing it to start a newer one is free. On 2026-08-06 Pages
+# runners took 15 minutes to allocate, or never did, and each retry then
+# cancelled the attempt already waiting — so retrying actively made things
+# worse. Run 31120286790 died that way with no runner ever assigned.
+#
+# `false` is also what GitHub's own Pages starter workflow uses, for the
+# same reason: a production deployment should be allowed to finish.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:

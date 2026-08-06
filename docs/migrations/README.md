@@ -1,25 +1,49 @@
 # Migrations
 
-None of these have been run. They're written to be read before executing —
-each carries its own verification queries and rollback.
+They're written to be read before executing — each carries its own
+verification queries and rollback.
+
+Run status below is what the database actually reports, not what was
+intended. 004–007 were run at some point without this file being updated,
+which is worth knowing before trusting any "not run" here: check the
+database, don't take the table's word for it.
 
 ## Order
 
 | # | What | Risk | Notes |
 |---|---|---|---|
-| **009** | Customer access + privilege-escalation fix | Low | **Run first.** Closes a live hole; unblocks the storefront. |
 | 008 | Product types | Low | Small, isolated, immediately visible on the dashboard. |
-| 004 | Business types and modules | Low | Additive. Seeded to match existing `type` values. |
-| 005 | `herd.farms.business_id` | Low | Additive. Backfilled by name. |
-| 006 | `business_members` | Low | Additive. Carries farm membership across. |
-| **007** | Membership answers via business | **High** | Changes what 41 tables mean in two statements. Rehearse on a restored backup. |
-| 010 | Scope the store to a business | Medium | Retires the global farmer flag. Needs 006 and 009. |
+| 010 | Scope the store to a business | Medium | Retires the global farmer flag. Needs 006 and 009 — both now run. |
 | 002 | Link books to per-animal costs | Low | Additive. Makes "Attributed to" possible. |
 | **012** | Drop the duplicate `reserve_product` | Low | **Run if 011 was run.** 011 created an overload that broke reserving. |
 | ~~001~~ | ~~`businesses.farm_id`~~ | — | **Superseded.** Pointed the link the wrong way; see `../business-as-tenant.md`. |
 | ~~003~~ | ~~Transaction types~~ | — | **Already run.** |
+| ~~004~~ | ~~Business types and modules~~ | — | **Already run.** `business_type_modules` is populated for all three types. |
+| ~~005~~ | ~~`herd.farms.business_id`~~ | — | **Already run.** The farm is linked to business 5. |
+| ~~006~~ | ~~`business_members`~~ | — | **Already run — its policies are broken; see 014.** |
+| ~~007~~ | ~~Membership answers via business~~ | — | **Already run.** |
 | ~~009~~ | ~~Customer access~~ | — | **Already run.** |
 | ~~011~~ | ~~Reserve against inventory~~ | — | **Already run — superseded by 012.** |
+| ~~014~~ | ~~Fix `business_members` policy recursion~~ | — | **Already run, 2026-08-06.** Unblocked the business switcher. |
+
+## A policy on a table must not query that table
+
+006 tested membership with a plain `exists` against `business_members` from
+inside a policy *on* `business_members`, reasoning that a helper function
+would recurse. It's the other way round: the self-referential `exists` is
+the recursion, because evaluating the policy reads the table and reading the
+table evaluates the policy. Postgres raises `42P17` and every select fails.
+
+A `security definer` function is what breaks the cycle — its body runs with
+RLS bypassed, so it never re-enters the policy. 014 does that.
+
+Two things that make this hard to spot:
+
+- A `for all` policy covers `select` too, so fixing only the select policy
+  leaves the recursion in place.
+- The error text contains the word "relation", which client code checking
+  for a missing table can easily mistake for one. That's precisely what
+  happened — see `missingRelation` in `app/src/lib/workspace.tsx`.
 
 ## Check for an existing function before writing one
 

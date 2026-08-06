@@ -66,15 +66,18 @@ function milkProductIdsFrom(products: ProductRow[]): { ids: Set<number>; usedFal
  * asks for type_code and retries without it when migration 008 hasn't run.
  * One wasted round trip in the un-migrated case, and none afterwards.
  */
-async function fetchProducts(): Promise<ProductRow[]> {
-  const withType = await supabase.from("products").select("id, name, unit, price, type_code");
+async function fetchProducts(businessId: number): Promise<ProductRow[]> {
+  const withType = await supabase
+    .from("products")
+    .select("id, name, unit, price, type_code")
+    .eq("business_id", businessId);
   if (!withType.error) return (withType.data ?? []) as ProductRow[];
 
   if (!/type_code|column|schema cache/i.test(withType.error.message)) {
     throw new Error(`products: ${withType.error.message}`);
   }
 
-  const without = await supabase.from("products").select("id, name, unit, price");
+  const without = await supabase.from("products").select("id, name, unit, price").eq("business_id", businessId);
   if (without.error) throw new Error(`products: ${without.error.message}`);
   return (without.data ?? []) as ProductRow[];
 }
@@ -117,14 +120,13 @@ export async function fetchDashboardData(todayIso: string, scope: DashboardScope
             .eq("produced_date", todayIso)
             .is("deleted_at", null)
         : Promise.resolve(NO_ROWS),
-      // The store tables (inventory_batches, orders, products) carry neither
-      // business_id nor farm_id, so these three can't be scoped and are read
-      // whole. Harmless while `store` is a farm-only module and exactly one
-      // farm exists; a second farm makes it wrong, and the fix is a
-      // migration adding the column, not a filter here.
-      supabase.from("inventory_batches").select("id, product_id, produced_date, quantity, reserved"),
-      fetchProducts(),
-      supabase.from("orders").select("id, status, picked_up_date, cancelled_date"),
+      // Scoped since migration 010 put business_id on all three.
+      supabase
+        .from("inventory_batches")
+        .select("id, product_id, produced_date, quantity, reserved")
+        .eq("business_id", businessId),
+      fetchProducts(businessId),
+      supabase.from("orders").select("id, status, picked_up_date, cancelled_date").eq("business_id", businessId),
       supabase
         .from("ledger_transactions")
         .select("id, business_id, date, type, category, amount, note, payer, account")

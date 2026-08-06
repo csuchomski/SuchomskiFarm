@@ -129,10 +129,6 @@ export default function CustomerStore() {
           {actionError && (
             <>
               <p style={{ fontSize: 13, color: "var(--red)" }}>{actionError}</p>
-              <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>
-                If this mentions choosing between candidate functions, there are two copies of{" "}
-                <code>reserve_product</code> and migration 012 removes the duplicate.
-              </p>
             </>
           )}
         </div>

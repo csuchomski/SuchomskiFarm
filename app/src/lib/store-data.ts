@@ -65,15 +65,35 @@ export interface StoreData {
   production: RealProductionRecord[];
 }
 
-export async function fetchStoreData(): Promise<StoreData> {
+/**
+ * Which business's store this is. Migration 010 put business_id on products,
+ * inventory_batches and orders; production records still hang off a farm.
+ */
+export interface StoreScope {
+  businessId: number;
+  farmId: string | null;
+}
+
+export async function fetchStoreData(scope: StoreScope): Promise<StoreData> {
+  const { businessId, farmId } = scope;
+
   const [productsRes, batchesRes, discardsRes, productionRes] = await Promise.all([
-    supabase.from("products").select("id, name, unit, price").order("name"),
-    supabase.from("inventory_batches").select("id, product_id, produced_date, quantity, reserved, herd_animal_id"),
-    supabase.from("discards").select("id, product_id, product_name, quantity, reason, batch_produced_date"),
+    supabase.from("products").select("id, name, unit, price").eq("business_id", businessId).order("name"),
     supabase
-      .schema("herd")
-      .from("production_records")
-      .select("id, animal_id, product_id, product_name, quantity, unit, produced_date, batch_id"),
+      .from("inventory_batches")
+      .select("id, product_id, produced_date, quantity, reserved, herd_animal_id")
+      .eq("business_id", businessId),
+    // discards got no business_id in 010, so it can't be filtered server-side.
+    // Narrowed below to the scoped products instead — a discard belongs to
+    // whichever business owns its product.
+    supabase.from("discards").select("id, product_id, product_name, quantity, reason, batch_produced_date"),
+    farmId
+      ? supabase
+          .schema("herd")
+          .from("production_records")
+          .select("id, animal_id, product_id, product_name, quantity, unit, produced_date, batch_id")
+          .eq("farm_id", farmId)
+      : Promise.resolve({ data: [] as never[], error: null }),
   ]);
 
   for (const [label, res] of [
@@ -100,9 +120,13 @@ export async function fetchStoreData(): Promise<StoreData> {
     };
   });
 
+  const scopedProductIds = new Set(products.map((p) => p.id));
+
   return {
     products,
-    discards: (discardsRes.data ?? []) as RealDiscard[],
+    discards: ((discardsRes.data ?? []) as RealDiscard[]).filter(
+      (d) => d.product_id === null || scopedProductIds.has(d.product_id),
+    ),
     production: (productionRes.data ?? []) as RealProductionRecord[],
   };
 }
@@ -112,15 +136,19 @@ function round3(n: number) {
 }
 
 /**
- * Insert a new inventory batch. Chosen as the first real write in the app
- * because it's the least entangled one available: public.inventory_batches
- * has no farm_id, no created_by/rev audit columns, and no soft-delete — so
- * if this fails, the cause is write permissions rather than a malformed
- * audit payload.
+ * Insert a new inventory batch.
+ *
+ * `businessId` is required, not optional. Since migration 010 the insert
+ * policy is `with check (is_business_member(business_id))`, and
+ * is_business_member(null) is false — so omitting it doesn't write an
+ * unscoped row, it fails outright with:
+ *
+ *   new row violates row-level security policy for table "inventory_batches"
  *
  * `reserved` is NOT NULL in the schema, so it's always sent explicitly.
  */
 export async function addInventoryBatch(input: {
+  businessId: number;
   productId: number;
   producedDate: string;
   quantity: number;
@@ -129,6 +157,7 @@ export async function addInventoryBatch(input: {
   const { data, error } = await supabase
     .from("inventory_batches")
     .insert({
+      business_id: input.businessId,
       product_id: input.productId,
       produced_date: input.producedDate,
       quantity: input.quantity,

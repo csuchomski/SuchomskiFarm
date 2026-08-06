@@ -3,6 +3,7 @@ import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, EarTag, GridRow } from "../components/ui";
 import { addInventoryBatch, fetchStoreData, formatUnitPrice, type StoreData } from "../lib/store-data";
 import { fetchAnimals, type RealAnimal } from "../lib/herd";
+import { useWorkspace } from "../lib/workspace";
 import "./store-products.css";
 
 type Fetch =
@@ -15,6 +16,8 @@ type Save = { state: "idle" } | { state: "saving" } | { state: "saved" } | { sta
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export default function StoreProducts() {
+  const { business, farmId } = useWorkspace();
+  const businessId = business?.id ?? null;
   const [result, setResult] = useState<Fetch>({ state: "loading" });
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
@@ -23,13 +26,17 @@ export default function StoreProducts() {
   const [save, setSave] = useState<Save>({ state: "idle" });
 
   const load = useCallback(async () => {
-    const [data, animals] = await Promise.all([fetchStoreData(), fetchAnimals()]);
+    if (businessId === null) return;
+    const [data, animals] = await Promise.all([fetchStoreData({ businessId, farmId }), fetchAnimals()]);
     setResult({ state: "ok", data, animals });
-    setSelectedId((cur) => cur ?? data.products.find((p) => p.batches.length > 0)?.id ?? data.products[0]?.id ?? null);
-  }, []);
+    // Reset rather than preserve: the previously selected product belongs to
+    // the business we just switched away from.
+    setSelectedId(data.products.find((p) => p.batches.length > 0)?.id ?? data.products[0]?.id ?? null);
+  }, [businessId, farmId]);
 
   useEffect(() => {
     let cancelled = false;
+    setResult({ state: "loading" });
     load().catch(
       (err) => !cancelled && setResult({ state: "error", message: err instanceof Error ? err.message : String(err) }),
     );
@@ -51,10 +58,10 @@ export default function StoreProducts() {
   const canSave = selected !== null && date !== "" && quantity.trim() !== "" && !Number.isNaN(qtyNum) && qtyNum > 0;
 
   const handleAddBatch = async () => {
-    if (!canSave || !selected) return;
+    if (!canSave || !selected || businessId === null) return;
     setSave({ state: "saving" });
     try {
-      await addInventoryBatch({ productId: selected.id, producedDate: date, quantity: qtyNum });
+      await addInventoryBatch({ businessId, productId: selected.id, producedDate: date, quantity: qtyNum });
       setQuantity("");
       await load();
       setSave({ state: "saved" });

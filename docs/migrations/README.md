@@ -12,6 +12,7 @@ database, don't take the table's word for it.
 
 | # | What | Risk | Notes |
 |---|---|---|---|
+| 015 | Lactation constraints | Low | Additive. Moves two app-only invariants into the database. Cheapest while `lactations` is empty. |
 | 008 | Product types | Low | Small, isolated, immediately visible on the dashboard. |
 | 002 | Link books to per-animal costs | Low | Additive. Makes "Attributed to" possible. |
 | ~~001~~ | ~~`businesses.farm_id`~~ | — | **Superseded.** Pointed the link the wrong way; see `../business-as-tenant.md`. |

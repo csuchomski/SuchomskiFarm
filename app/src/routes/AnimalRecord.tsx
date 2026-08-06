@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useWorkspace } from "../lib/workspace";
+import { LactationSection } from "../components/herd/LactationSection";
 import { Button, Callout, EarTag, Pill, StatTile } from "../components/ui";
 import { AnimalForm } from "../components/herd/AnimalForm";
 import { Pedigree } from "../components/herd/Pedigree";
@@ -229,14 +230,21 @@ export default function AnimalRecord() {
             </>
           )}
 
-          {/* Milk, health and cost are one note rather than four empty
-              sections: lactations, test_days, treatments and cost_entries
-              are all empty, so a section each would be four identical boxes
-              saying nothing. */}
-          <Callout>
-            Milk, health and cost history aren't shown — the lactation, treatment and per-animal cost tables have
-            no rows yet. They'll appear here once they do.
-          </Callout>
+          {/* Lactations are real now. Treatments and per-animal costs are
+              still empty, so they stay a single note rather than two boxes
+              that can only say the same thing. */}
+          <LactationSection
+            animalId={animal.id}
+            farmId={farmId}
+            canWrite={animal.sex === "female" && animal.class !== "calf"}
+          />
+
+          <div style={{ marginTop: 24 }}>
+            <Callout>
+              Health and cost history aren't shown — the treatment and per-animal cost tables have no rows yet.
+              They'll appear here once they do.
+            </Callout>
+          </div>
         </div>
 
         <div>

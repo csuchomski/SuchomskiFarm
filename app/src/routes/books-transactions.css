@@ -90,3 +90,44 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+@media (max-width: 1000px) {
+  .ledger-footer {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+
+@media (max-width: 860px) {
+  /* 16px or Safari zooms on focus; see sign-in.css. */
+  .entry-form__field {
+    font-size: 16px;
+  }
+
+  /* Six and eight fixed tracks can't fit; auto-fit lets the fields flow
+     into as many rows as the screen needs without a template per width. */
+  .entry-form__grid,
+  .entry-form__grid--wide {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  .entry-form {
+    padding: 12px;
+  }
+
+  .arriving-panel {
+    padding: 12px;
+    margin: 16px 0;
+  }
+
+  .action-row {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .entry-form__grid,
+  .entry-form__grid--wide {
+    grid-template-columns: 1fr;
+  }
+}

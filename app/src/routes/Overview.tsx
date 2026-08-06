@@ -125,13 +125,13 @@ export default function Overview() {
                 </p>
               ) : (
                 <>
-                  <GridRow cols="92px 1fr 100px" as="header">
+                  <GridRow cols="92px 1fr 100px" mobileCols="76px 1fr 84px" as="header">
                     <span>Date</span>
                     <span>Entry</span>
                     <span className="text-right">Amount</span>
                   </GridRow>
                   {data.recent.map((t) => (
-                    <GridRow key={t.id} cols="92px 1fr 100px" as="body">
+                    <GridRow key={t.id} cols="92px 1fr 100px" mobileCols="76px 1fr 84px" as="body">
                       <span className="mono" style={{ fontSize: 13 }}>
                         {t.date}
                       </span>

@@ -63,3 +63,27 @@
   gap: 6px;
   color: var(--ink-soft);
 }
+
+@media (max-width: 860px) {
+  /* 16px or Safari zooms on focus; see sign-in.css. */
+  .animals-search,
+  .animals-sort {
+    font-size: 16px;
+  }
+
+  .animals-search {
+    /* min-width 220px plus the sort control overflows below ~360px; on a
+       phone the search takes its own line and the filters follow. */
+    min-width: 100%;
+    flex: none;
+  }
+
+  .animals-controls {
+    gap: 10px;
+    padding: 12px 0;
+  }
+
+  .animals-chip {
+    padding: 10px 11px;
+  }
+}

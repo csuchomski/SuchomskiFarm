@@ -72,3 +72,83 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.topbar__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.topbar__menu {
+  display: none;
+  background: none;
+  border: 1px solid var(--hairline);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+/* ── phone / small tablet ──────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .topbar {
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .topbar__menu {
+    display: inline-flex;
+  }
+
+  /* The search box is a non-functional placeholder. On a 375px screen it
+     would consume the width the business switcher actually needs, so it
+     goes rather than shrinking everything around it. */
+  .topbar__search {
+    display: none;
+  }
+
+  /* The role is repeated on every page header that shows it; the switcher
+     is not, so the switcher keeps the space. */
+  .topbar__role {
+    display: none;
+  }
+
+  .topbar__right {
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .topbar__business {
+    /* Long enough to tell "Suchomski Family Farm" from "5553 N Lydell Ave"
+       without pushing Sign out off the edge. */
+    max-width: 44vw;
+    min-height: 40px;
+    /* The 11px eyebrow treatment is deliberate, but under 16px Safari
+       zooms the page on focus and doesn't zoom back. The select ellipsizes
+       natively, so the larger type costs nothing but the type scale. */
+    font-size: 16px;
+    letter-spacing: 0.02em;
+    text-transform: none;
+  }
+
+  .topbar__wordmark {
+    font-size: 19px;
+  }
+}
+
+@media (max-width: 400px) {
+  .topbar__wordmark {
+    /* Below this the wordmark and the switcher can't both fit; the
+       switcher is the one you need. */
+    display: none;
+  }
+
+  .topbar__business {
+    max-width: 52vw;
+  }
+}

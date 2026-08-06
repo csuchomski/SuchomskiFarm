@@ -23,3 +23,19 @@
 .stat-tile__label {
   margin-top: 4px;
 }
+
+@media (max-width: 860px) {
+  .stat-tile {
+    /* The tiles sit in a minmax(0, 1fr) grid on mobile; a 104px floor would
+       push the second column past the screen edge on a 360px phone. */
+    min-width: 0;
+  }
+
+  .stat-tile__value--lg {
+    font-size: 23px;
+  }
+
+  .stat-tile__value--md {
+    font-size: 19px;
+  }
+}

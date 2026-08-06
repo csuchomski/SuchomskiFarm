@@ -38,3 +38,31 @@
 .chain__cell--dark .chain__detail {
   color: var(--ink-faint);
 }
+
+@media (max-width: 860px) {
+  .chain {
+    /* Four steps in a row give ~80px each on a phone — narrower than the
+       words in them. Two-up keeps the chain readable and still reads in
+       order, left to right then down. */
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chain__cell {
+    padding: 12px 12px;
+    min-height: 76px;
+  }
+
+  .chain__title {
+    font-size: 15px;
+  }
+}
+
+/* Most phones are 360-430px wide, where two-up still fits the cell text
+   ("Nothing logged" at 15px needs ~105px of a ~155px cell). Only stack
+   fully on the genuinely tiny ones. */
+@media (max-width: 340px) {
+  .chain {
+    grid-template-columns: 1fr;
+  }
+}

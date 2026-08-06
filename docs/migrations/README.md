@@ -12,7 +12,6 @@ database, don't take the table's word for it.
 
 | # | What | Risk | Notes |
 |---|---|---|---|
-| 015 | Lactation constraints | Low | Additive. Moves two app-only invariants into the database. Cheapest while `lactations` is empty. |
 | 008 | Product types | Low | Small, isolated, immediately visible on the dashboard. |
 | 002 | Link books to per-animal costs | Low | Additive. Makes "Attributed to" possible. |
 | ~~001~~ | ~~`businesses.farm_id`~~ | — | **Superseded.** Pointed the link the wrong way; see `../business-as-tenant.md`. |
@@ -26,6 +25,7 @@ database, don't take the table's word for it.
 | ~~010~~ | ~~Scope the store to a business~~ | — | **Already run, 2026-08-06.** See "a policy change can break writes" below. |
 | ~~012~~ | ~~Drop the duplicate `reserve_product`~~ | — | **Already run, 2026-08-06 — was a no-op.** The duplicate was already absent. |
 | ~~014~~ | ~~Fix `business_members` policy recursion~~ | — | **Already run, 2026-08-06.** Unblocked the business switcher. |
+| ~~015~~ | ~~Lactation constraints~~ | — | **Already run, 2026-08-06.** Check constraint validated; rejections verified. |
 
 ## A policy change can break writes, not just reads
 

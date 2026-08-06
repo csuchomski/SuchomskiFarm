@@ -7,12 +7,11 @@ import { herdSchema } from "./supabase";
  * write-first: without a way to record a freshening there is nothing for a
  * screen to show.
  *
- * Two invariants the schema doesn't enforce are enforced here instead.
- * There is no unique index on (animal_id, lactation_number), and nothing
- * stops a second open lactation while one is still running — both are
- * nonsense for a real cow, and both would be silently accepted. Checked in
- * `validateFreshening` against the lactations already loaded; a database
- * constraint would be better and is noted in docs/migrations.
+ * Two invariants are checked twice, deliberately. `validateFreshening`
+ * catches them before a write so the form can explain itself, and migration
+ * 015 enforces them in the database so a second tab, an import or a
+ * hand-written insert can't get around the form. The client check is for
+ * the message; the database is the guarantee.
  */
 
 export interface RealLactation {
@@ -129,6 +128,28 @@ export function validateDryOff(lactation: RealLactation, dryOffDate: string, tod
 
 // ─── access ────────────────────────────────────────────────────────────
 
+/**
+ * Turns migration 015's constraint violations back into the sentences
+ * `validateFreshening` would have used.
+ *
+ * The client check normally catches these first, so reaching one means the
+ * form's view of her history was stale — a second tab, or two people at
+ * once. That's exactly when a raw "duplicate key value violates unique
+ * constraint lactations_animal_parity_uniq" is least useful.
+ */
+export function explainWriteError(message: string): string {
+  if (message.includes("lactations_animal_parity_uniq")) {
+    return "That lactation number already exists for her. Reload — her history has changed since this form opened.";
+  }
+  if (message.includes("lactations_one_open_per_animal")) {
+    return "She already has an open lactation. Reload — she may have been freshened elsewhere.";
+  }
+  if (message.includes("lactations_dry_after_fresh")) {
+    return "Dry-off can't be before she freshened.";
+  }
+  return message;
+}
+
 export async function fetchLactations(farmId: string): Promise<RealLactation[]> {
   const { data, error } = await herdSchema()
     .from("lactations")
@@ -163,7 +184,7 @@ export async function recordFreshening(
     .select(LACTATION_COLUMNS)
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(explainWriteError(error.message));
   return data as RealLactation;
 }
 
@@ -179,7 +200,7 @@ export async function recordDryOff(
     .select(LACTATION_COLUMNS)
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(explainWriteError(error.message));
   return data as RealLactation;
 }
 
@@ -210,6 +231,6 @@ export async function updateFigures(id: string, figures: LactationFigures): Prom
     .select(LACTATION_COLUMNS)
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(explainWriteError(error.message));
   return data as RealLactation;
 }

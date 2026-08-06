@@ -3,6 +3,7 @@ import {
   byFreshDateDesc,
   daysBetween,
   daysInMilk,
+  explainWriteError,
   nextLactationNumber,
   openLactation,
   statusOf,
@@ -191,5 +192,36 @@ describe("byFreshDateDesc", () => {
       lactation({ id: "high", lactation_number: 2, fresh_date: "2026-02-01" }),
     ].sort(byFreshDateDesc);
     expect(sorted[0].id).toBe("high");
+  });
+});
+
+describe("explainWriteError", () => {
+  // These fire only when the client check was working from stale data —
+  // a second tab, or two people recording at once — so the message has to
+  // say what to do, not name a Postgres index.
+  it("explains a duplicate parity", () => {
+    expect(
+      explainWriteError('duplicate key value violates unique constraint "lactations_animal_parity_uniq"'),
+    ).toMatch(/already exists for her.*Reload/s);
+  });
+
+  it("explains a second open lactation", () => {
+    expect(
+      explainWriteError('duplicate key value violates unique constraint "lactations_one_open_per_animal"'),
+    ).toMatch(/already has an open lactation.*Reload/s);
+  });
+
+  it("explains a dry-off before freshening", () => {
+    expect(
+      explainWriteError('new row for relation "lactations" violates check constraint "lactations_dry_after_fresh"'),
+    ).toBe("Dry-off can't be before she freshened.");
+  });
+
+  it("passes an unrecognised error through unchanged", () => {
+    // Swallowing an unknown failure behind a friendly sentence is how a real
+    // fault becomes invisible — see missingRelation in workspace.tsx.
+    expect(explainWriteError("permission denied for table lactations")).toBe(
+      "permission denied for table lactations",
+    );
   });
 });

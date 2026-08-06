@@ -1,6 +1,15 @@
 -- 010 — Scope the store to a business, retiring the global "farmer" flag.
 --
--- STATUS: PROPOSAL. Not run. Run LAST — after 004-007, and after 009.
+-- STATUS: RUN, 2026-08-06. Ran after 004-007, 009 and 014.
+--
+-- Rehearsed in a rolled-back transaction first: owner and buyer both saw
+-- identical row counts before and after, so nothing vanished from the
+-- storefront. Backfilled all 4 products, 5 batches and 9 orders to the farm.
+--
+-- ⚠️ It also breaks any insert that omits business_id, because the check is
+-- `is_business_member(business_id)` and is_business_member(null) is false —
+-- the row is rejected, not written unscoped. app/src/lib/store-data.ts
+-- addInventoryBatch() had to start sending it.
 --
 -- is_farmer() is:
 --

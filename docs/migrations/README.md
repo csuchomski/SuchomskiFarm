@@ -13,9 +13,7 @@ database, don't take the table's word for it.
 | # | What | Risk | Notes |
 |---|---|---|---|
 | 008 | Product types | Low | Small, isolated, immediately visible on the dashboard. |
-| 010 | Scope the store to a business | Medium | Retires the global farmer flag. Needs 006 and 009 — both now run. |
 | 002 | Link books to per-animal costs | Low | Additive. Makes "Attributed to" possible. |
-| **012** | Drop the duplicate `reserve_product` | Low | **Run if 011 was run.** 011 created an overload that broke reserving. |
 | ~~001~~ | ~~`businesses.farm_id`~~ | — | **Superseded.** Pointed the link the wrong way; see `../business-as-tenant.md`. |
 | ~~003~~ | ~~Transaction types~~ | — | **Already run.** |
 | ~~004~~ | ~~Business types and modules~~ | — | **Already run.** `business_type_modules` is populated for all three types. |
@@ -24,7 +22,27 @@ database, don't take the table's word for it.
 | ~~007~~ | ~~Membership answers via business~~ | — | **Already run.** |
 | ~~009~~ | ~~Customer access~~ | — | **Already run.** |
 | ~~011~~ | ~~Reserve against inventory~~ | — | **Already run — superseded by 012.** |
+| ~~010~~ | ~~Scope the store to a business~~ | — | **Already run, 2026-08-06.** See "a policy change can break writes" below. |
+| ~~012~~ | ~~Drop the duplicate `reserve_product`~~ | — | **Already run, 2026-08-06 — was a no-op.** The duplicate was already absent. |
 | ~~014~~ | ~~Fix `business_members` policy recursion~~ | — | **Already run, 2026-08-06.** Unblocked the business switcher. |
+
+## A policy change can break writes, not just reads
+
+010 replaced `is_farmer()` with `is_business_member(business_id)` on
+products, inventory_batches and orders. The read side was verified easily —
+same row counts before and after, for an owner and for a buyer.
+
+The write side changed silently. `with check (is_business_member(business_id))`
+rejects any insert that leaves `business_id` null, because
+`is_business_member(null)` is false. Adding a batch failed with:
+
+```
+new row violates row-level security policy for table "inventory_batches"
+```
+
+Reading a table after a policy change tells you nothing about writing to it.
+Rehearse an insert too, and remember that a backfilled column only covers
+rows that already exist — new ones need the application to start sending it.
 
 ## A policy on a table must not query that table
 

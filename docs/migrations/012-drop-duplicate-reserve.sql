@@ -1,6 +1,15 @@
 -- 012 — Remove the duplicate reserve_product added by 011.
 --
--- STATUS: PROPOSAL. Not run. Run after 011.
+-- STATUS: RUN, 2026-08-06 — and it was already a no-op.
+--
+-- Checked before running: only reserve_product(bigint,numeric,uuid) existed,
+-- so the two-argument duplicate 011 was supposed to have added was already
+-- absent. Either 011's create failed or the overload was dropped by hand.
+-- The `drop ... if exists` below is idempotent, so running it changed
+-- nothing; it's recorded here so the state is settled rather than assumed.
+--
+-- The app already passes all three arguments (app/src/lib/customer.ts), so
+-- nothing needed changing there.
 --
 -- 011 added reserve_product(bigint, numeric) without checking whether the
 -- name was taken. It was: reserve_product(bigint, numeric, uuid) already

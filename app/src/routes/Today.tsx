@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, EarTag, GridRow, StatTile } from "../components/ui";
 import { fetchDashboardData, type DashboardData } from "../lib/dashboard-data";
+import { useWorkspace } from "../lib/workspace";
 import { formatAge } from "../lib/herd";
 import "./today.css";
 
@@ -27,11 +28,16 @@ const longDate = (iso: string) =>
 
 export default function Today() {
   const navigate = useNavigate();
+  const { business, farmId } = useWorkspace();
+  const businessId = business?.id ?? null;
   const [result, setResult] = useState<Fetch>({ state: "loading" });
 
   useEffect(() => {
+    if (businessId === null) return;
     let cancelled = false;
-    fetchDashboardData(todayIso())
+    setResult({ state: "loading" });
+
+    fetchDashboardData(todayIso(), { businessId, farmId })
       .then((data) => !cancelled && setResult({ state: "ok", data }))
       .catch(
         (err) => !cancelled && setResult({ state: "error", message: err instanceof Error ? err.message : String(err) }),
@@ -39,7 +45,9 @@ export default function Today() {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // Both ids matter: the ledger follows the business, the herd follows the
+    // farm, and a switch changes them together.
+  }, [businessId, farmId]);
 
   const data = result.state === "ok" ? result.data : null;
 

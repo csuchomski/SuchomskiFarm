@@ -1,5 +1,5 @@
 import { HashRouter, Route, Routes } from "react-router-dom";
-import Today from "./routes/Today";
+import Home from "./routes/Home";
 import Animals from "./routes/Animals";
 import AnimalRecord from "./routes/AnimalRecord";
 import StoreProducts from "./routes/StoreProducts";
@@ -8,6 +8,7 @@ import CustomerStore from "./routes/CustomerStore";
 import { AuthProvider } from "./lib/auth";
 import { WorkspaceProvider } from "./lib/workspace";
 import { RequireAuth } from "./components/auth/RequireAuth";
+import { RequireModule } from "./components/auth/RequireModule";
 
 // Hash routing rather than browser routing: this deploys to GitHub Pages
 // (a static file host with no server-side rewrite config), so a clean
@@ -22,11 +23,18 @@ export default function App() {
         <HashRouter>
           <Routes>
             <Route element={<RequireAuth />}>
-              <Route path="/" element={<Today />} />
-              <Route path="/animals" element={<Animals />} />
-              <Route path="/animals/:tag" element={<AnimalRecord />} />
-              <Route path="/store/products" element={<StoreProducts />} />
-              <Route path="/books/transactions" element={<BooksTransactions />} />
+              {/* One adaptive home: farm businesses get Today, everything
+                  else gets Overview. See routes/Home.tsx. */}
+              <Route path="/" element={<Home />} />
+              {/* Everything below is module-gated — switching to a business
+                  without the module bounces back to "/" rather than leaving
+                  you on another business's screen. */}
+              <Route element={<RequireModule />}>
+                <Route path="/animals" element={<Animals />} />
+                <Route path="/animals/:tag" element={<AnimalRecord />} />
+                <Route path="/store/products" element={<StoreProducts />} />
+                <Route path="/books/transactions" element={<BooksTransactions />} />
+              </Route>
             </Route>
             {/* Customer store sits outside the auth gate — a customer isn't
                 a farm_members row. See RequireAuth's comment. */}

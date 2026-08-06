@@ -77,6 +77,88 @@ export async function fetchBooksData(): Promise<BooksData> {
   };
 }
 
+/**
+ * The home screen for a business with no herd — a realtor, a rental. Today's
+ * dairy figures mean nothing there, so this is what's left when you take
+ * them away: the ledger, which every business type has.
+ *
+ * Scoped server-side by business_id rather than fetched whole and filtered
+ * in the component, so switching business can't leave another business's
+ * money on screen.
+ */
+export interface BusinessOverview {
+  today: string;
+  monthIncome: number;
+  monthExpenses: number;
+  monthNet: number;
+  monthEntries: number;
+  /** Most recent entries across all time, newest first. */
+  recent: RealTransaction[];
+  /** Opening balance plus every entry posted against the account. */
+  balances: { account: string; balance: number }[];
+  /** Type codes on this business's transactions that aren't in the lookup
+   * table, so the totals above knowingly exclude them. */
+  unknownTypes: string[];
+}
+
+export async function fetchBusinessOverview(businessId: number, todayIso: string): Promise<BusinessOverview> {
+  const monthStart = `${todayIso.slice(0, 7)}-01`;
+
+  const [accountsRes, transactionsRes, typesRes] = await Promise.all([
+    supabase.from("ledger_accounts").select("id, name, opening_balance, business_id").eq("business_id", businessId),
+    supabase
+      .from("ledger_transactions")
+      .select("id, business_id, date, type, category, amount, note, payer, account")
+      .eq("business_id", businessId)
+      .order("date", { ascending: false }),
+    supabase.from("transaction_types").select("code, label, direction, active, sort_order").order("sort_order"),
+  ]);
+
+  for (const [label, res] of [
+    ["ledger_accounts", accountsRes],
+    ["ledger_transactions", transactionsRes],
+  ] as const) {
+    if (res.error) throw new Error(`${label}: ${res.error.message}`);
+  }
+
+  // Missing before migration 003; anything else is a real failure.
+  if (typesRes.error && !/does not exist|schema cache|not find the table/i.test(typesRes.error.message)) {
+    throw new Error(`transaction_types: ${typesRes.error.message}`);
+  }
+
+  const accounts = (accountsRes.data ?? []) as RealLedgerAccount[];
+  const transactions = (transactionsRes.data ?? []) as RealTransaction[];
+  const types = typeMap(typesRes.error ? FALLBACK_TYPES : ((typesRes.data ?? []) as TransactionType[]));
+
+  const month = transactions.filter((t) => t.date >= monthStart && t.date <= todayIso);
+  const monthTotals = summarise(month, types);
+  const allTime = summarise(transactions, types);
+
+  // An account with no opening_balance row still gets a line if anything was
+  // posted to it — otherwise the money would be invisible.
+  const balances = new Map<string, number>();
+  for (const a of accounts) balances.set(a.name, Number(a.opening_balance ?? 0));
+  for (const t of transactions) {
+    const name = t.account?.trim();
+    if (!name) continue;
+    const amount = Math.abs(Number(t.amount));
+    const signed =
+      directionOf(t, types) === "income" ? amount : directionOf(t, types) === "expense" ? -amount : 0;
+    balances.set(name, (balances.get(name) ?? 0) + signed);
+  }
+
+  return {
+    today: todayIso,
+    monthIncome: monthTotals.income,
+    monthExpenses: monthTotals.expenses,
+    monthNet: monthTotals.net,
+    monthEntries: month.length,
+    recent: transactions.slice(0, 8),
+    balances: [...balances].map(([account, balance]) => ({ account, balance })).sort((a, b) => a.account.localeCompare(b.account)),
+    unknownTypes: allTime.unknownTypes,
+  };
+}
+
 export async function addTransactionType(input: {
   code: string;
   label: string;

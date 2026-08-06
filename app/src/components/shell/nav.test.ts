@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allGroups, groupsForModules } from "./nav";
+import { allGroups, groupsForModules, moduleForPath } from "./nav";
 
 const headings = (modules: string[]) => groupsForModules(modules).map((g) => g.heading);
 
@@ -36,6 +36,41 @@ describe("groupsForModules", () => {
     for (const group of allGroups) {
       expect(group.module).toBeTruthy();
       expect(groupsForModules([group.module])).toContain(group);
+    }
+  });
+});
+
+describe("moduleForPath", () => {
+  it("maps a built route to the module that owns it", () => {
+    expect(moduleForPath("/animals")).toBe("herd");
+    expect(moduleForPath("/store/products")).toBe("store");
+    expect(moduleForPath("/books/transactions")).toBe("books");
+  });
+
+  it("gates a record page the same as its index", () => {
+    expect(moduleForPath("/animals/1103")).toBe("herd");
+  });
+
+  it("leaves home ungated, so every business type has somewhere to land", () => {
+    expect(moduleForPath("/")).toBeNull();
+  });
+
+  it("leaves an unknown path ungated rather than guessing a module", () => {
+    // Gating on a guess would make a typo'd URL redirect instead of 404,
+    // which hides the mistake.
+    expect(moduleForPath("/nope")).toBeNull();
+  });
+
+  it("doesn't match a path that merely shares a prefix", () => {
+    expect(moduleForPath("/animalsomething")).toBeNull();
+  });
+
+  it("gates every built nav item, so no link can outlive its module", () => {
+    for (const group of allGroups) {
+      for (const item of group.items) {
+        if (!item.to) continue;
+        expect(moduleForPath(item.to)).toBe(group.module);
+      }
     }
   });
 });

@@ -10,6 +10,7 @@ import {
   statusOf,
   type RealLactation,
 } from "../lib/lactations";
+import { fetchProductionRecords, milkForLactation, peakOf, type RealProductionRecord } from "../lib/milkings";
 import { useWorkspace } from "../lib/workspace";
 
 /**
@@ -24,9 +25,9 @@ import { useWorkspace } from "../lib/workspace";
 type Load =
   | { state: "loading" }
   | { state: "error"; message: string }
-  | { state: "ok"; lactations: RealLactation[]; animals: RealAnimal[] };
+  | { state: "ok"; lactations: RealLactation[]; animals: RealAnimal[]; records: RealProductionRecord[] };
 
-const COLS = "60px 1fr 64px 100px 100px 64px 92px";
+const COLS = "60px 1fr 64px 100px 100px 64px 110px 92px";
 /** Tag, name, DIM and status are what you check in a barn; the parity and
  *  the two dates are reference and get dropped rather than crushed. */
 const COLS_SM = "44px 1fr 48px 78px";
@@ -37,14 +38,17 @@ export default function Lactations() {
 
   useEffect(() => {
     if (!farmId) {
-      setLoad({ state: "ok", lactations: [], animals: [] });
+      setLoad({ state: "ok", lactations: [], animals: [], records: [] });
       return;
     }
     let cancelled = false;
     setLoad({ state: "loading" });
 
-    Promise.all([fetchLactations(farmId), fetchAnimals()])
-      .then(([lactations, animals]) => !cancelled && setLoad({ state: "ok", lactations, animals }))
+    Promise.all([fetchLactations(farmId), fetchAnimals(), fetchProductionRecords(farmId)])
+      .then(
+        ([lactations, animals, records]) =>
+          !cancelled && setLoad({ state: "ok", lactations, animals, records }),
+      )
       .catch(
         (err) => !cancelled && setLoad({ state: "error", message: err instanceof Error ? err.message : String(err) }),
       );
@@ -56,6 +60,7 @@ export default function Lactations() {
 
   const lactations = load.state === "ok" ? [...load.lactations].sort(byFreshDateDesc) : [];
   const animals = load.state === "ok" ? load.animals : [];
+  const records = load.state === "ok" ? load.records : [];
   const byId = new Map(animals.map((a) => [a.id, a]));
 
   const inMilk = lactations.filter((l) => statusOf(l) === "in-milk");
@@ -113,6 +118,7 @@ export default function Lactations() {
                 <span className="hide-sm">Fresh</span>
                 <span className="hide-sm">Dry off</span>
                 <span className="text-right">DIM</span>
+                <span className="text-right hide-sm">Milk · peak</span>
                 <span>Status</span>
               </GridRow>
 
@@ -141,6 +147,17 @@ export default function Lactations() {
                         {l.dry_off_date ?? "—"}
                       </span>
                       <span className="mono text-right">{daysInMilk(l) ?? "—"}</span>
+                      <span className="mono text-right hide-sm" style={{ fontSize: 13 }}>
+                        {(() => {
+                          // Derived from the milkings themselves rather than
+                          // the typed DHIA figures, so it can't drift from
+                          // what was actually recorded.
+                          const milk = milkForLactation(l, records);
+                          const peak = peakOf(l, records);
+                          if (milk === 0) return <span style={{ color: "var(--ink-faint)" }}>—</span>;
+                          return `${milk}${peak ? ` · ${peak.quantity}@${peak.dim}d` : ""}`;
+                        })()}
+                      </span>
                       <span>
                         <Pill variant={status === "in-milk" ? "outline-green" : "neutral"}>
                           {status === "in-milk" ? "In milk" : status === "dry" ? "Dry" : "Scheduled"}

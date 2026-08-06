@@ -24,7 +24,7 @@ export const allGroups: NavGroup[] = [
     items: [
       { label: "Animals", to: "/animals" },
       { label: "Lactations", to: "/lactations" },
-      { label: "Milkings" },
+      { label: "Milkings", to: "/milkings" },
       { label: "Health" },
     ],
   },

@@ -1,0 +1,53 @@
+.milking-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px 0;
+}
+
+.milking-date {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 14px/1 var(--font-mono);
+}
+
+.milking-date:focus-visible {
+  outline: 2px solid var(--herd-green);
+  outline-offset: 1px;
+}
+
+/* The one control on the page people use repeatedly, so it's sized to be
+   hit and read rather than to match the row's type scale. */
+.milking-qty {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 15px;
+  text-align: right;
+}
+
+.milking-qty:focus-visible {
+  outline: 2px solid var(--herd-green);
+  outline-offset: 1px;
+}
+
+@media (max-width: 860px) {
+  /* 16px or Safari zooms on focus; see sign-in.css. */
+  .milking-date,
+  .milking-qty {
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  .milking-controls {
+    gap: 12px;
+    padding: 12px 0;
+  }
+}

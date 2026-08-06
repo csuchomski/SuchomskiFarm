@@ -78,3 +78,22 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+@media (max-width: 860px) {
+  .pedigree {
+    /* Three generations can't compress into a phone's width without the
+       names becoming unreadable, so the chart scrolls sideways inside its
+       own box rather than squeezing or breaking the page. .pedigree
+       already sets overflow-x: auto; this gives it something to scroll. */
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  .ped-col {
+    min-width: 132px;
+  }
+
+  .ped-cell {
+    padding: 8px 10px;
+  }
+}

@@ -166,16 +166,16 @@ export default function Today() {
                 </div>
               )}
 
-              <GridRow cols="60px 1fr 92px 92px 100px" as="header">
+              <GridRow cols="60px 1fr 92px 92px 100px" mobileCols="44px 1fr 92px" as="header">
                 <span>Tag</span>
                 <span>Animal</span>
-                <span className="text-right">Revenue</span>
-                <span className="text-right">Cost</span>
+                <span className="text-right hide-sm">Revenue</span>
+                <span className="text-right hide-sm">Cost</span>
                 <span className="text-right">Net</span>
               </GridRow>
               {data.profitPerHead.map(({ animal, costCents, revenueCents, netCents }) => (
                 <Link key={animal.id} to={`/animals/${animal.ear_tag}`} style={{ color: "inherit", display: "contents" }}>
-                  <GridRow cols="60px 1fr 92px 92px 100px" as="body">
+                  <GridRow cols="60px 1fr 92px 92px 100px" mobileCols="44px 1fr 92px" as="body">
                     <EarTag tag={animal.ear_tag} accent="herd" />
                     <span>
                       <span className="serif" style={{ fontSize: 17 }}>
@@ -186,10 +186,13 @@ export default function Today() {
                         {animal.class} · {formatAge(animal.birth_date)}
                       </span>
                     </span>
-                    <span className="mono text-right" style={{ fontSize: 15 }}>
+                    <span className="mono text-right hide-sm" style={{ fontSize: 15 }}>
                       {revenueCents ? money(revenueCents) : "—"}
                     </span>
-                    <span className="mono text-right" style={{ fontSize: 15, color: costCents ? "var(--red)" : undefined }}>
+                    <span
+                      className="mono text-right hide-sm"
+                      style={{ fontSize: 15, color: costCents ? "var(--red)" : undefined }}
+                    >
                       {costCents ? dollars(costCents / 100) : "—"}
                     </span>
                     <span

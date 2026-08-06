@@ -1,5 +1,6 @@
 .grid-row {
   display: grid;
+  grid-template-columns: var(--grid-cols);
   gap: 12px;
   align-items: center;
 }
@@ -21,4 +22,29 @@
 
 .text-right {
   text-align: right;
+}
+
+@media (max-width: 640px) {
+  .grid-row {
+    grid-template-columns: var(--grid-cols-sm);
+    gap: 10px;
+  }
+
+  .grid-row--body {
+    /* Most rows are links — a row opening an animal record shouldn't need
+       a careful finger. 48px is the comfortable minimum. */
+    padding: 13px 4px;
+    min-height: 48px;
+  }
+
+  .grid-row--header {
+    padding: 0 4px 8px;
+  }
+
+  /* Cells dropped on a narrow screen. Must be applied to the header cell
+     and its matching body cell together, or the remaining cells shift into
+     the wrong columns. See GridRow's `mobileCols`. */
+  .hide-sm {
+    display: none;
+  }
 }

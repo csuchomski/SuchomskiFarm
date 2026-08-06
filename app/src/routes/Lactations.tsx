@@ -27,6 +27,9 @@ type Load =
   | { state: "ok"; lactations: RealLactation[]; animals: RealAnimal[] };
 
 const COLS = "60px 1fr 64px 100px 100px 64px 92px";
+/** Tag, name, DIM and status are what you check in a barn; the parity and
+ *  the two dates are reference and get dropped rather than crushed. */
+const COLS_SM = "44px 1fr 48px 78px";
 
 export default function Lactations() {
   const { farmId, business } = useWorkspace();
@@ -103,12 +106,12 @@ export default function Lactations() {
             </div>
           ) : (
             <div style={{ marginTop: 24 }}>
-              <GridRow cols={COLS} as="header">
+              <GridRow cols={COLS} mobileCols={COLS_SM} as="header">
                 <span>Tag</span>
                 <span>Animal</span>
-                <span className="text-right">№</span>
-                <span>Fresh</span>
-                <span>Dry off</span>
+                <span className="text-right hide-sm">№</span>
+                <span className="hide-sm">Fresh</span>
+                <span className="hide-sm">Dry off</span>
                 <span className="text-right">DIM</span>
                 <span>Status</span>
               </GridRow>
@@ -122,17 +125,17 @@ export default function Lactations() {
                     to={animal ? `/animals/${animal.ear_tag}` : "/animals"}
                     style={{ color: "inherit", display: "contents" }}
                   >
-                    <GridRow cols={COLS} as="body">
+                    <GridRow cols={COLS} mobileCols={COLS_SM} as="body">
                       <EarTag tag={animal?.ear_tag ?? "—"} accent="herd" />
                       <span className="serif" style={{ fontSize: 17 }}>
                         {animal?.barn_name ?? (animal ? `Tag ${animal.ear_tag}` : "Unknown animal")}
                       </span>
-                      <span className="mono text-right">{l.lactation_number}</span>
-                      <span className="mono" style={{ fontSize: 13 }}>
+                      <span className="mono text-right hide-sm">{l.lactation_number}</span>
+                      <span className="mono hide-sm" style={{ fontSize: 13 }}>
                         {l.fresh_date}
                       </span>
                       <span
-                        className="mono"
+                        className="mono hide-sm"
                         style={{ fontSize: 13, color: l.dry_off_date ? undefined : "var(--ink-faint)" }}
                       >
                         {l.dry_off_date ?? "—"}
@@ -161,7 +164,7 @@ export default function Lactations() {
               </p>
               {missing.map((a) => (
                 <Link key={a.id} to={`/animals/${a.ear_tag}`} style={{ color: "inherit", display: "contents" }}>
-                  <GridRow cols="60px 1fr 120px" as="body">
+                  <GridRow cols="60px 1fr 120px" mobileCols="44px 1fr 72px" as="body">
                     <EarTag tag={a.ear_tag} accent="herd" />
                     <span className="serif" style={{ fontSize: 17 }}>
                       {a.barn_name ?? `Tag ${a.ear_tag}`}

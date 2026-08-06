@@ -93,12 +93,17 @@ export default function StoreProducts() {
 
       {data && (
         <>
-          <GridRow cols="1fr 96px 96px 108px 108px" as="header" style={{ marginTop: 16 }}>
+          <GridRow
+            cols="1fr 96px 96px 108px 108px"
+            mobileCols="1fr 66px 84px"
+            as="header"
+            style={{ marginTop: 16 }}
+          >
             <span>Product</span>
             <span className="text-right">On hand</span>
-            <span className="text-right">Claimed</span>
-            <span className="text-right">Open to shop</span>
-            <span className="text-right">Held weekly</span>
+            <span className="text-right hide-sm">Claimed</span>
+            <span className="text-right">Open</span>
+            <span className="text-right hide-sm">Held weekly</span>
           </GridRow>
 
           {data.products.map((p) => (
@@ -110,7 +115,7 @@ export default function StoreProducts() {
               tabIndex={0}
               onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setSelectedId(p.id)}
             >
-              <GridRow cols="1fr 96px 96px 108px 108px" as="body" highlight={p.id === selectedId}>
+              <GridRow cols="1fr 96px 96px 108px 108px" mobileCols="1fr 66px 84px" as="body" highlight={p.id === selectedId}>
                 <span>
                   <span className="serif" style={{ fontSize: 17 }}>
                     {p.name}
@@ -122,14 +127,14 @@ export default function StoreProducts() {
                 <span className="mono text-right" style={{ fontSize: 15 }}>
                   {p.onHand}
                 </span>
-                <span className="mono text-right" style={{ fontSize: 15 }}>
+                <span className="mono text-right hide-sm" style={{ fontSize: 15 }}>
                   {p.claimed}
                 </span>
                 <span className="mono text-right" style={{ fontSize: 15, fontWeight: 500 }}>
                   {p.openToShop}
                 </span>
                 {/* Held-weekly comes from public.schedules, which has no rows yet. */}
-                <span className="mono text-right" style={{ fontSize: 15, color: "var(--ink-faint)" }}>
+                <span className="mono text-right hide-sm" style={{ fontSize: 15, color: "var(--ink-faint)" }}>
                   —
                 </span>
               </GridRow>
@@ -230,24 +235,24 @@ export default function StoreProducts() {
               </div>
               {selected.batches.length > 0 ? (
                 <>
-                  <GridRow cols="130px 1fr 96px 96px 96px" as="header">
+                  <GridRow cols="130px 1fr 96px 96px 96px" mobileCols="86px 1fr 74px" as="header">
                     <span>Produced</span>
                     <span>Source</span>
-                    <span className="text-right">Quantity</span>
-                    <span className="text-right">Reserved</span>
+                    <span className="text-right hide-sm">Quantity</span>
+                    <span className="text-right hide-sm">Reserved</span>
                     <span className="text-right">Available</span>
                   </GridRow>
                   {selected.batches.map((b) => {
                     const animal = b.herd_animal_id ? animalsById.get(b.herd_animal_id) : null;
                     const available = Math.round((Number(b.quantity) - Number(b.reserved)) * 1000) / 1000;
                     return (
-                      <GridRow cols="130px 1fr 96px 96px 96px" as="body" className="mono" key={b.id}>
+                      <GridRow cols="130px 1fr 96px 96px 96px" mobileCols="86px 1fr 74px" as="body" className="mono" key={b.id}>
                         <span>{b.produced_date}</span>
                         <span style={{ color: "var(--ink-muted)" }}>
                           {animal ? `${animal.barn_name ?? animal.ear_tag} · tag ${animal.ear_tag}` : "pooled"}
                         </span>
-                        <span className="text-right">{b.quantity}</span>
-                        <span className="text-right">{b.reserved}</span>
+                        <span className="text-right hide-sm">{b.quantity}</span>
+                        <span className="text-right hide-sm">{b.reserved}</span>
                         <span className="text-right" style={{ fontWeight: 500 }}>
                           {available}
                         </span>
@@ -264,13 +269,13 @@ export default function StoreProducts() {
                   <div className="eyebrow" style={{ margin: "20px 0 10px" }}>
                     Discarded
                   </div>
-                  <GridRow cols="130px 1fr 96px" as="header">
+                  <GridRow cols="130px 1fr 96px" mobileCols="86px 1fr 66px" as="header">
                     <span>Batch date</span>
                     <span>Reason</span>
                     <span className="text-right">Quantity</span>
                   </GridRow>
                   {discardsForSelected.map((d) => (
-                    <GridRow cols="130px 1fr 96px" as="body" className="mono" key={d.id}>
+                    <GridRow cols="130px 1fr 96px" mobileCols="86px 1fr 66px" as="body" className="mono" key={d.id}>
                       <span>{d.batch_produced_date ?? "—"}</span>
                       <span style={{ color: "var(--ochre)" }}>{d.reason}</span>
                       <span className="text-right">{d.quantity}</span>

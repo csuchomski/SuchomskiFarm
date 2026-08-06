@@ -71,3 +71,47 @@ button {
   border-top: 1px solid var(--hairline);
   margin: 0;
 }
+
+/* ── mobile foundations ────────────────────────────────────────────────
+   Applied everywhere rather than per-screen, because each of these is a
+   whole-page failure rather than a layout detail. */
+
+html,
+body {
+  /* One over-wide table shouldn't let the entire page slide sideways. */
+  overflow-x: hidden;
+}
+
+/* Long ear tags, notes and emails would otherwise push a grid track wider
+   than the screen and take the layout with them. */
+body {
+  overflow-wrap: break-word;
+}
+
+img,
+svg {
+  max-width: 100%;
+}
+
+@media (max-width: 860px) {
+  /* Safari zooms the whole page when a focused input is under 16px, and
+     doesn't zoom back out. Every text-entry control has to clear it. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  /* Comfortable tap targets. Inputs in this app are otherwise ~34px. */
+  input,
+  select,
+  button {
+    min-height: 44px;
+  }
+
+  /* …except where a control is deliberately inline in a row of text. */
+  .btn--sm,
+  .link-button {
+    min-height: 0;
+  }
+}

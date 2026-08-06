@@ -107,3 +107,30 @@ button.batch-entry__action:disabled {
 .attribution-cell--excluded {
   background: var(--hazard-yellow-wash-strong);
 }
+
+@media (max-width: 860px) {
+  /* 16px or Safari zooms on focus; see sign-in.css. */
+  .batch-entry__input,
+  .batch-entry__qty-input {
+    font-size: 16px;
+  }
+
+  .batch-entry {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+
+  .product-panel {
+    padding: 14px;
+  }
+
+  .product-panel__head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .batch-entry {
+    grid-template-columns: 1fr;
+  }
+}

@@ -17,6 +17,10 @@
   padding: 24px 32px 48px;
 }
 
+.ops-shell__scrim {
+  display: none;
+}
+
 .page-header {
   display: flex;
   align-items: flex-end;
@@ -24,6 +28,10 @@
   gap: 16px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--hairline);
+}
+
+.page-header__titles {
+  min-width: 0;
 }
 
 .page-header__title {
@@ -34,6 +42,7 @@
 .page-header__actions {
   display: flex;
   gap: 8px;
+  flex: none;
 }
 
 .stat-row {
@@ -53,11 +62,72 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
 .two-col {
   display: grid;
   grid-template-columns: 1fr 348px;
   gap: 32px;
+}
+
+/* ── tablet ────────────────────────────────────────────────────────────
+   The 348px sidebar stops earning its place before the rail does: at this
+   width the main column is already too narrow to read a table in. */
+@media (max-width: 1000px) {
+  .two-col {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+
+/* ── phone / small tablet ──────────────────────────────────────────────
+   The rail leaves the flow entirely and becomes a drawer; see rail.css. */
+@media (max-width: 860px) {
+  .ops-shell__main {
+    padding: 16px 16px 40px;
+  }
+
+  .page-header {
+    /* Title beside actions would leave ~120px for a 34px serif heading. */
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .page-header__title {
+    font-size: 26px;
+  }
+
+  .page-header__actions {
+    flex-wrap: wrap;
+  }
+
+  .stat-row {
+    /* 48px between four tiles pushes them off-screen, and flex-wrap drops
+       to one tile per line. A two-up grid stays readable at any width. */
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 20px;
+    padding: 16px 0 20px;
+  }
+
+  .ops-shell__scrim {
+    display: block;
+    position: fixed;
+    inset: var(--topbar-height) 0 0;
+    z-index: 30;
+    border: none;
+    padding: 0;
+    background: rgba(25, 26, 22, 0.4);
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@media (max-width: 420px) {
+  .stat-row {
+    gap: 14px 16px;
+  }
 }

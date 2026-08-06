@@ -22,6 +22,10 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 const money = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const COLS = "96px 1fr 140px 120px 120px 120px 110px";
+/** Seven tracks need ~800px. On a phone a ledger line is a date, what it
+ *  was, and how much — category, type, payer and account are detail you
+ *  open the entry for. */
+const COLS_SM = "72px 1fr 88px";
 
 export default function BooksTransactions() {
   // The business is chosen once, in the topbar, and every screen follows it —
@@ -328,13 +332,13 @@ export default function BooksTransactions() {
             </Callout>
           </div>
 
-          <GridRow cols={COLS} as="header">
+          <GridRow cols={COLS} mobileCols={COLS_SM} as="header">
             <span>Date</span>
             <span>Description</span>
-            <span>Category</span>
-            <span>Type</span>
-            <span>Payer</span>
-            <span>Account</span>
+            <span className="hide-sm">Category</span>
+            <span className="hide-sm">Type</span>
+            <span className="hide-sm">Payer</span>
+            <span className="hide-sm">Account</span>
             <span className="text-right">Amount</span>
           </GridRow>
 
@@ -343,16 +347,19 @@ export default function BooksTransactions() {
             const sign = direction === "income" ? "+" : direction === "expense" ? "−" : "";
             const label = types.get(t.type.trim())?.label ?? t.type ?? "(blank)";
             return (
-              <GridRow cols={COLS} as="body" className="mono" key={t.id}>
+              <GridRow cols={COLS} mobileCols={COLS_SM} as="body" className="mono" key={t.id}>
                 <span>{t.date}</span>
                 <span style={{ fontFamily: "var(--font-sans)" }}>{t.note || "—"}</span>
-                <span>{t.category}</span>
-                <span style={{ color: direction === "unknown" ? "var(--ochre)" : "var(--ink-muted)" }}>
+                <span className="hide-sm">{t.category}</span>
+                <span
+                  className="hide-sm"
+                  style={{ color: direction === "unknown" ? "var(--ochre)" : "var(--ink-muted)" }}
+                >
                   {label}
                   {direction === "unknown" && " ?"}
                 </span>
-                <span style={{ color: "var(--ink-muted)" }}>{t.payer || "—"}</span>
-                <span style={{ color: "var(--ink-muted)" }}>{t.account || "—"}</span>
+                <span className="hide-sm" style={{ color: "var(--ink-muted)" }}>{t.payer || "—"}</span>
+                <span className="hide-sm" style={{ color: "var(--ink-muted)" }}>{t.account || "—"}</span>
                 <span
                   className="text-right"
                   style={{

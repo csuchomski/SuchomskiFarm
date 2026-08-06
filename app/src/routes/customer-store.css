@@ -122,3 +122,11 @@
 .shop-note {
   padding: 24px 16px;
 }
+
+@media (max-width: 420px) {
+  .shop-hero,
+  .shop-section {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}

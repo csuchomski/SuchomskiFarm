@@ -26,6 +26,12 @@ import {
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 const COLS = "48px 100px 100px 64px 92px 1fr";
+/** Dry-off date drops on a phone. The last track stays — it carries the
+ *  row's actions, and hiding it would take "dry off" with it — but the
+ *  figures text inside it is hidden, so the cell narrows to its buttons.
+ *  Header and body must keep the same number of visible cells or every
+ *  column after the first hidden one shifts. */
+const COLS_SM = "32px 82px 42px 74px 1fr";
 
 type Load = { state: "loading" } | { state: "error"; message: string } | { state: "ok"; rows: RealLactation[] };
 
@@ -227,13 +233,15 @@ export function LactationSection({
 
       {rows.length > 0 && (
         <>
-          <GridRow cols={COLS} as="header">
+          <GridRow cols={COLS} mobileCols={COLS_SM} as="header">
             <span>№</span>
             <span>Fresh</span>
-            <span>Dry off</span>
+            <span className="hide-sm">Dry off</span>
             <span className="text-right">DIM</span>
             <span>Status</span>
-            <span>Peak · total · ME305</span>
+            <span>
+              <span className="hide-sm">Peak · total · ME305</span>
+            </span>
           </GridRow>
 
           {rows.map((l) => {
@@ -241,10 +249,13 @@ export function LactationSection({
             const dim = daysInMilk(l);
             return (
               <div key={l.id}>
-                <GridRow cols={COLS} as="body">
+                <GridRow cols={COLS} mobileCols={COLS_SM} as="body">
                   <span className="mono">{l.lactation_number}</span>
                   <span className="mono" style={{ fontSize: 13 }}>{l.fresh_date}</span>
-                  <span className="mono" style={{ fontSize: 13, color: l.dry_off_date ? undefined : "var(--ink-faint)" }}>
+                  <span
+                    className="mono hide-sm"
+                    style={{ fontSize: 13, color: l.dry_off_date ? undefined : "var(--ink-faint)" }}
+                  >
                     {l.dry_off_date ?? "—"}
                   </span>
                   <span className="mono text-right">{dim ?? "—"}</span>
@@ -253,8 +264,11 @@ export function LactationSection({
                       {status === "in-milk" ? "In milk" : status === "dry" ? "Dry" : "Scheduled"}
                     </Pill>
                   </span>
-                  <span style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
-                    <span className="mono" style={{ color: l.peak_milk_lb === null ? "var(--ink-faint)" : undefined }}>
+                  <span style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <span
+                      className="mono hide-sm"
+                      style={{ color: l.peak_milk_lb === null ? "var(--ink-faint)" : undefined }}
+                    >
                       {l.peak_milk_lb !== null ? `${l.peak_milk_lb} lb` : "—"}
                       {l.peak_dim !== null && ` @ ${l.peak_dim}d`}
                       {" · "}

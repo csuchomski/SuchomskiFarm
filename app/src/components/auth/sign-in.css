@@ -27,3 +27,28 @@
   outline: 2px solid var(--herd-green);
   outline-offset: 1px;
 }
+
+/* Safari zooms into any focused control under 16px and never zooms back
+   out. The global `input` rule in global.css is outranked by these class
+   selectors, so each one has to opt in at its own specificity. */
+@media (max-width: 860px) {
+  .sign-in-field {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 420px) {
+  .sign-in-card {
+    /* A fixed 340px card overflows a 360px viewport once the page has any
+       padding, and sign-in is the one screen nobody can route around. */
+    width: 100%;
+    max-width: 340px;
+    padding: 24px 20px;
+  }
+
+  .sign-in-page {
+    padding: 16px;
+    align-items: flex-start;
+    padding-top: 12vh;
+  }
+}

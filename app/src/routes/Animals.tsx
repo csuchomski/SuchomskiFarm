@@ -22,6 +22,9 @@ type Fetch =
 type SortKey = "name" | "tag" | "age" | "class";
 
 const COLS = "60px 1fr 110px 110px 96px";
+/** Class and age go on a phone: class is already repeated under the name,
+ *  and age is reference rather than something you scan a list for. */
+const COLS_SM = "44px 1fr 84px";
 
 export default function Animals() {
   const navigate = useNavigate();
@@ -161,17 +164,17 @@ export default function Animals() {
 
       {result.state === "ok" && (
         <>
-          <GridRow cols={COLS} as="header">
+          <GridRow cols={COLS} mobileCols={COLS_SM} as="header">
             <span>Tag</span>
             <span>Animal</span>
-            <span>Class</span>
+            <span className="hide-sm">Class</span>
             <span>Status</span>
-            <span className="text-right">Age</span>
+            <span className="text-right hide-sm">Age</span>
           </GridRow>
 
           {visible.map((a) => (
             <Link key={a.id} to={`/animals/${a.ear_tag}`} style={{ color: "inherit", display: "contents" }}>
-              <GridRow cols={COLS} as="body" highlight={a.status !== "active"}>
+              <GridRow cols={COLS} mobileCols={COLS_SM} as="body" highlight={a.status !== "active"}>
                 <EarTag tag={a.ear_tag} accent="herd" />
                 <span>
                   <span className="serif" style={{ fontSize: 17 }}>
@@ -182,11 +185,11 @@ export default function Animals() {
                     {[describeBreeding(breeds.get(a.id)), a.sex].filter(Boolean).join(" · ")}
                   </span>
                 </span>
-                <span style={{ fontSize: 13 }}>{a.class}</span>
+                <span className="hide-sm" style={{ fontSize: 13 }}>{a.class}</span>
                 <span>
                   <Pill variant={a.status === "active" ? "outline-green" : "outline"}>{a.status}</Pill>
                 </span>
-                <span className="mono text-right" style={{ fontSize: 15 }}>
+                <span className="mono text-right hide-sm" style={{ fontSize: 15 }}>
                   {formatAge(a.birth_date)}
                 </span>
               </GridRow>

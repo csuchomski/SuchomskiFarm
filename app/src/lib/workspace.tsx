@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "./supabase";
+import { useAuth } from "./auth";
 
 /**
  * The current workspace: which business you're working in, what modules it
@@ -79,19 +80,48 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setSelectedId(id);
   }, []);
 
+  /**
+   * The workspace follows the session rather than asking for it once.
+   *
+   * This provider wraps the sign-in screen, so it mounts while you're still
+   * signed out. It used to call supabase.auth.getUser() in an effect keyed
+   * only on [selectedId]: on a fresh sign-in that ran before a session
+   * existed, resolved to no user, and never ran again — leaving businesses
+   * empty for the whole session and the app reporting "you're not a member
+   * of any business yet" to an owner of three. Keying on the signed-in user
+   * id is what makes signing in re-run it.
+   */
+  const { session, loading: authLoading } = useAuth();
+  const userId = session?.user?.id ?? null;
+
   useEffect(() => {
     let cancelled = false;
 
+    // Deciding anything before auth has resolved produces exactly the stale
+    // empty state this comment is about.
+    if (authLoading) return;
+
+    if (userId === null) {
+      setState({
+        loading: false,
+        error: null,
+        businesses: [],
+        business: null,
+        modules: [],
+        farmId: null,
+        role: null,
+        userId: null,
+        migrated: false,
+      });
+      return;
+    }
+
+    // A different user must not briefly see the previous one's businesses.
+    setState((s) => (s.userId === userId ? s : { ...s, loading: true, businesses: [], business: null }));
+
     (async () => {
       try {
-        const { data: userData } = await supabase.auth.getUser();
-        const user = userData.user;
-        if (!user) {
-          if (!cancelled) setState((s) => ({ ...s, loading: false }));
-          return;
-        }
-
-        const membership = await loadMembership(user.id);
+        const membership = await loadMembership(userId);
         if (cancelled) return;
 
         const businesses = membership.businesses;
@@ -115,7 +145,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           modules,
           farmId,
           role: membership.roleFor(chosen?.id ?? -1),
-          userId: user.id,
+          userId,
           migrated: membership.migrated,
         });
       } catch (err) {
@@ -128,7 +158,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [selectedId]);
+  }, [selectedId, userId, authLoading]);
 
   const value = useMemo<WorkspaceState>(() => ({ ...state, setBusinessId }), [state, setBusinessId]);
 

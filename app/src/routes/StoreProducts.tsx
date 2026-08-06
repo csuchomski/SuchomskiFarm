@@ -1,15 +1,31 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, EarTag, GridRow } from "../components/ui";
 import { addInventoryBatch, fetchStoreData, formatUnitPrice, type StoreData } from "../lib/store-data";
 import { fetchAnimals, type RealAnimal } from "../lib/herd";
+import { fetchLactations, openLactation, type RealLactation } from "../lib/lactations";
+import {
+  enteredEntries,
+  fetchMilkProduct,
+  recordMilkings,
+  totalOf,
+  validateMilkings,
+  type MilkingEntry,
+} from "../lib/milkings";
 import { useWorkspace } from "../lib/workspace";
 import "./store-products.css";
 
 type Fetch =
   | { state: "loading" }
   | { state: "error"; message: string }
-  | { state: "ok"; data: StoreData; animals: RealAnimal[] };
+  | {
+      state: "ok";
+      data: StoreData;
+      animals: RealAnimal[];
+      lactations: RealLactation[];
+      milkProductId: number | null;
+    };
 
 type Save = { state: "idle" } | { state: "saving" } | { state: "saved" } | { state: "error"; message: string };
 
@@ -25,10 +41,23 @@ export default function StoreProducts() {
   const [quantity, setQuantity] = useState("");
   const [save, setSave] = useState<Save>({ state: "idle" });
 
+  // Per-animal attribution. Empty means a plain batch with no animal behind
+  // it, which is still valid — eggs and pork have no cow.
+  const [showPerAnimal, setShowPerAnimal] = useState(false);
+  const [perAnimal, setPerAnimal] = useState<Record<string, string>>({});
+
   const load = useCallback(async () => {
     if (businessId === null) return;
-    const [data, animals] = await Promise.all([fetchStoreData({ businessId, farmId }), fetchAnimals()]);
-    setResult({ state: "ok", data, animals });
+    const [data, animals, lactations, milkProduct] = await Promise.all([
+      fetchStoreData({ businessId, farmId }),
+      fetchAnimals(),
+      farmId ? fetchLactations(farmId) : Promise.resolve([] as RealLactation[]),
+      // Asked for separately because fetchStoreData doesn't select
+      // type_code, and matching on the name alone would call "Milk soap"
+      // milk. Same lookup the Milkings page uses, so they agree.
+      fetchMilkProduct(businessId),
+    ]);
+    setResult({ state: "ok", data, animals, lactations, milkProductId: milkProduct?.id ?? null });
     // Reset rather than preserve: the previously selected product belongs to
     // the business we just switched away from.
     setSelectedId(data.products.find((p) => p.batches.length > 0)?.id ?? data.products[0]?.id ?? null);
@@ -47,22 +76,59 @@ export default function StoreProducts() {
 
   const data = result.state === "ok" ? result.data : null;
   const selected = data?.products.find((p) => p.id === selectedId) ?? null;
-  const animalsById = new Map((result.state === "ok" ? result.animals : []).map((a) => [a.id, a]));
+  const allAnimals = result.state === "ok" ? result.animals : [];
+  const lactations = result.state === "ok" ? result.lactations : [];
+  const animalsById = new Map(allAnimals.map((a) => [a.id, a]));
+
+  // Per-animal only applies to milk. Attributing eggs to a lactating cow
+  // would be nonsense, and "in lactation" has no meaning for pork.
+  const milkProductId = result.state === "ok" ? result.milkProductId : null;
+  const isMilk = selected !== null && milkProductId !== null && selected.id === milkProductId;
+
+  // Only cows currently milking, which is what was asked for: a dry cow or
+  // a heifer can't have produced today's milk.
+  const lactatingCows = isMilk
+    ? allAnimals.filter((a) => openLactation(lactations.filter((l) => l.animal_id === a.id)) !== null)
+    : [];
+
+  const sheet: MilkingEntry[] = lactatingCows.map((a) => ({ animalId: a.id, quantity: perAnimal[a.id] ?? "" }));
+  const perAnimalTotal = totalOf(sheet);
+  const usingPerAnimal = showPerAnimal && enteredEntries(sheet).length > 0;
 
   const productionForSelected = selected
     ? data!.production.filter((r) => r.product_id === selected.id)
     : [];
   const discardsForSelected = selected ? data!.discards.filter((d) => d.product_id === selected.id) : [];
 
-  const qtyNum = Number(quantity);
-  const canSave = selected !== null && date !== "" && quantity.trim() !== "" && !Number.isNaN(qtyNum) && qtyNum > 0;
+  const qtyNum = usingPerAnimal ? perAnimalTotal : Number(quantity);
+  const perAnimalProblem = usingPerAnimal ? validateMilkings(sheet, todayIso(), date) : null;
+  const canSave =
+    selected !== null &&
+    date !== "" &&
+    perAnimalProblem === null &&
+    (usingPerAnimal ? perAnimalTotal > 0 : quantity.trim() !== "" && !Number.isNaN(qtyNum) && qtyNum > 0);
 
   const handleAddBatch = async () => {
     if (!canSave || !selected || businessId === null) return;
     setSave({ state: "saving" });
     try {
-      await addInventoryBatch({ businessId, productId: selected.id, producedDate: date, quantity: qtyNum });
+      if (usingPerAnimal && farmId) {
+        // Goes through the same path as the Milkings page, so a batch
+        // entered here and one entered there can't behave differently.
+        await recordMilkings({
+          farmId,
+          businessId,
+          productId: selected.id,
+          productName: selected.name,
+          unit: selected.unit,
+          producedDate: date,
+          entries: enteredEntries(sheet),
+        });
+      } else {
+        await addInventoryBatch({ businessId, productId: selected.id, producedDate: date, quantity: qtyNum });
+      }
       setQuantity("");
+      setPerAnimal({});
       await load();
       setSave({ state: "saved" });
       setTimeout(() => setSave((s) => (s.state === "saved" ? { state: "idle" } : s)), 4000);
@@ -170,15 +236,33 @@ export default function StoreProducts() {
                     min="0"
                     step="0.001"
                     placeholder="0.000"
-                    value={quantity}
+                    /* Derived, not typed, once cows are entered — two
+                       numbers that could disagree would leave no way to
+                       tell which one the batch actually holds. */
+                    value={usingPerAnimal ? String(perAnimalTotal) : quantity}
+                    readOnly={usingPerAnimal}
                     onChange={(e) => setQuantity(e.target.value)}
                     aria-label="Quantity"
                   />
                   <span style={{ fontSize: 13, color: "var(--ink-muted)", marginLeft: 8 }}>{selected.unit}</span>
                 </div>
-                <div className="batch-entry__action" style={{ opacity: 0.4 }} title="Per-animal split isn't wired up yet">
-                  Per animal
-                </div>
+                {isMilk ? (
+                  <button
+                    className={`batch-entry__action ${showPerAnimal ? "batch-entry__action--on" : ""}`}
+                    onClick={() => setShowPerAnimal((v) => !v)}
+                    aria-expanded={showPerAnimal}
+                  >
+                    {usingPerAnimal ? `${enteredEntries(sheet).length} cow${enteredEntries(sheet).length === 1 ? "" : "s"}` : "Per animal"}
+                  </button>
+                ) : (
+                  <div
+                    className="batch-entry__action"
+                    style={{ opacity: 0.4 }}
+                    title={`Per-animal attribution applies to milk, not ${selected.name.toLowerCase()}`}
+                  >
+                    Per animal
+                  </div>
+                )}
                 <button
                   className="batch-entry__action batch-entry__action--filled"
                   onClick={() => void handleAddBatch()}
@@ -187,6 +271,50 @@ export default function StoreProducts() {
                   {save.state === "saving" ? "Saving…" : "Add batch"}
                 </button>
               </div>
+
+              {isMilk && showPerAnimal && (
+                <div className="per-animal">
+                  <div className="eyebrow" style={{ marginBottom: 8 }}>
+                    Milk from each cow
+                  </div>
+                  {lactatingCows.length === 0 ? (
+                    <p style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+                      No cow has an open lactation, so there's nobody to attribute this milk to. Record a freshening
+                      from <Link to="/lactations">Lactations</Link> and she'll appear here.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="per-animal__grid">
+                        {lactatingCows.map((a) => (
+                          <label key={a.id} className="per-animal__row">
+                            <EarTag tag={a.ear_tag} accent="herd" />
+                            <span className="per-animal__name">{a.barn_name ?? `Tag ${a.ear_tag}`}</span>
+                            <input
+                              className="per-animal__qty mono"
+                              type="number"
+                              min="0"
+                              step="0.001"
+                              inputMode="decimal"
+                              placeholder="—"
+                              aria-label={`${selected.unit} from ${a.barn_name ?? a.ear_tag}`}
+                              value={perAnimal[a.id] ?? ""}
+                              onChange={(ev) => setPerAnimal((m) => ({ ...m, [a.id]: ev.target.value }))}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 10 }}>
+                        {usingPerAnimal
+                          ? `${perAnimalTotal} ${selected.unit} across ${enteredEntries(sheet).length} cow${enteredEntries(sheet).length === 1 ? "" : "s"} — the batch quantity above follows this sum.`
+                          : `Leave a cow blank if she wasn't milked. Blank is not the same as zero.`}
+                      </p>
+                      {perAnimalProblem && (
+                        <p style={{ fontSize: 13, color: "var(--red)", marginTop: 6 }}>{perAnimalProblem}</p>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
 
               {save.state === "saved" && (
                 <p style={{ fontSize: 13, color: "var(--herd-green)", marginTop: -8, marginBottom: 16 }}>

@@ -134,3 +134,76 @@ button.batch-entry__action:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* An open toggle, not a second primary action. Filling it the same black
+   as "Add batch" put two identical dark bars side by side with no way to
+   tell which one saves. */
+.batch-entry__action--on {
+  background: var(--paper-tint);
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+/* Per-animal attribution on the batch form. */
+.per-animal {
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.per-animal__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 8px 16px;
+}
+
+.per-animal__row {
+  display: grid;
+  grid-template-columns: 52px 1fr 96px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.per-animal__name {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.per-animal__qty {
+  min-height: 40px;
+  width: 100%;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 15px;
+  text-align: right;
+}
+
+.per-animal__qty:focus-visible {
+  outline: 2px solid var(--herd-green);
+  outline-offset: 1px;
+}
+
+@media (max-width: 860px) {
+  .per-animal {
+    padding: 12px;
+  }
+
+  .per-animal__grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* 16px or Safari zooms on focus; see sign-in.css. */
+  .per-animal__qty {
+    font-size: 16px;
+    min-height: 44px;
+  }
+}

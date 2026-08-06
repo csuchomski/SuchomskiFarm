@@ -43,7 +43,19 @@ const STORAGE_KEY = "suchomski.businessId";
 
 const WorkspaceContext = createContext<WorkspaceState | null>(null);
 
-const missingRelation = (message: string) => /does not exist|schema cache|not find the table|relation/i.test(message);
+/**
+ * True only for "that table hasn't been created yet", which is the one
+ * failure the fallback path below is meant to absorb.
+ *
+ * The bare word `relation` used to be in here, and it matched
+ * "infinite recursion detected in policy for relation business_members" —
+ * a broken RLS policy, reported as a missing table. The provider then fell
+ * back to its pre-006 path, which can only return the single farm business,
+ * so the switcher silently vanished instead of anything surfacing the error.
+ * Matching on the phrases that mean absence keeps a live fault loud.
+ */
+export const missingRelation = (message: string) =>
+  /does not exist|schema cache|not find the table|relation .* does not exist/i.test(message);
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<Omit<WorkspaceState, "setBusinessId">>({

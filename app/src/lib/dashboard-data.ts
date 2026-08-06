@@ -79,34 +79,75 @@ async function fetchProducts(): Promise<ProductRow[]> {
   return (without.data ?? []) as ProductRow[];
 }
 
-export async function fetchDashboardData(todayIso: string): Promise<DashboardData> {
+/**
+ * Which business's Today this is. Herd records hang off a farm, the ledger
+ * hangs off a business, and the two ids are not interchangeable — see
+ * docs/books-herd-link.md.
+ */
+export interface DashboardScope {
+  businessId: number;
+  farmId: string | null;
+}
+
+/** Stands in for a query that wasn't worth running. A business with no farm
+ * has no herd rows by definition, so asking is a round trip to learn nothing. */
+const NO_ROWS = { data: [] as never[], error: null } as const;
+
+export async function fetchDashboardData(todayIso: string, scope: DashboardScope): Promise<DashboardData> {
   const monthStart = `${todayIso.slice(0, 7)}-01`;
+  const { businessId, farmId } = scope;
 
   const [animalsRes, productionRes, batchesRes, productsRes, ordersRes, txnRes, typesRes, costRes, revenueRes] =
     await Promise.all([
-      supabase
-        .schema("herd")
-        .from("animals")
-        .select("id, ear_tag, barn_name, sex, class, status, birth_date")
-        .is("deleted_at", null)
-        .order("barn_name"),
-      supabase
-        .schema("herd")
-        .from("production_records")
-        .select("id, animal_id, product_id, product_name, quantity, unit, produced_date, batch_id")
-        .eq("produced_date", todayIso)
-        .is("deleted_at", null),
+      farmId
+        ? supabase
+            .schema("herd")
+            .from("animals")
+            .select("id, ear_tag, barn_name, sex, class, status, birth_date")
+            .eq("farm_id", farmId)
+            .is("deleted_at", null)
+            .order("barn_name")
+        : Promise.resolve(NO_ROWS),
+      farmId
+        ? supabase
+            .schema("herd")
+            .from("production_records")
+            .select("id, animal_id, product_id, product_name, quantity, unit, produced_date, batch_id")
+            .eq("farm_id", farmId)
+            .eq("produced_date", todayIso)
+            .is("deleted_at", null)
+        : Promise.resolve(NO_ROWS),
+      // The store tables (inventory_batches, orders, products) carry neither
+      // business_id nor farm_id, so these three can't be scoped and are read
+      // whole. Harmless while `store` is a farm-only module and exactly one
+      // farm exists; a second farm makes it wrong, and the fix is a
+      // migration adding the column, not a filter here.
       supabase.from("inventory_batches").select("id, product_id, produced_date, quantity, reserved"),
       fetchProducts(),
       supabase.from("orders").select("id, status, picked_up_date, cancelled_date"),
       supabase
         .from("ledger_transactions")
         .select("id, business_id, date, type, category, amount, note, payer, account")
+        .eq("business_id", businessId)
         .gte("date", monthStart)
         .lte("date", todayIso),
       supabase.from("transaction_types").select("code, label, direction, active, sort_order"),
-      supabase.schema("herd").from("cost_entries").select("animal_id, amount_cents").is("deleted_at", null),
-      supabase.schema("herd").from("revenue_entries").select("animal_id, amount_cents").is("deleted_at", null),
+      farmId
+        ? supabase
+            .schema("herd")
+            .from("cost_entries")
+            .select("animal_id, amount_cents")
+            .eq("farm_id", farmId)
+            .is("deleted_at", null)
+        : Promise.resolve(NO_ROWS),
+      farmId
+        ? supabase
+            .schema("herd")
+            .from("revenue_entries")
+            .select("animal_id, amount_cents")
+            .eq("farm_id", farmId)
+            .is("deleted_at", null)
+        : Promise.resolve(NO_ROWS),
     ]);
 
   // productsRes is already unwrapped — fetchProducts() throws on failure

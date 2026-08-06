@@ -63,3 +63,29 @@ export const allGroups: NavGroup[] = [
 export function groupsForModules(modules: string[]): NavGroup[] {
   return allGroups.filter((g) => modules.includes(g.module));
 }
+
+/**
+ * The module a path belongs to, or null when the path isn't module-gated —
+ * the home route, which every business has whatever its type.
+ *
+ * Derived from `allGroups` rather than a second hand-maintained table, so a
+ * nav item added above is gated automatically. The two can't drift apart,
+ * because there's only one of them.
+ *
+ * Matching is by longest prefix so a record page (/animals/1103) gates the
+ * same as its index (/animals) without needing its own entry.
+ */
+export function moduleForPath(path: string): string | null {
+  let best: { module: string; length: number } | null = null;
+
+  for (const group of allGroups) {
+    for (const item of group.items) {
+      // "/" would prefix-match everything; it's the ungated home route.
+      if (!item.to || item.to === "/") continue;
+      if (path !== item.to && !path.startsWith(`${item.to}/`)) continue;
+      if (!best || item.to.length > best.length) best = { module: group.module, length: item.to.length };
+    }
+  }
+
+  return best?.module ?? null;
+}

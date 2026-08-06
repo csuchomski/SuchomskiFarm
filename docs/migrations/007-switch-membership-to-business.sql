@@ -94,8 +94,19 @@ commit;
 -- ---------------------------------------------------------------------------
 -- ROLLBACK — the live definitions as dumped from pg_proc, verbatim.
 --
+-- Re-dumped 2026-08-06 with database access. An earlier copy of this block
+-- dropped the `set search_path` clause both functions carry, which would have
+-- restored them subtly weakened rather than unchanged: search_path is a
+-- security control on a SECURITY DEFINER function, and a rollback that
+-- silently relaxes one is not a rollback. Kept exact below.
+--
 --   create or replace function herd.is_farm_member(f uuid)
---   returns boolean language sql stable security definer as $$
+--   returns boolean
+--   language sql
+--   stable
+--   security definer
+--   set search_path to 'herd'
+--   as $$
 --     select exists (
 --       select 1 from herd.farm_members m
 --       where m.farm_id = f and m.user_id = auth.uid()
@@ -103,7 +114,12 @@ commit;
 --   $$;
 --
 --   create or replace function herd.can_write_farm(f uuid)
---   returns boolean language sql stable security definer as $$
+--   returns boolean
+--   language sql
+--   stable
+--   security definer
+--   set search_path to 'herd'
+--   as $$
 --     select exists (
 --       select 1 from herd.farm_members m
 --       where m.farm_id = f

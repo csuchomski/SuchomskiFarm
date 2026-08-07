@@ -77,8 +77,10 @@ Four items were reviewed and are no longer open.
 - **Migration 008** — was *already run*, and had been for some time. The
   migrations README said otherwise, which is exactly the failure its own
   header warns about: check the database, don't trust the table. Milk
-  detection has had `type_code` to work from all along; the name-matching
-  fallback in `findMilkProduct` is dead weight rather than the live path.
+  detection has had `type_code` to work from all along, so `findMilkProduct`
+  resolves on type rather than on the name. The name-match fallback stays:
+  the backfill was deliberately conservative and left one product untyped,
+  and a product added without a type would otherwise be invisible to it.
 - **Migration 002** — run. Two nullable columns linking `herd.cost_entries`
   and `herd.revenue_entries` to a ledger transaction. Its stated dependency
   on 001 was stale: 001 was superseded, and the cross-tenant hole it existed

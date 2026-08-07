@@ -2,7 +2,23 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, EarTag, GridRow } from "../components/ui";
-import { addInventoryBatch, fetchStoreData, formatUnitPrice, type StoreData } from "../lib/store-data";
+import {
+  addInventoryBatch,
+  createProduct,
+  discardInventory,
+  DISCARD_REASONS,
+  fetchStoreData,
+  formatUnitPrice,
+  PRODUCT_TYPES,
+  updateProduct,
+  validateDiscard,
+  validateProduct,
+  type DiscardReason,
+  type ProductDraft,
+  type StoreData,
+} from "../lib/store-data";
+import { fetchSchedules, type Schedule } from "../lib/schedules";
+import { weeklyCommitment } from "../lib/forecast";
 import { fetchAnimals, type RealAnimal } from "../lib/herd";
 import { fetchLactations, openLactation, type RealLactation } from "../lib/lactations";
 import {
@@ -30,6 +46,14 @@ type Fetch =
 
 type Save = { state: "idle" } | { state: "saving" } | { state: "saved" } | { state: "error"; message: string };
 
+const emptyDraft = (): ProductDraft => ({
+  name: "",
+  unit: "",
+  price: "",
+  forecastOverride: "",
+  typeCode: "",
+});
+
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export default function StoreProducts() {
@@ -42,6 +66,22 @@ export default function StoreProducts() {
   const [quantity, setQuantity] = useState("");
   const [save, setSave] = useState<Save>({ state: "idle" });
 
+  // Standing orders, for the "held weekly" column — it read "—" because
+  // public.schedules had no rows and no UI. It has both now.
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+
+  // Creating and editing a product. "New product" was a button with no
+  // onClick; there was no way to add one, or to change a price that every
+  // order is costed from.
+  const [productForm, setProductForm] = useState<{ mode: "new" | "edit"; id: number | null } | null>(null);
+  const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
+
+  // Throwing stock away. discard_inventory has existed all along; the page
+  // listed discards without any way to record one.
+  const [discarding, setDiscarding] = useState(false);
+  const [discardQty, setDiscardQty] = useState("");
+  const [discardReason, setDiscardReason] = useState<string>(DISCARD_REASONS[0]);
+
   // Per-animal attribution. Empty means a plain batch with no animal behind
   // it, which is still valid — eggs and pork have no cow.
   const [showPerAnimal, setShowPerAnimal] = useState(false);
@@ -49,7 +89,7 @@ export default function StoreProducts() {
 
   const load = useCallback(async () => {
     if (businessId === null) return;
-    const [data, animals, lactations, milkProduct] = await Promise.all([
+    const [data, animals, lactations, milkProduct, standing] = await Promise.all([
       fetchStoreData({ businessId, farmId }),
       fetchAnimals(),
       farmId ? fetchLactations(farmId) : Promise.resolve([] as RealLactation[]),
@@ -57,8 +97,10 @@ export default function StoreProducts() {
       // type_code, and matching on the name alone would call "Milk soap"
       // milk. Same lookup the Milkings page uses, so they agree.
       fetchMilkProduct(businessId),
+      fetchSchedules(businessId),
     ]);
     setResult({ state: "ok", data, animals, lactations, milkProductId: milkProduct?.id ?? null });
+    setSchedules(standing);
     // Reset rather than preserve: the previously selected product belongs to
     // the business we just switched away from.
     setSelectedId(data.products.find((p) => p.batches.length > 0)?.id ?? data.products[0]?.id ?? null);
@@ -151,6 +193,43 @@ export default function StoreProducts() {
     }
   };
 
+  const productProblem = productForm ? validateProduct(draft) : null;
+  const discardProblem = selected
+    ? validateDiscard({ quantity: discardQty, reason: discardReason, available: selected.openToShop })
+    : null;
+
+  const handleSaveProduct = async () => {
+    if (!productForm || productProblem || businessId === null) return;
+    setSave({ state: "saving" });
+    try {
+      if (productForm.mode === "edit" && productForm.id !== null) await updateProduct(productForm.id, draft);
+      else await createProduct(businessId, draft);
+      await load();
+      setProductForm(null);
+      setSave({ state: "idle" });
+    } catch (err) {
+      setSave({ state: "error", message: err instanceof Error ? err.message : String(err) });
+    }
+  };
+
+  const handleDiscard = async () => {
+    if (!selected || discardProblem) return;
+    setSave({ state: "saving" });
+    try {
+      await discardInventory({
+        productId: selected.id,
+        quantity: Number(discardQty),
+        reason: discardReason as DiscardReason,
+      });
+      await load();
+      setDiscarding(false);
+      setDiscardQty("");
+      setSave({ state: "idle" });
+    } catch (err) {
+      setSave({ state: "error", message: err instanceof Error ? err.message : String(err) });
+    }
+  };
+
   return (
     <OpsShell>
       <PageHeader
@@ -158,8 +237,20 @@ export default function StoreProducts() {
         title="Products"
         actions={
           <>
-            <Button>Forecast</Button>
-            <Button variant="filled">New product</Button>
+            <Link to="/store/forecast">
+              <Button>Forecast</Button>
+            </Link>
+            <Button
+              variant="filled"
+              disabled={!data || businessId === null}
+              onClick={() => {
+                setProductForm(productForm ? null : { mode: "new", id: null });
+                setDraft(emptyDraft());
+                setSave({ state: "idle" });
+              }}
+            >
+              {productForm?.mode === "new" ? "Cancel" : "New product"}
+            </Button>
           </>
         }
       />
@@ -169,6 +260,94 @@ export default function StoreProducts() {
       )}
       {result.state === "error" && (
         <p style={{ fontSize: 14, color: "var(--red)", padding: "16px 8px" }}>Couldn't load the store: {result.message}</p>
+      )}
+
+      {data && productForm && (
+        <div className="product-form">
+          <div className="eyebrow" style={{ marginBottom: 8 }}>
+            {productForm.mode === "edit" ? "Edit product" : "New product"}
+          </div>
+          <div className="product-form__fields">
+            <label style={{ fontSize: 13 }}>
+              <div className="eyebrow">Name</div>
+              <input
+                className="order-select"
+                value={draft.name}
+                placeholder="Raw milk"
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              />
+            </label>
+            <label style={{ fontSize: 13 }}>
+              <div className="eyebrow">Sold by</div>
+              <input
+                className="order-select"
+                value={draft.unit}
+                placeholder="gallon"
+                onChange={(e) => setDraft({ ...draft, unit: e.target.value })}
+              />
+            </label>
+            <label style={{ fontSize: 13 }}>
+              <div className="eyebrow">Price</div>
+              <input
+                className="order-select"
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                placeholder="—"
+                value={draft.price}
+                onChange={(e) => setDraft({ ...draft, price: e.target.value })}
+              />
+            </label>
+            <label style={{ fontSize: 13 }}>
+              <div className="eyebrow">Type</div>
+              <select
+                className="order-select"
+                value={draft.typeCode}
+                onChange={(e) => setDraft({ ...draft, typeCode: e.target.value })}
+              >
+                <option value="">Not set</option>
+                {PRODUCT_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label style={{ fontSize: 13 }}>
+              <div className="eyebrow">Expected weekly</div>
+              <input
+                className="order-select"
+                type="number"
+                min="0"
+                step="0.001"
+                inputMode="decimal"
+                placeholder="from history"
+                value={draft.forecastOverride}
+                onChange={(e) => setDraft({ ...draft, forecastOverride: e.target.value })}
+              />
+            </label>
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <Button
+              variant="filled"
+              size="sm"
+              disabled={productProblem !== null || save.state === "saving"}
+              onClick={() => void handleSaveProduct()}
+            >
+              {save.state === "saving" ? "Saving…" : "Save"}
+            </Button>
+            <Button size="sm" onClick={() => setProductForm(null)}>
+              Cancel
+            </Button>
+            {productProblem && <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>{productProblem}</span>}
+            {save.state === "error" && <span style={{ fontSize: 13, color: "var(--red)" }}>{save.message}</span>}
+          </div>
+          <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 12 }}>
+            The price is what every order is costed from when it's collected. "Expected weekly" overrides the
+            forecast's own estimate — leave it blank and it works the rate out from the last fortnight.
+          </p>
+        </div>
       )}
 
       {data && (
@@ -213,9 +392,16 @@ export default function StoreProducts() {
                 <span className="mono text-right" style={{ fontSize: 15, fontWeight: 500 }}>
                   {p.openToShop}
                 </span>
-                {/* Held-weekly comes from public.schedules, which has no rows yet. */}
-                <span className="mono text-right hide-sm" style={{ fontSize: 15, color: "var(--ink-faint)" }}>
-                  —
+                {/* Held weekly: what standing orders have promised. This
+                    was a hard-coded "—" while public.schedules had no rows. */}
+                <span
+                  className="mono text-right hide-sm"
+                  style={{
+                    fontSize: 15,
+                    color: weeklyCommitment(schedules, p.id) > 0 ? undefined : "var(--ink-faint)",
+                  }}
+                >
+                  {weeklyCommitment(schedules, p.id) || "—"}
                 </span>
               </GridRow>
             </div>
@@ -230,7 +416,94 @@ export default function StoreProducts() {
                 <span className="mono" style={{ fontSize: 13, color: "var(--ink-muted)" }}>
                   {selected.unit} · {formatUnitPrice(selected)}
                 </span>
+                <span style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="link-button mono"
+                    onClick={() => {
+                      setProductForm({ mode: "edit", id: selected.id });
+                      setDraft({
+                        name: selected.name,
+                        unit: selected.unit,
+                        price: selected.price === null ? "" : String(selected.price),
+                        forecastOverride:
+                          selected.forecast_override === null ? "" : String(selected.forecast_override),
+                        typeCode: "",
+                      });
+                      setSave({ state: "idle" });
+                    }}
+                  >
+                    edit
+                  </button>
+                  {selected.openToShop > 0 && (
+                    <button
+                      type="button"
+                      className="link-button mono"
+                      onClick={() => {
+                        setDiscarding((v) => !v);
+                        setDiscardQty("");
+                        setSave({ state: "idle" });
+                      }}
+                    >
+                      {discarding ? "cancel" : "discard"}
+                    </button>
+                  )}
+                </span>
               </div>
+
+              {discarding && (
+                <div className="product-form" style={{ marginTop: 12 }}>
+                  <div className="eyebrow" style={{ marginBottom: 8 }}>
+                    Throw out {selected.name.toLowerCase()}
+                  </div>
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+                    <label style={{ fontSize: 13 }}>
+                      <div className="eyebrow">How much</div>
+                      <input
+                        className="order-select"
+                        style={{ width: 110 }}
+                        type="number"
+                        min="0"
+                        max={selected.openToShop}
+                        step="0.001"
+                        inputMode="decimal"
+                        aria-label="Quantity to discard"
+                        value={discardQty}
+                        onChange={(e) => setDiscardQty(e.target.value)}
+                      />
+                    </label>
+                    <label style={{ fontSize: 13 }}>
+                      <div className="eyebrow">Reason</div>
+                      <select
+                        className="order-select"
+                        value={discardReason}
+                        onChange={(e) => setDiscardReason(e.target.value)}
+                      >
+                        {DISCARD_REASONS.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <Button
+                      variant="filled"
+                      size="sm"
+                      disabled={discardProblem !== null || save.state === "saving"}
+                      onClick={() => void handleDiscard()}
+                    >
+                      {save.state === "saving" ? "Saving…" : "Discard"}
+                    </Button>
+                    <span style={{ fontSize: 13, color: "var(--ink-muted)", flexBasis: "100%" }}>
+                      {discardProblem ??
+                        `${selected.openToShop} ${selected.unit} unreserved. Stock already promised to an order can't be discarded.`}
+                    </span>
+                    {save.state === "error" && (
+                      <span style={{ fontSize: 13, color: "var(--red)", flexBasis: "100%" }}>{save.message}</span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="eyebrow" style={{ margin: "16px 0 10px" }}>
                 Add a batch of {selected.name.toLowerCase()}

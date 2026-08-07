@@ -130,3 +130,49 @@
     padding-right: 12px;
   }
 }
+
+/* Starting a weekly pickup, from the shop. Deliberately quieter than the
+   Reserve button: most visits are a one-off, and the subscription is the
+   thing you opt into rather than the default. */
+
+.shop-subscribe-link {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 6px 0;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--ink-muted);
+  background: none;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.shop-subscribe-link:hover {
+  color: var(--ink);
+}
+
+.shop-subscribe {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+
+.shop-subscribe__row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.shop-subscribe__row > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.shop-subscribe__note {
+  font-size: 12px;
+  color: var(--ink-muted);
+  text-wrap: pretty;
+}

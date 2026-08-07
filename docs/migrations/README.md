@@ -27,6 +27,7 @@ database, don't take the table's word for it.
 | ~~014~~ | ~~Fix `business_members` policy recursion~~ | — | **Already run, 2026-08-06.** Unblocked the business switcher. |
 | ~~015~~ | ~~Lactation constraints~~ | — | **Already run, 2026-08-06.** Check constraint validated; rejections verified. |
 | ~~016~~ | ~~Genetics uniqueness + unsavable options~~ | — | **Already run, 2026-08-07.** One result per animal per marker/condition. Also retired two dropdown options (`origin 'born_here'`, `status 'dead'`) that the `animals` check constraints always rejected. |
+| ~~019~~ | ~~Standing weekly orders~~ | — | **Already run, 2026-08-07.** Scopes `schedules` to a business, adds `cancelled_at`, narrows the stock hold from 7 days to 3, and fixes `complete_scheduled_pickup` leaving its order unscoped — the same bug as 017. Also relaxes `check_schedule_capacity`, which refused any subscription the current day's stock couldn't cover. |
 | ~~017~~ | ~~`reserve_product` sets `business_id`~~ | — | **Already run, 2026-08-07.** Every order the function created got `business_id` null, and `is_business_member(null)` is false — so any order placed after 010 was invisible to the farmer. Another instance of "a policy change can break writes" below. |
 
 ## A policy change can break writes, not just reads

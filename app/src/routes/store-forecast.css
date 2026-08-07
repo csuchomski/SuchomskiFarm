@@ -1,0 +1,89 @@
+@import "./books-reports.css";
+
+/* The forecast. One card per product, then a day-by-day run of the one
+   you're looking at. */
+
+.forecast-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.forecast-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px;
+  text-align: left;
+  font: inherit;
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.forecast-card:hover {
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+
+.forecast-card--active {
+  border-color: var(--ink);
+  border-width: 2px;
+  padding: 11px;
+}
+
+.forecast-card__name {
+  font-size: 17px;
+}
+
+.forecast-card__now {
+  font-size: 14px;
+}
+
+.forecast-card__promise {
+  font-size: 12px;
+  color: var(--ink-muted);
+  text-wrap: pretty;
+}
+
+.forecast-head {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 8px 0 16px;
+}
+
+/* A proportional mark inside the row rather than a chart — same hairline
+   vocabulary as Reports. */
+.forecast-bar {
+  display: block;
+  height: 3px;
+  background: var(--hairline);
+  min-width: 0;
+}
+
+.forecast-bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--herd-green);
+}
+
+.forecast-bar__fill--short {
+  background: var(--red);
+}
+
+@media (max-width: 640px) {
+  .forecast-cards {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .forecast-cards {
+    grid-template-columns: 1fr;
+  }
+}

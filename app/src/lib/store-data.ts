@@ -14,6 +14,11 @@ export interface RealProduct {
   name: string;
   unit: string;
   price: number | null;
+  /** A weekly production figure set by hand. product_stats() compares it
+   * against a week of real production, so it is weekly, not daily — see
+   * lib/forecast.ts, which divides it by seven. Null means "work it out
+   * from history". */
+  forecast_override: number | null;
 }
 
 export interface RealBatch {
@@ -78,7 +83,11 @@ export async function fetchStoreData(scope: StoreScope): Promise<StoreData> {
   const { businessId, farmId } = scope;
 
   const [productsRes, batchesRes, discardsRes, productionRes] = await Promise.all([
-    supabase.from("products").select("id, name, unit, price").eq("business_id", businessId).order("name"),
+    supabase
+      .from("products")
+      .select("id, name, unit, price, forecast_override")
+      .eq("business_id", businessId)
+      .order("name"),
     supabase
       .from("inventory_batches")
       .select("id, product_id, produced_date, quantity, reserved, herd_animal_id")

@@ -1,0 +1,222 @@
+// @vitest-environment jsdom
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
+
+/**
+ * Render smoke tests for the four new Store and Books pages.
+ *
+ * The arithmetic lives in lib/orders.ts and lib/books-report.ts and is unit
+ * tested there. These exist to catch what those can't: a page that throws on
+ * mount, or one whose numbers never reach the screen.
+ */
+
+const business = { id: 5, name: "Suchomski Family Farm", type: "farm" };
+
+const workspace = {
+  loading: false,
+  error: null,
+  businesses: [business],
+  business,
+  modules: ["herd", "store", "books"],
+  farmId: "farm-1",
+  role: "owner",
+  userId: "u1",
+  migrated: true,
+  setBusinessId: vi.fn(),
+};
+
+vi.mock("../lib/workspace", () => ({
+  useWorkspace: () => workspace,
+  WorkspaceProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+vi.mock("../lib/auth", () => ({
+  useAuth: () => ({ session: { user: { id: "u1" } }, loading: false }),
+  signOut: vi.fn(),
+}));
+
+const customers = [
+  { id: "cust-1", first_name: "Meghan", last_name: "Suchomski", email: "meghan@example.com", phone: null, role: "buyer" },
+  { id: "cust-2", first_name: "", last_name: "", email: "quiet@example.com", phone: null, role: "buyer" },
+];
+
+const orders = [
+  // Open: 2 gallons of Milk at $10 = $20 expected.
+  {
+    id: 12,
+    customer_id: "cust-1",
+    product_id: 1,
+    quantity: 2,
+    status: "reserved",
+    reserved_date: "2026-08-05T12:00:00Z",
+    picked_up_date: null,
+    cancelled_date: null,
+    unit_price: null,
+    total_cost: null,
+    amount_paid: null,
+    payment_method: null,
+    business_id: 5,
+  },
+  // Finished and paid.
+  {
+    id: 9,
+    customer_id: "cust-1",
+    product_id: 1,
+    quantity: 1.5,
+    status: "completed",
+    reserved_date: "2026-06-10T00:00:00Z",
+    picked_up_date: "2026-06-24T00:00:00Z",
+    cancelled_date: null,
+    unit_price: 10,
+    total_cost: 15,
+    amount_paid: 15,
+    payment_method: "Cash",
+    business_id: 5,
+  },
+];
+
+vi.mock("../lib/orders", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/orders")>()),
+  fetchOrders: vi.fn(async () => orders),
+  fetchCustomers: vi.fn(async () => customers),
+}));
+
+vi.mock("../lib/store-data", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/store-data")>()),
+  fetchStoreData: vi.fn(async () => ({
+    products: [
+      { id: 1, name: "Milk", unit: "gallon", price: 10, onHand: 6, claimed: 2, openToShop: 4, batches: [] },
+    ],
+    discards: [],
+    production: [],
+  })),
+}));
+
+const booksData = {
+  businesses: [business],
+  accounts: [
+    { id: 3, name: "Landmark CU - Farm", opening_balance: 454.54, business_id: 5 },
+    // Deliberately another business's account: it must not appear.
+    { id: 2, name: "Landmark CU - Realtor", opening_balance: 2076.59, business_id: 3 },
+  ],
+  transactions: [
+    { id: 2, business_id: 5, date: "2026-07-16", type: "income", category: "Other farm income", amount: 20, note: null, payer: "Thomas", account: "Landmark CU - Farm" },
+    { id: 5, business_id: 5, date: "2026-07-20", type: "expense", category: "Feed", amount: 30, note: null, payer: "Co-op", account: "Landmark CU - Farm" },
+    // Posted to an account with no ledger_accounts row for this business.
+    { id: 6, business_id: 5, date: "2026-07-22", type: "income", category: "Other farm income", amount: 5, note: null, payer: "Stand", account: "Venmo" },
+    // Another business's entry: must be excluded.
+    { id: 1, business_id: 4, date: "2026-07-06", type: "income", category: "Rents received", amount: 2000, note: null, payer: "Whitney", account: "Venmo" },
+  ],
+  types: [
+    { code: "income", label: "Income", direction: "income" as const, active: true, sort_order: 10 },
+    { code: "expense", label: "Expense", direction: "expense" as const, active: true, sort_order: 20 },
+    { code: "transfer", label: "Transfer", direction: "neutral" as const, active: true, sort_order: 30 },
+  ],
+  typesTableExists: true,
+};
+
+vi.mock("../lib/books-data", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/books-data")>()),
+  fetchBooksData: vi.fn(async () => booksData),
+}));
+
+afterEach(cleanup);
+
+const mount = async (Component: React.ComponentType, settled: string | RegExp) => {
+  render(
+    <MemoryRouter>
+      <Component />
+    </MemoryRouter>,
+  );
+  // findAllByText, not findByText: several of these strings legitimately
+  // appear twice — once in the nav rail, once on the page.
+  await screen.findAllByText(settled);
+};
+
+describe("Orders page", () => {
+  it("shows the open order with its customer, product and expected value", async () => {
+    const { default: StoreOrders } = await import("./StoreOrders");
+    await mount(StoreOrders, "Waiting for pickup");
+
+    expect(screen.getAllByText("Meghan Suchomski").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Milk · order 12/)).toBeTruthy();
+    // 2 gallons at $10 — priced from the product, since an open order has no
+    // total_cost of its own.
+    expect(screen.getAllByText("$20.00").length).toBeGreaterThan(0);
+  });
+
+  it("counts takings from what was actually paid", async () => {
+    const { default: StoreOrders } = await import("./StoreOrders");
+    await mount(StoreOrders, "Waiting for pickup");
+    // Only the completed order contributes: $15.
+    expect(screen.getAllByText("$15.00").length).toBeGreaterThan(0);
+  });
+
+  it("keeps finished orders collapsed so the open list stays the page", async () => {
+    const { default: StoreOrders } = await import("./StoreOrders");
+    await mount(StoreOrders, "Waiting for pickup");
+    expect(screen.getByText("Finished")).toBeTruthy();
+    // The completed order's date is only rendered once it's expanded.
+    expect(screen.queryByText("2026-06-24")).toBeNull();
+  });
+});
+
+describe("Customers page", () => {
+  it("lists customers and falls back to email for a blank name", async () => {
+    const { default: StoreCustomers } = await import("./StoreCustomers");
+    await mount(StoreCustomers, "Customers");
+
+    expect(screen.getAllByText("Meghan Suchomski").length).toBeGreaterThan(0);
+    // cust-2 has no name at all.
+    expect(screen.getByText("quiet@example.com")).toBeTruthy();
+  });
+
+  it("shows someone who has never ordered rather than hiding them", async () => {
+    const { default: StoreCustomers } = await import("./StoreCustomers");
+    await mount(StoreCustomers, "Customers");
+    expect(screen.getByText("never")).toBeTruthy();
+  });
+});
+
+describe("Books accounts page", () => {
+  it("adds movement to the opening balance", async () => {
+    const { default: BooksAccounts } = await import("./BooksAccounts");
+    await mount(BooksAccounts, "Accounts");
+
+    // 454.54 opening + 20 income − 30 expense = 444.54.
+    expect(screen.getByText("$444.54")).toBeTruthy();
+  });
+
+  it("surfaces an account only a transaction names", async () => {
+    const { default: BooksAccounts } = await import("./BooksAccounts");
+    await mount(BooksAccounts, "Accounts");
+    expect(screen.getAllByText("Venmo").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("unlisted").length).toBeGreaterThan(0);
+  });
+
+  it("excludes another business's account", async () => {
+    const { default: BooksAccounts } = await import("./BooksAccounts");
+    await mount(BooksAccounts, "Accounts");
+    expect(screen.queryByText("Landmark CU - Realtor")).toBeNull();
+  });
+});
+
+describe("Books reports page", () => {
+  it("breaks the period down by month and by category", async () => {
+    const { default: BooksReports } = await import("./BooksReports");
+    await mount(BooksReports, "By month");
+
+    expect(screen.getByText("Jul 2026")).toBeTruthy();
+    expect(screen.getByText("Feed")).toBeTruthy();
+    expect(screen.getAllByText("Other farm income").length).toBeGreaterThan(0);
+  });
+
+  it("leaves another business's income out of the totals", async () => {
+    const { default: BooksReports } = await import("./BooksReports");
+    await mount(BooksReports, "By month");
+    // Business 4's $2,000 rent must not appear anywhere.
+    expect(screen.queryByText("$2,000.00")).toBeNull();
+    expect(screen.queryByText("Rents received")).toBeNull();
+  });
+});

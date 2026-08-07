@@ -35,9 +35,9 @@ export const allGroups: NavGroup[] = [
     heading: "Store",
     items: [
       { label: "Products", to: "/store/products" },
-      { label: "Orders" },
+      { label: "Orders", to: "/store/orders" },
+      { label: "Customers", to: "/store/customers" },
       { label: "Schedules" },
-      { label: "Customers" },
     ],
   },
   {
@@ -55,9 +55,9 @@ export const allGroups: NavGroup[] = [
     heading: "Books",
     items: [
       { label: "Transactions", to: "/books/transactions" },
-      { label: "Accounts" },
+      { label: "Accounts", to: "/books/accounts" },
+      { label: "Reports", to: "/books/reports" },
       { label: "Balance sheet" },
-      { label: "Reports" },
     ],
   },
 ];

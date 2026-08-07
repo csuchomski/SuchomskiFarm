@@ -1,0 +1,81 @@
+@import "./store-orders.css";
+
+/* Reports. The bars are proportional marks inside table rows rather than a
+   chart — same hairline vocabulary as the rest of the app, and they degrade
+   to nothing on a narrow screen without taking the numbers with them. */
+
+.report-ranges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.report-chip {
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 12px;
+  background: var(--paper);
+  color: var(--ink-muted);
+  border: 1px solid var(--hairline);
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.report-chip:hover {
+  color: var(--ink);
+}
+
+.report-chip--active {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+
+.month-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  max-width: 320px;
+}
+
+.month-bars__in,
+.month-bars__out {
+  height: 3px;
+  min-width: 0;
+}
+
+.month-bars__in {
+  background: var(--herd-green);
+}
+
+.month-bars__out {
+  background: var(--red);
+}
+
+.category-bar {
+  height: 3px;
+  margin-top: 4px;
+  max-width: 240px;
+  background: var(--hairline);
+}
+
+.category-bar__fill {
+  height: 100%;
+  background: var(--ink);
+}
+
+.report-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .report-columns {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}

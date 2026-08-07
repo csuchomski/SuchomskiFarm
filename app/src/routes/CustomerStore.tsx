@@ -8,6 +8,7 @@ import {
   fetchMyOrders,
   fetchProfile,
   fetchShop,
+  outstanding,
   reserve,
   type CustomerOrder,
   type CustomerProfile,
@@ -650,20 +651,40 @@ export default function CustomerStore() {
           <div className="shop-pickups-title serif" style={{ fontSize: 21 }}>
             History
           </div>
-          {past.map((o) => (
-            <div className="shop-pickup" key={o.id}>
-              <div className="shop-product__top">
-                <div>
-                  <div className="serif shop-product__name" style={{ color: "var(--ink-muted)" }}>
-                    {o.quantity} {productUnit(o.product_id)} {productName(o.product_id).toLowerCase()}
+          {past.map((o) => {
+            const gap = outstanding(o);
+            return (
+              <div className="shop-pickup" key={o.id}>
+                <div className="shop-product__top">
+                  <div>
+                    <div className="serif shop-product__name" style={{ color: "var(--ink-muted)" }}>
+                      {o.quantity} {productUnit(o.product_id)} {productName(o.product_id).toLowerCase()}
+                    </div>
+                    <div className="mono shop-product__price">
+                      {o.cancelled_date
+                        ? "Cancelled"
+                        : `Collected ${new Date(o.picked_up_date!).toLocaleDateString()}`}
+                      {o.payment_method && ` · ${o.payment_method}`}
+                    </div>
                   </div>
-                  <div className="mono shop-product__price">
-                    {o.cancelled_date ? "Cancelled" : `Collected ${new Date(o.picked_up_date!).toLocaleDateString()}`}
-                  </div>
+                  {/* Only on a collected order. A cancellation cost nothing,
+                      and an unpriced one shows a dash rather than $0.00 —
+                      four of the completed orders on this farm have no price
+                      at all, and calling those free would be a claim. */}
+                  {o.picked_up_date && (
+                    <div className="mono shop-history__cost">
+                      {money(o.total_cost === null ? null : Number(o.total_cost))}
+                      {gap !== null && gap !== 0 && (
+                        <div className="shop-history__gap">
+                          {gap > 0 ? `$${gap.toFixed(2)} still owed` : `$${Math.abs(gap).toFixed(2)} over`}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </>
       )}
 

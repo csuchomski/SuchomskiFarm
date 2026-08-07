@@ -31,6 +31,8 @@ const orders = [
     cancelled_date: null,
     unit_price: 10,
     total_cost: 20,
+    amount_paid: null,
+    payment_method: null,
   },
   {
     id: 9,
@@ -42,6 +44,50 @@ const orders = [
     cancelled_date: null,
     unit_price: 10,
     total_cost: 15,
+    amount_paid: 15,
+    payment_method: "Cash",
+  },
+  // Collected, part paid — $20 of milk against $12 handed over.
+  {
+    id: 8,
+    product_id: 1,
+    quantity: 2,
+    status: "completed",
+    reserved_date: "2026-06-01T00:00:00Z",
+    picked_up_date: "2026-06-03T00:00:00Z",
+    cancelled_date: null,
+    unit_price: 10,
+    total_cost: 20,
+    amount_paid: 12,
+    payment_method: "Check",
+  },
+  // Collected before the store priced anything. Four real orders look like
+  // this, and "$0.00" would be a claim rather than a blank.
+  {
+    id: 7,
+    product_id: 1,
+    quantity: 4,
+    status: "completed",
+    reserved_date: "2026-05-01T00:00:00Z",
+    picked_up_date: "2026-05-02T00:00:00Z",
+    cancelled_date: null,
+    unit_price: null,
+    total_cost: null,
+    amount_paid: null,
+    payment_method: null,
+  },
+  {
+    id: 6,
+    product_id: 3,
+    quantity: 1,
+    status: "cancelled",
+    reserved_date: "2026-05-20T00:00:00Z",
+    picked_up_date: null,
+    cancelled_date: "2026-05-21T00:00:00Z",
+    unit_price: null,
+    total_cost: null,
+    amount_paid: null,
+    payment_method: null,
   },
 ];
 
@@ -156,10 +202,36 @@ describe("Shop tabs", () => {
     expect(screen.getByText("Meghan Suchomski")).toBeTruthy();
     expect(screen.getByText("meghan@example.com")).toBeTruthy();
     expect(screen.getByText("555-0100")).toBeTruthy();
-    // One collected order at $15.
-    expect(screen.getByText(/1 order · \$15\.00/)).toBeTruthy();
+    // Three collected orders: $15 + $20, and one that was never priced.
+    expect(screen.getByText(/3 orders · \$35\.00/)).toBeTruthy();
     expect(screen.getByText("History")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+  });
+
+  it("puts what each past order cost on the history row", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: /Account/ }));
+
+    const rows = [...document.querySelectorAll(".shop-pickup")].map((r) => r.textContent ?? "");
+
+    // Paid in full: the cost, and what it was paid by.
+    expect(rows.some((t) => /Collected .*· Cash/.test(t) && t.includes("$15.00"))).toBe(true);
+
+    // Part paid: the cost, plus what's still outstanding.
+    const short = rows.find((t) => t.includes("$20.00"));
+    expect(short).toBeTruthy();
+    expect(short).toContain("Check");
+    expect(short).toContain("$8.00 still owed");
+
+    // Never priced: a dash, not $0.00 — those are different claims.
+    const unpriced = rows.find((t) => t.startsWith("4 gallon milk"));
+    expect(unpriced).toContain("—");
+    expect(unpriced).not.toContain("$");
+
+    // Cancelled: nothing was collected, so there's no cost to show.
+    const cancelled = rows.find((t) => t.includes("Cancelled"));
+    expect(cancelled).toBeTruthy();
+    expect(cancelled).not.toContain("$");
   });
 
   it("goes back to Store when the tab is pressed again", async () => {

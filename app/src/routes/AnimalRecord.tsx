@@ -159,7 +159,10 @@ export default function AnimalRecord() {
             </div>
           </div>
           <EarTag tag={animal.ear_tag} accent="herd" size="lg" />
-          <div style={{ display: "flex", gap: 8, flex: "none" }}>
+          {/* A class rather than an inline style so the mobile rules can put
+              these on their own row — inline `flex: none` won this argument
+              at every width and squeezed the name to three letters. */}
+          <div className="record-head__actions">
             <Button disabled title="Treatments aren't built yet">
               Log treatment
             </Button>

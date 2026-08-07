@@ -11,6 +11,7 @@ import {
   type RealLactation,
 } from "../lib/lactations";
 import { fetchProductionRecords, milkForLactation, peakOf, type RealProductionRecord } from "../lib/milkings";
+import { LactationCharts } from "../components/herd/LactationCharts";
 import { useWorkspace } from "../lib/workspace";
 
 /**
@@ -26,6 +27,8 @@ type Load =
   | { state: "loading" }
   | { state: "error"; message: string }
   | { state: "ok"; lactations: RealLactation[]; animals: RealAnimal[]; records: RealProductionRecord[] };
+
+const todayIso = () => new Date().toISOString().slice(0, 10);
 
 const COLS = "60px 1fr 64px 100px 100px 64px 110px 92px";
 /** Tag, name, DIM and status are what you check in a barn; the parity and
@@ -101,6 +104,24 @@ export default function Lactations() {
               tone={missing.length > 0 ? "red" : "ink"}
             />
           </div>
+
+          {lactations.length > 0 && (
+            <div style={{ marginTop: 32 }}>
+              <div className="serif" style={{ fontSize: 21, marginBottom: 4 }}>
+                Curve and yield
+              </div>
+              <p style={{ fontSize: 13, color: "var(--ink-muted)", marginBottom: 16 }}>
+                Weekly milk against days in milk, so a lactation lines up against the one before it whatever time of
+                year each started. The bars below compare total yield across her lactations on one scale.
+              </p>
+              <LactationCharts
+                lactations={lactations}
+                records={records}
+                animals={animals}
+                todayIso={todayIso()}
+              />
+            </div>
+          )}
 
           {lactations.length === 0 ? (
             <div style={{ marginTop: 24 }}>

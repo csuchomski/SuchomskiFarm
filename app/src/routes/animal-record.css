@@ -27,6 +27,13 @@
   display: flex;
   gap: 16px;
   align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.record-head__actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
 }
 
 .record-head__id {
@@ -75,8 +82,19 @@
 .record-body {
   padding: 24px 32px 32px;
   display: grid;
-  grid-template-columns: 1fr 348px;
+  /* minmax(0, …), not a bare 1fr. A grid track sized `1fr` still refuses to
+     go below its content's min-content width, so the pedigree — three 132px
+     columns inside an overflow-x box — pushed this track to 400px on a
+     390px screen. html then clipped the excess instead of scrolling, which
+     put Pedigree and Offspring somewhere you could not reach at all. */
+  grid-template-columns: minmax(0, 1fr) 348px;
   gap: 32px;
+}
+
+/* Same reason: a grid item defaults to min-width: auto, which lets its
+   contents veto any shrinking the track asks for. */
+.record-body > * {
+  min-width: 0;
 }
 
 .curve-legend {
@@ -234,5 +252,57 @@
 
   .record-tabs::-webkit-scrollbar {
     display: none;
+  }
+
+  /* The record was two columns at every width. On a phone the 348px track
+     put Pedigree and Offspring at x=612 on a 390px screen — off the edge,
+     and the page did not scroll, so that half of the record simply could
+     not be reached. One column, and the padding comes in with it. */
+  .record-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+    padding: 20px 16px 32px;
+  }
+
+  /* The photo, name, tag and buttons all competed for one row. The buttons
+     carried `flex: none` and won, squeezing the name to "Pati / enc / e".
+     Now the identity keeps the first row and the buttons take their own. */
+  .record-head__id {
+    flex: 1 1 140px;
+  }
+
+  .record-head__actions {
+    flex: 1 0 100%;
+    order: 3;
+    padding-bottom: 4px;
+  }
+
+  .record-head__actions > * {
+    flex: 1;
+  }
+}
+
+@media (max-width: 520px) {
+  .record-head__name {
+    font-size: 22px;
+    /* "Patience" is short; a registered name is not, and a long one has to
+       break rather than push the row wider. */
+    overflow-wrap: anywhere;
+  }
+
+  .record-topbar {
+    padding: 0 12px;
+    gap: 12px;
+  }
+
+  .record-topbar .eyebrow {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .breed-row {
+    grid-template-columns: minmax(90px, 1fr) 2fr 48px;
+    gap: 8px;
   }
 }

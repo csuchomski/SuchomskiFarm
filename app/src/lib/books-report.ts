@@ -198,3 +198,49 @@ export function monthsBack(todayIso: string, back: number): string {
   }
   return `${y}-${String(m).padStart(2, "0")}-01`;
 }
+
+/**
+ * The account names that belong to a business.
+ *
+ * Two sources, deliberately. The obvious one is ledger_accounts rows scoped
+ * to the business. The second is account names its own transactions already
+ * use: `account` is free text, and the live "Venmo" row carries no
+ * business_id at all, so an accounts-table-only list would leave you unable
+ * to pick the account half your entries are already posted to.
+ *
+ * This exists because the entry form defaulted to `accounts[0]` across
+ * *every* business — sorted by name, that was another business's chequing
+ * account, pre-filled on a farm entry with nothing to say it was wrong.
+ */
+export function accountsForBusiness(
+  accounts: RealLedgerAccount[],
+  transactions: RealTransaction[],
+  businessId: number | null,
+): string[] {
+  if (businessId === null) return [];
+
+  const names: string[] = [];
+  const seen = new Set<string>();
+  const add = (raw: string | null | undefined) => {
+    const name = raw?.trim();
+    if (!name || seen.has(name.toLowerCase())) return;
+    seen.add(name.toLowerCase());
+    names.push(name);
+  };
+
+  // Listed accounts first, in name order, so the default is stable.
+  for (const a of [...accounts].filter((a) => a.business_id === businessId).sort((x, y) => x.name.localeCompare(y.name))) {
+    add(a.name);
+  }
+  for (const t of transactions.filter((t) => t.business_id === businessId)) add(t.account);
+
+  return names;
+}
+
+/** What the entry form should start on: this business's first account, or
+ * nothing rather than another business's. */
+export const defaultAccountFor = (
+  accounts: RealLedgerAccount[],
+  transactions: RealTransaction[],
+  businessId: number | null,
+): string => accountsForBusiness(accounts, transactions, businessId)[0] ?? "";

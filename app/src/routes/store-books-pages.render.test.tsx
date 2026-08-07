@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
@@ -13,10 +13,12 @@ import { MemoryRouter } from "react-router-dom";
 
 const business = { id: 5, name: "Suchomski Family Farm", type: "farm" };
 
+const otherBusiness = { id: 4, name: "5553 N Lydell Ave", type: "rental" };
+
 const workspace = {
   loading: false,
   error: null,
-  businesses: [business],
+  businesses: [business, otherBusiness],
   business,
   modules: ["herd", "store", "books"],
   farmId: "farm-1",
@@ -94,10 +96,14 @@ vi.mock("../lib/store-data", async (importOriginal) => ({
 }));
 
 const booksData = {
-  businesses: [business],
+  businesses: [business, otherBusiness],
   accounts: [
+    // First in the list on purpose, mirroring the live data: sorted by name
+    // this is what `accounts[0]` used to resolve to, which is exactly how a
+    // farm entry ended up pre-filled with the rental's chequing account.
+    { id: 4, name: "5553 N Lyd Check", opening_balance: 852.64, business_id: 4 },
     { id: 3, name: "Landmark CU - Farm", opening_balance: 454.54, business_id: 5 },
-    // Deliberately another business's account: it must not appear.
+    // Another business's account: it must not appear either.
     { id: 2, name: "Landmark CU - Realtor", opening_balance: 2076.59, business_id: 3 },
   ],
   transactions: [
@@ -292,5 +298,62 @@ describe("Balance sheet page", () => {
     const { default: BooksBalanceSheet } = await import("./BooksBalanceSheet");
     await mount(BooksBalanceSheet, "Liabilities");
     expect(screen.getByText("Equipment loan")).toBeTruthy();
+  });
+});
+
+describe("Books transactions — the entry form", () => {
+  /**
+   * The bug this covers, reported from a phone: the Account field on a farm
+   * entry was pre-filled with "5553 N Lyd Check", the rental business's
+   * chequing account. The default came from `data.accounts[0]` across every
+   * business, and sorted by name that is the rental account.
+   */
+  it("defaults the account to one belonging to the business you're on", async () => {
+    const { default: BooksTransactions } = await import("./BooksTransactions");
+    render(
+      <MemoryRouter>
+        <BooksTransactions />
+      </MemoryRouter>,
+    );
+    await screen.findAllByText("Transactions");
+
+    fireEvent.click(screen.getByRole("button", { name: "Add entry" }));
+
+    const accountField = screen.getByPlaceholderText("Account") as HTMLInputElement;
+    expect(accountField.value).toBe("Landmark CU - Farm");
+    expect(accountField.value).not.toBe("5553 N Lyd Check");
+  });
+
+  it("offers only this business's accounts, plus ones it already posts to", async () => {
+    const { default: BooksTransactions } = await import("./BooksTransactions");
+    const { container } = render(
+      <MemoryRouter>
+        <BooksTransactions />
+      </MemoryRouter>,
+    );
+    await screen.findAllByText("Transactions");
+    fireEvent.click(screen.getByRole("button", { name: "Add entry" }));
+
+    const offered = [...container.querySelectorAll("#ledger-accounts option")].map((o) =>
+      o.getAttribute("value"),
+    );
+    // The farm's own account, and Venmo because farm entries post to it.
+    expect(offered).toEqual(["Landmark CU - Farm", "Venmo"]);
+    expect(offered).not.toContain("Landmark CU - Realtor");
+  });
+
+  it("lets an entry be logged against another business", async () => {
+    const { default: BooksTransactions } = await import("./BooksTransactions");
+    render(
+      <MemoryRouter>
+        <BooksTransactions />
+      </MemoryRouter>,
+    );
+    await screen.findAllByText("Transactions");
+    fireEvent.click(screen.getByRole("button", { name: "Add entry" }));
+
+    const picker = screen.getByRole("combobox", { name: "Business for this entry" }) as HTMLSelectElement;
+    expect(picker.value).toBe("5");
+    expect(picker.textContent).toContain("Suchomski Family Farm");
   });
 });

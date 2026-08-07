@@ -31,6 +31,7 @@ database, don't take the table's word for it.
 | ~~019~~ | ~~Standing weekly orders~~ | — | **Already run, 2026-08-07.** Scopes `schedules` to a business, adds `cancelled_at`, narrows the stock hold from 7 days to 3, and fixes `complete_scheduled_pickup` leaving its order unscoped — the same bug as 017. Also relaxes `check_schedule_capacity`, which refused any subscription the current day's stock couldn't cover. |
 | ~~017~~ | ~~`reserve_product` sets `business_id`~~ | — | **Already run, 2026-08-07.** Every order the function created got `business_id` null, and `is_business_member(null)` is false — so any order placed after 010 was invisible to the farmer. Another instance of "a policy change can break writes" below. |
 | ~~021~~ | ~~`herd.record_production` scopes its batches~~ | — | **Already run, 2026-08-07.** The fourth instance of the unscoped-insert bug — and the first found by a query rather than by reading a function body. See below. |
+| ~~022~~ | ~~Payment methods~~ | — | **Already run, 2026-08-07.** `payment_methods` lookup seeded Cash/Venmo/Check, an FK from `orders.payment_method`, and both pickup functions validate against the table instead of a hard-coded `in ('Cash','Venmo')`. A fourth method is now one insert, no migration. Also stops a *customer* collecting more than their standing order is for. |
 
 ## Run the scoping audit after any policy change
 

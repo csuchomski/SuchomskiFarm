@@ -17,6 +17,8 @@ import {
   cancelSchedule,
   createSchedule,
   fetchMySchedules,
+  fulfilPickup,
+  isHeld,
   nextPickup,
   skipWeek,
   untilLabel,
@@ -24,6 +26,8 @@ import {
   type Schedule,
   type Weekday,
 } from "../lib/schedules";
+import { amountDue, completePickup, validateCollection } from "../lib/orders";
+import { fetchPaymentMethods, methodCodes, type PaymentMethodOption } from "../lib/payment-methods";
 import "./customer-store.css";
 
 type Fetch =
@@ -35,9 +39,22 @@ type Fetch =
       orders: CustomerOrder[];
       schedules: Schedule[];
       profile: CustomerProfile | null;
+      methods: PaymentMethodOption[];
     };
 
+/** Which thing on the Pickup tab is being handed over right now. Orders and
+ * standing orders share the panel but not their id space, so the kind is
+ * part of the key. */
+type Collecting = { kind: "order" | "schedule"; id: number } | null;
+
 const price = (n: number | null, unit: string) => (n === null ? `— per ${unit}` : `$${Number(n).toFixed(2)} per ${unit}`);
+
+const money = (n: number | null) => (n === null ? "—" : `$${n.toFixed(2)}`);
+
+/** "Cash, Venmo or Check" — the payment list read as a sentence rather than
+ * as a comma-separated dump. */
+const orList = (items: string[]): string =>
+  items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}`;
 
 export default function CustomerStore() {
   const { session, loading: authLoading } = useAuth();
@@ -53,18 +70,24 @@ export default function CustomerStore() {
   const [subDay, setSubDay] = useState<string>("Thursday");
   const [subQty, setSubQty] = useState("");
   const [tab, setTab] = useState<CustomerTab>("Store");
+  // Confirming a collection: what's being handed over, how much of it, and
+  // how it was paid for.
+  const [collecting, setCollecting] = useState<Collecting>(null);
+  const [collectQty, setCollectQty] = useState("");
+  const [collectMethod, setCollectMethod] = useState("");
 
   const load = useCallback(async () => {
     if (!userId) return;
-    const [products, orders, schedules, profile] = await Promise.all([
+    const [products, orders, schedules, profile, methods] = await Promise.all([
       fetchShop(),
       fetchMyOrders(userId),
       fetchMySchedules(userId),
       // The account tab needs a name to show. A missing profile is not an
       // error — the row is created by a trigger and may lag a fresh signup.
       fetchProfile(userId).catch(() => null),
+      fetchPaymentMethods(),
     ]);
-    setResult({ state: "ok", products, orders, schedules, profile });
+    setResult({ state: "ok", products, orders, schedules, profile, methods });
   }, [userId]);
 
   useEffect(() => {
@@ -186,6 +209,7 @@ export default function CustomerStore() {
   };
 
   const products = result.state === "ok" ? result.products : [];
+  const methods = result.state === "ok" ? result.methods : [];
   const orders = result.state === "ok" ? result.orders : [];
   const open = orders.filter((o) => !o.cancelled_date && !o.picked_up_date);
   const schedules = result.state === "ok" ? result.schedules : [];
@@ -203,6 +227,74 @@ export default function CustomerStore() {
 
   const productName = (id: number) => products.find((p) => p.id === id)?.name ?? "Item";
   const productUnit = (id: number) => products.find((p) => p.id === id)?.unit ?? "";
+  const productPrice = (id: number) => products.find((p) => p.id === id)?.price ?? null;
+
+  const startCollect = (target: NonNullable<Collecting>, quantity: number) => {
+    setCollecting(target);
+    // Pre-filled with the whole thing — taking less is the correction, not
+    // the normal case.
+    setCollectQty(String(quantity));
+    // The method deliberately isn't. A default here is a default answer to
+    // "how did you pay", and the books would carry it as though someone had
+    // said so.
+    setCollectMethod("");
+    setActionError(null);
+    setNotice(null);
+  };
+
+  const collectProblem = (ordered: number) =>
+    validateCollection({
+      ordered,
+      quantity: collectQty,
+      paymentMethod: collectMethod,
+      allowed: methodCodes(methods),
+    });
+
+  /**
+   * Hand-over, from the customer's side. The two paths write the same row in
+   * the end — complete_scheduled_pickup creates a completed order — so the
+   * form and its rules are shared and only the call differs.
+   */
+  const handleCollect = async (input: {
+    target: NonNullable<Collecting>;
+    productId: number;
+    ordered: number;
+  }) => {
+    if (collectProblem(input.ordered)) return;
+    const quantity = Number(collectQty);
+    const paid = amountDue(productPrice(input.productId), quantity);
+
+    setBusyId(input.target.id);
+    setActionError(null);
+    try {
+      if (input.target.kind === "order") {
+        await completePickup({
+          orderId: input.target.id,
+          finalQuantity: quantity,
+          paymentMethod: collectMethod,
+          amountPaid: paid,
+        });
+      } else {
+        await fulfilPickup({
+          scheduleId: input.target.id,
+          quantity,
+          paymentMethod: collectMethod,
+          amountPaid: paid,
+        });
+      }
+      await load();
+      setCollecting(null);
+      setNotice(
+        `Collected ${quantity} ${productUnit(input.productId)} of ${productName(input.productId).toLowerCase()}${
+          paid === null ? "" : ` — ${money(paid)} by ${collectMethod.toLowerCase()}`
+        }.`,
+      );
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <CustomerShell
@@ -217,8 +309,11 @@ export default function CustomerStore() {
           {new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}
         </div>
         <div className="serif shop-hero__title">Fresh today</div>
+        {/* The methods come off the table rather than being written into the
+            sentence, so adding one doesn't leave this line lying. */}
         <p className="shop-hero__lede text-wrap-pretty">
-          Reserve what you want and pick it up at the farm. Pay cash or Venmo when you collect.
+          Reserve what you want and pick it up at the farm.
+          {methods.length > 0 && ` Pay by ${orList(methods.map((m) => m.label))} when you collect.`}
         </p>
       </div>
 
@@ -379,6 +474,11 @@ export default function CustomerStore() {
           <div className="shop-pickups-title serif">Every week</div>
           {activeSchedules.map((sch) => {
             const next = nextPickup(sch, today);
+            // Collectable once the stock is being held for it — the same
+            // three-day window the shop stops selling it in, so what's on the
+            // shelf and what this offers can't disagree.
+            const due = isHeld(sch, today);
+            const isCollecting = collecting?.kind === "schedule" && collecting.id === sch.id;
             return (
               <div className="shop-pickup" key={`sched-${sch.id}`}>
                 <div className="shop-product__top">
@@ -392,18 +492,58 @@ export default function CustomerStore() {
                   </div>
                   <Pill variant="outline-green">weekly</Pill>
                 </div>
-                <div className="shop-product__actions">
-                  <Button
-                    onClick={() => next && void handleSkip(sch, next)}
-                    disabled={busyId === sch.id || !next}
-                    style={{ flex: 1 }}
-                  >
-                    Skip {next ? next.slice(5) : "next"}
-                  </Button>
-                  <Button onClick={() => void handleStopSchedule(sch)} disabled={busyId === sch.id} style={{ flex: 1 }}>
-                    Stop
-                  </Button>
-                </div>
+                {isCollecting ? (
+                  <CollectForm
+                    name={productName(sch.product_id)}
+                    unit={productUnit(sch.product_id)}
+                    ordered={sch.quantity}
+                    price={productPrice(sch.product_id)}
+                    methods={methods}
+                    quantity={collectQty}
+                    onQuantity={setCollectQty}
+                    method={collectMethod}
+                    onMethod={setCollectMethod}
+                    problem={collectProblem(sch.quantity)}
+                    busy={busyId === sch.id}
+                    onConfirm={() =>
+                      void handleCollect({
+                        target: { kind: "schedule", id: sch.id },
+                        productId: sch.product_id,
+                        ordered: sch.quantity,
+                      })
+                    }
+                    onCancel={() => setCollecting(null)}
+                  />
+                ) : (
+                  <>
+                    {due && (
+                      <div className="shop-product__actions">
+                        <button
+                          className="shop-reserve-btn"
+                          onClick={() => startCollect({ kind: "schedule", id: sch.id }, sch.quantity)}
+                        >
+                          I've picked this up
+                        </button>
+                      </div>
+                    )}
+                    <div className="shop-product__actions">
+                      <Button
+                        onClick={() => next && void handleSkip(sch, next)}
+                        disabled={busyId === sch.id || !next}
+                        style={{ flex: 1 }}
+                      >
+                        Skip {next ? next.slice(5) : "next"}
+                      </Button>
+                      <Button
+                        onClick={() => void handleStopSchedule(sch)}
+                        disabled={busyId === sch.id}
+                        style={{ flex: 1 }}
+                      >
+                        Stop
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             );
           })}
@@ -416,29 +556,62 @@ export default function CustomerStore() {
           Nothing reserved yet.
         </p>
       )}
-      {open.map((o) => (
-        <div className="shop-pickup" key={o.id}>
-          <div className="shop-product__top">
-            <div>
-              <div className="serif shop-product__name">
-                {o.quantity} {productUnit(o.product_id)} {productName(o.product_id).toLowerCase()}
+      {open.map((o) => {
+        const isCollecting = collecting?.kind === "order" && collecting.id === o.id;
+        return (
+          <div className="shop-pickup" key={o.id}>
+            <div className="shop-product__top">
+              <div>
+                <div className="serif shop-product__name">
+                  {o.quantity} {productUnit(o.product_id)} {productName(o.product_id).toLowerCase()}
+                </div>
+                <div className="mono shop-product__price">
+                  {o.reserved_date ? `Reserved ${new Date(o.reserved_date).toLocaleDateString()}` : o.status} · pay at
+                  pickup
+                </div>
               </div>
-              <div className="mono shop-product__price">
-                {o.reserved_date ? `Reserved ${new Date(o.reserved_date).toLocaleDateString()}` : o.status} · pay at
-                pickup
+              <div className="mono" style={{ fontSize: 15, fontWeight: 500, flex: "none" }}>
+                {money(o.total_cost === null ? amountDue(productPrice(o.product_id), o.quantity) : Number(o.total_cost))}
               </div>
             </div>
-            <div className="mono" style={{ fontSize: 15, fontWeight: 500, flex: "none" }}>
-              {o.total_cost === null ? "—" : `$${Number(o.total_cost).toFixed(2)}`}
-            </div>
+            {isCollecting ? (
+              <CollectForm
+                name={productName(o.product_id)}
+                unit={productUnit(o.product_id)}
+                ordered={o.quantity}
+                price={productPrice(o.product_id)}
+                methods={methods}
+                quantity={collectQty}
+                onQuantity={setCollectQty}
+                method={collectMethod}
+                onMethod={setCollectMethod}
+                problem={collectProblem(o.quantity)}
+                busy={busyId === o.id}
+                onConfirm={() =>
+                  void handleCollect({
+                    target: { kind: "order", id: o.id },
+                    productId: o.product_id,
+                    ordered: o.quantity,
+                  })
+                }
+                onCancel={() => setCollecting(null)}
+              />
+            ) : (
+              <div className="shop-product__actions">
+                <button
+                  className="shop-reserve-btn"
+                  onClick={() => startCollect({ kind: "order", id: o.id }, o.quantity)}
+                >
+                  I've picked this up
+                </button>
+                <Button onClick={() => void handleCancel(o)} disabled={busyId === o.id} style={{ flex: 1 }}>
+                  {busyId === o.id ? "Cancelling…" : "Cancel"}
+                </Button>
+              </div>
+            )}
           </div>
-          <div className="shop-product__actions">
-            <Button onClick={() => void handleCancel(o)} disabled={busyId === o.id} style={{ flex: 1 }}>
-              {busyId === o.id ? "Cancelling…" : "Cancel"}
-            </Button>
-          </div>
-        </div>
-      ))}
+        );
+      })}
 
         </>
       )}
@@ -515,5 +688,113 @@ export default function CustomerStore() {
         </>
       )}
     </CustomerShell>
+  );
+}
+
+/**
+ * Confirming a hand-over: what it was, how much of it, and how it was paid
+ * for. Shared by a one-off reservation and a week of a standing order,
+ * because from the database's side they finish as the same completed order.
+ *
+ * The product is shown, not chosen — a customer confirms what they came for
+ * rather than picking from a list, and the amount follows from the price
+ * rather than being typed, so the two things they can actually get wrong are
+ * the quantity and the payment method.
+ */
+function CollectForm({
+  name,
+  unit,
+  ordered,
+  price,
+  methods,
+  quantity,
+  onQuantity,
+  method,
+  onMethod,
+  problem,
+  busy,
+  onConfirm,
+  onCancel,
+}: {
+  name: string;
+  unit: string;
+  ordered: number;
+  price: number | null;
+  methods: PaymentMethodOption[];
+  quantity: string;
+  onQuantity: (v: string) => void;
+  method: string;
+  onMethod: (v: string) => void;
+  problem: string | null;
+  busy: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const typed = Number(quantity);
+  const due = Number.isFinite(typed) && typed > 0 ? amountDue(price, typed) : null;
+  const short = Number.isFinite(typed) && typed > 0 && typed < ordered;
+
+  return (
+    <div className="shop-collect">
+      <div className="shop-collect__what serif">
+        {name}
+        <span className="mono shop-collect__ordered"> · {ordered} {unit} due</span>
+      </div>
+
+      <div className="shop-subscribe__row">
+        <label className="shop-collect__field">
+          <span className="eyebrow">Picked up</span>
+          <input
+            className="shop-qty-field"
+            type="number"
+            min="0"
+            max={ordered}
+            step="0.001"
+            inputMode="decimal"
+            value={quantity}
+            onChange={(e) => onQuantity(e.target.value)}
+            aria-label={`Quantity of ${name} picked up`}
+          />
+        </label>
+        <label className="shop-collect__field">
+          <span className="eyebrow">Paid by</span>
+          <select
+            className="shop-qty-field"
+            value={method}
+            onChange={(e) => onMethod(e.target.value)}
+            aria-label="How you paid"
+          >
+            <option value="">Choose…</option>
+            {methods.map((m) => (
+              <option key={m.code} value={m.code}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {/* Both facts on one line, and not in the message below: that one is
+          taken over by whatever is wrong, and "the rest goes back on the
+          shelf" is exactly the thing you'd want to still be able to see
+          while you fix something else. */}
+      <div className="shop-collect__due mono">
+        {due === null ? "No price set — the farm will sort this out." : `That's $${due.toFixed(2)}.`}
+        {short && ` ${Math.round((ordered - typed) * 1000) / 1000} ${unit} goes back on the shelf.`}
+      </div>
+
+      <div className="shop-subscribe__row">
+        <button className="shop-reserve-btn" onClick={onConfirm} disabled={busy || problem !== null}>
+          {busy ? "Saving…" : "Confirm pickup"}
+        </button>
+        <Button onClick={onCancel} disabled={busy}>
+          Cancel
+        </Button>
+      </div>
+
+      <p className="shop-subscribe__note" style={problem ? { color: "var(--red)" } : undefined}>
+        {problem ?? "Confirm this once you've actually got it and paid."}
+      </p>
+    </div>
   );
 }

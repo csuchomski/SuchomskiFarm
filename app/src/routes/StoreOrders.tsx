@@ -13,15 +13,14 @@ import {
   fetchCustomers,
   fetchOrders,
   isOpen,
-  PAYMENT_METHODS,
   reserveFor,
   totalsOf,
   validatePickup,
   validateReserve,
   type Customer,
-  type PaymentMethod,
   type RealOrder,
 } from "../lib/orders";
+import { fetchPaymentMethods, methodCodes, type PaymentMethodOption } from "../lib/payment-methods";
 import { useWorkspace } from "../lib/workspace";
 import "./store-orders.css";
 
@@ -41,7 +40,13 @@ const money = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDi
 type Load =
   | { state: "loading" }
   | { state: "error"; message: string }
-  | { state: "ok"; orders: RealOrder[]; customers: Customer[]; products: ProductWithInventory[] };
+  | {
+      state: "ok";
+      orders: RealOrder[];
+      customers: Customer[];
+      products: ProductWithInventory[];
+      methods: PaymentMethodOption[];
+    };
 
 const OPEN_COLS = "1fr 130px 96px 110px 150px";
 const OPEN_COLS_SM = "1fr 74px 96px";
@@ -73,15 +78,16 @@ export default function StoreOrders() {
 
   const refresh = useCallback(async () => {
     if (businessId === null) {
-      setLoad({ state: "ok", orders: [], customers: [], products: [] });
+      setLoad({ state: "ok", orders: [], customers: [], products: [], methods: await fetchPaymentMethods() });
       return;
     }
-    const [orders, customers, store] = await Promise.all([
+    const [orders, customers, store, methods] = await Promise.all([
       fetchOrders(businessId),
       fetchCustomers(),
       fetchStoreData({ businessId, farmId }),
+      fetchPaymentMethods(),
     ]);
-    setLoad({ state: "ok", orders, customers, products: store.products });
+    setLoad({ state: "ok", orders, customers, products: store.products, methods });
   }, [businessId, farmId]);
 
   useEffect(() => {
@@ -98,6 +104,7 @@ export default function StoreOrders() {
   const orders = load.state === "ok" ? load.orders : EMPTY_ORDERS;
   const customers = load.state === "ok" ? load.customers : EMPTY_CUSTOMERS;
   const products = load.state === "ok" ? load.products : EMPTY_PRODUCTS;
+  const methods = load.state === "ok" ? load.methods : EMPTY_METHODS;
 
   const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
@@ -109,7 +116,7 @@ export default function StoreOrders() {
 
   const pickupOrder = open.find((o) => o.id === pickingUp) ?? null;
   const pickupProblem = pickupOrder
-    ? validatePickup({ order: pickupOrder, finalQuantity, paymentMethod, amountPaid })
+    ? validatePickup({ order: pickupOrder, finalQuantity, paymentMethod, amountPaid, allowed: methodCodes(methods) })
     : null;
 
   const resProductRow = products.find((p) => String(p.id) === resProduct);
@@ -125,7 +132,10 @@ export default function StoreOrders() {
     // Pre-filled with the full order, which is what usually happens; the
     // short-pickup case is a correction, not the default.
     setFinalQuantity(String(o.quantity));
-    setPaymentMethod("Cash");
+    // First on the list rather than the literal "Cash", so a farm that
+    // retires it doesn't get a dropdown pre-set to something the database
+    // will refuse.
+    setPaymentMethod(methods[0]?.code ?? "");
     const price = productById.get(o.product_id)?.price;
     setAmountPaid(price === null || price === undefined ? "" : String(expectedValue(o, price) ?? ""));
     setError(null);
@@ -140,7 +150,7 @@ export default function StoreOrders() {
       await completePickup({
         orderId: pickupOrder.id,
         finalQuantity: Number(finalQuantity),
-        paymentMethod: paymentMethod === "" ? null : (paymentMethod as PaymentMethod),
+        paymentMethod: paymentMethod === "" ? null : paymentMethod,
         amountPaid: amountPaid.trim() === "" ? null : Number(amountPaid),
       });
       await refresh();
@@ -366,9 +376,9 @@ export default function StoreOrders() {
                             onChange={(e) => setPaymentMethod(e.target.value)}
                           >
                             <option value="">Not paid</option>
-                            {PAYMENT_METHODS.map((m) => (
-                              <option key={m} value={m}>
-                                {m}
+                            {methods.map((m) => (
+                              <option key={m.code} value={m.code}>
+                                {m.label}
                               </option>
                             ))}
                           </select>
@@ -472,3 +482,4 @@ export default function StoreOrders() {
 const EMPTY_ORDERS: RealOrder[] = [];
 const EMPTY_CUSTOMERS: Customer[] = [];
 const EMPTY_PRODUCTS: ProductWithInventory[] = [];
+const EMPTY_METHODS: PaymentMethodOption[] = [];

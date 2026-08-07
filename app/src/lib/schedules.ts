@@ -285,11 +285,16 @@ export async function updateSchedule(
  * Hands over this week's pickup. Consumes stock, writes a completed order
  * and marks the date fulfilled — all in one database function, so the three
  * can't come apart.
+ *
+ * Since migration 022 the function refuses a customer more than the standing
+ * order is for, so a mistyped quantity can't empty the shelf. A farmer is
+ * exempt — handing over an extra gallon at the gate is a real thing.
  */
 export async function fulfilPickup(input: {
   scheduleId: number;
   quantity?: number | null;
-  paymentMethod?: "Cash" | "Venmo" | null;
+  /** A code from public.payment_methods, checked against that table. */
+  paymentMethod?: string | null;
   amountPaid?: number | null;
 }): Promise<number> {
   const { data, error } = await supabase.rpc("complete_scheduled_pickup", {

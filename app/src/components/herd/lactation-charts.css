@@ -1,0 +1,223 @@
+@import "../../routes/books-reports.css";
+
+/* Lactation curve and yield comparison. Bars built from divs — the data is
+   a few dozen points and the design system is hairlines and flat blocks, so
+   a charting dependency would be more code rather than less. */
+
+.lac-charts {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.lac-charts__cows {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.lac-panel {
+  border: 1px solid var(--hairline);
+  padding: 16px;
+  min-width: 0;
+}
+
+.lac-panel__head {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.lac-panel__title {
+  font-size: 19px;
+}
+
+.lac-panel__open {
+  font-size: 13px;
+  color: var(--herd-green);
+}
+
+.lac-panel__sub {
+  font-size: 13px;
+  color: var(--ink-muted);
+  text-wrap: pretty;
+}
+
+.lac-panel__empty,
+.lac-panel__note {
+  font-size: 13px;
+  color: var(--ink-muted);
+  text-wrap: pretty;
+  margin-top: 12px;
+}
+
+/* ── the curve ── */
+
+.lac-curve {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 180px;
+  padding-bottom: 1px;
+  border-bottom: 1px solid var(--ink);
+  /* Many weeks on a narrow screen: scroll rather than shave the bars to
+     invisible slivers. */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.lac-curve__col {
+  flex: 1 1 10px;
+  min-width: 8px;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+/* The two bars share a cell, the prior one behind. Absolute positioning so
+   a shorter current bar doesn't hide the trace it's being compared with. */
+.lac-curve__stack {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.lac-curve__bar {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+}
+
+/* A pale tint of the same green, not --hairline. Hairline is a border
+   colour: at 1px against a border it reads fine, and as a 100px block
+   behind another block it disappears entirely, which makes the comparison
+   the chart exists for invisible. Same hue keeps the two bars legible as
+   one measure at two times. */
+.lac-curve__bar--prior {
+  background: color-mix(in srgb, var(--herd-green) 26%, var(--paper));
+}
+
+.lac-curve__bar--current {
+  background: var(--herd-green);
+  /* Narrower than the prior trace so both are readable where they overlap. */
+  width: 66%;
+  left: 17%;
+}
+
+.lac-curve__axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.lac-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.lac-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lac-legend__swatch {
+  width: 9px;
+  height: 9px;
+  flex: none;
+}
+
+.lac-legend__swatch--current {
+  background: var(--herd-green);
+}
+
+.lac-legend__swatch--prior {
+  background: color-mix(in srgb, var(--herd-green) 26%, var(--paper));
+  /* An outline so the swatch is findable against the panel at 9px. */
+  outline: 1px solid var(--hairline);
+  outline-offset: -1px;
+}
+
+/* ── yield per lactation ── */
+
+.lac-yield {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lac-yield__row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 90px 110px;
+  gap: 12px;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.lac-yield__label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.lac-yield__track {
+  height: 14px;
+  background: var(--page);
+  min-width: 0;
+}
+
+.lac-yield__fill {
+  height: 100%;
+  background: var(--ink);
+}
+
+/* An unfinished lactation is hatched, so a total-so-far can't be misread as
+   a final figure sitting next to completed ones. */
+.lac-yield__fill--open {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--herd-green),
+    var(--herd-green) 5px,
+    color-mix(in srgb, var(--herd-green) 55%, var(--paper)) 5px,
+    color-mix(in srgb, var(--herd-green) 55%, var(--paper)) 10px
+  );
+}
+
+.lac-yield__value {
+  font-size: 14px;
+  text-align: right;
+}
+
+.lac-yield__meta {
+  font-size: 12px;
+  color: var(--ink-muted);
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .lac-panel {
+    padding: 12px;
+  }
+
+  .lac-curve {
+    height: 140px;
+  }
+
+  /* The per-lactation detail folds away; the bar and its total are the
+     comparison, and they stay. */
+  .lac-yield__row {
+    grid-template-columns: 34px minmax(0, 1fr) 80px;
+  }
+
+  .lac-yield__meta {
+    display: none;
+  }
+}

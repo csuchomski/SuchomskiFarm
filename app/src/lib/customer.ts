@@ -38,6 +38,30 @@ export interface CustomerOrder {
   cancelled_date: string | null;
   unit_price: number | null;
   total_cost: number | null;
+  /** What was actually handed over, and how. Both null on an order the
+   * farmer completed without recording a payment — five of the nine orders
+   * on file predate pricing entirely. */
+  amount_paid: number | null;
+  payment_method: string | null;
+}
+
+/**
+ * The gap between what a collected order cost and what was paid for it, or
+ * null when there's nothing to compare.
+ *
+ * Deliberately mirrors `owed` in totalsOf: an unpriced order contributes
+ * nothing rather than reading as a debt, and a sub-cent difference is a
+ * rounding sliver rather than money. Negative means overpaid, which is worth
+ * showing rather than clamping — a customer who handed over $20 for a $15
+ * pickup should see that on their own history.
+ */
+export function outstanding(
+  order: Pick<CustomerOrder, "total_cost" | "amount_paid" | "picked_up_date">,
+): number | null {
+  if (!order.picked_up_date) return null;
+  if (order.total_cost === null || order.amount_paid === null) return null;
+  const gap = Number(order.total_cost) - Number(order.amount_paid);
+  return Math.abs(gap) <= 0.005 ? 0 : Math.round(gap * 100) / 100;
 }
 
 export async function fetchProfile(userId: string): Promise<CustomerProfile | null> {
@@ -70,7 +94,9 @@ export async function fetchShop(): Promise<ShopProduct[]> {
 export async function fetchMyOrders(userId: string): Promise<CustomerOrder[]> {
   const { data, error } = await supabase
     .from("orders")
-    .select("id, product_id, quantity, status, reserved_date, picked_up_date, cancelled_date, unit_price, total_cost")
+    .select(
+      "id, product_id, quantity, status, reserved_date, picked_up_date, cancelled_date, unit_price, total_cost, amount_paid, payment_method",
+    )
     .eq("customer_id", userId)
     .order("reserved_date", { ascending: false });
   if (error) throw new Error(`orders: ${error.message}`);

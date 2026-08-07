@@ -263,3 +263,21 @@
   box-sizing: border-box;
   min-width: 0;
 }
+
+/* History rows: the amount sits opposite the product, matching the open
+   pickup above it, with the shortfall under it when there is one. */
+
+.shop-history__cost {
+  flex: none;
+  text-align: right;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.shop-history__gap {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--red);
+}

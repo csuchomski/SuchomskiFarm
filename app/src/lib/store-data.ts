@@ -185,3 +185,113 @@ export function formatUnitPrice(p: RealProduct): string {
   if (p.price === null || p.price === undefined) return `— / ${p.unit}`;
   return `$${Number(p.price).toFixed(2)} / ${p.unit}`;
 }
+
+// ─── managing products ─────────────────────────────────────────────────
+
+export interface ProductDraft {
+  name: string;
+  unit: string;
+  price: string;
+  /** Weekly production figure. Blank means "work it out from history" —
+   * see lib/forecast.ts, which divides this by seven. */
+  forecastOverride: string;
+  typeCode: string;
+}
+
+/** type_code drives milk detection (lib/milkings findMilkProduct) and the
+ * product-type lookup from migration 008. Free text in the schema; these are
+ * the ones the app already understands. */
+export const PRODUCT_TYPES = ["milk", "eggs", "meat", "soap", "other"] as const;
+
+export function validateProduct(draft: ProductDraft): string | null {
+  if (!draft.name.trim()) return "Give the product a name.";
+  if (!draft.unit.trim()) return "What's it sold by — gallon, dozen, pound?";
+
+  if (draft.price.trim() !== "") {
+    const price = Number(draft.price);
+    if (!Number.isFinite(price)) return "The price has to be a number.";
+    if (price < 0) return "The price can't be negative.";
+  }
+
+  if (draft.forecastOverride.trim() !== "") {
+    const f = Number(draft.forecastOverride);
+    if (!Number.isFinite(f)) return "The weekly figure has to be a number.";
+    if (f < 0) return "The weekly figure can't be negative.";
+  }
+
+  return null;
+}
+
+const productFields = (draft: ProductDraft) => ({
+  name: draft.name.trim(),
+  unit: draft.unit.trim(),
+  // Null rather than 0: no price at all is a real state, and an order
+  // priced at zero is not the same as one that couldn't be priced.
+  price: draft.price.trim() === "" ? null : Number(draft.price),
+  forecast_override: draft.forecastOverride.trim() === "" ? null : Number(draft.forecastOverride),
+  type_code: draft.typeCode.trim() || null,
+});
+
+export async function createProduct(businessId: number, draft: ProductDraft): Promise<RealProduct> {
+  const { data, error } = await supabase
+    .from("products")
+    .insert({ ...productFields(draft), business_id: businessId })
+    .select("id, name, unit, price, forecast_override")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as RealProduct;
+}
+
+export async function updateProduct(id: number, draft: ProductDraft): Promise<RealProduct> {
+  const { data, error } = await supabase
+    .from("products")
+    .update(productFields(draft))
+    .eq("id", id)
+    .select("id, name, unit, price, forecast_override")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as RealProduct;
+}
+
+// ─── discarding ────────────────────────────────────────────────────────
+
+/** The only two the database accepts — discard_inventory raises on anything
+ * else. Kept in lockstep with that check deliberately. */
+export const DISCARD_REASONS = ["Fed to Pigs", "Poured out"] as const;
+export type DiscardReason = (typeof DISCARD_REASONS)[number];
+
+/**
+ * Checked here so a mistake is a sentence rather than a plpgsql exception.
+ * `available` is unreserved stock: discard_inventory won't touch anything
+ * already promised to an order, and raises 'Not enough unreserved
+ * inventory' rather than breaking a promise.
+ */
+export function validateDiscard(input: { quantity: string; reason: string; available: number }): string | null {
+  const raw = input.quantity.trim();
+  if (raw === "") return "How much is being thrown out?";
+  const qty = Number(raw);
+  if (!Number.isFinite(qty)) return "The quantity has to be a number.";
+  if (qty <= 0) return "Discard at least some of it.";
+  if (qty > input.available) {
+    return `Only ${input.available} unreserved — the rest is promised to an order.`;
+  }
+  if (!DISCARD_REASONS.includes(input.reason as DiscardReason)) {
+    return `Pick a reason: ${DISCARD_REASONS.join(" or ")}.`;
+  }
+  return null;
+}
+
+export async function discardInventory(input: {
+  productId: number;
+  quantity: number;
+  reason: DiscardReason;
+  batchId?: number | null;
+}): Promise<void> {
+  const { error } = await supabase.rpc("discard_inventory", {
+    p_product_id: input.productId,
+    p_quantity: input.quantity,
+    p_reason: input.reason,
+    p_batch_id: input.batchId ?? null,
+  });
+  if (error) throw new Error(error.message);
+}

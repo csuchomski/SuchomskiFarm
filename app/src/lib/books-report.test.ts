@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { typeMap, type RealLedgerAccount, type RealTransaction, type TransactionType } from "./books-data";
 import {
   accountBalances,
+  accountsForBusiness,
+  defaultAccountFor,
   byCategory,
   byMonth,
   inRange,
@@ -254,5 +256,69 @@ describe("monthsBack", () => {
 
   it("handles more than a full year", () => {
     expect(monthsBack("2026-08-07", 12)).toBe("2025-08-01");
+  });
+});
+
+describe("accountsForBusiness", () => {
+  const accounts = [
+    account("Landmark CU - Farm", 454.54, 5),
+    account("5553 N Lyd Check", 852.64, 4),
+    account("Landmark CU - Realtor", 2076.59, 3),
+    // The live "Venmo" row: no business at all.
+    account("Venmo", 0, null),
+  ];
+
+  it("offers only this business's accounts", () => {
+    expect(accountsForBusiness(accounts, [], 5)).toEqual(["Landmark CU - Farm"]);
+  });
+
+  it("never offers another business's account", () => {
+    // The bug: sorted by name across every business, "5553 N Lyd Check"
+    // came first and was pre-filled on a farm entry.
+    expect(accountsForBusiness(accounts, [], 5)).not.toContain("5553 N Lyd Check");
+  });
+
+  it("includes an account its own transactions already use", () => {
+    // "Venmo" has no business_id, so it is in nobody's account list — but
+    // farm entries are posted to it, and you have to be able to pick it.
+    const rows = accountsForBusiness(accounts, [tx({ business_id: 5, account: "Venmo" })], 5);
+    expect(rows).toEqual(["Landmark CU - Farm", "Venmo"]);
+  });
+
+  it("doesn't pull in an account only another business posts to", () => {
+    const rows = accountsForBusiness(accounts, [tx({ business_id: 4, account: "Venmo" })], 5);
+    expect(rows).toEqual(["Landmark CU - Farm"]);
+  });
+
+  it("doesn't list the same account twice", () => {
+    const rows = accountsForBusiness(accounts, [tx({ business_id: 5, account: "Landmark CU - Farm" })], 5);
+    expect(rows).toEqual(["Landmark CU - Farm"]);
+  });
+
+  it("matches case-insensitively when de-duplicating", () => {
+    const rows = accountsForBusiness(accounts, [tx({ business_id: 5, account: "landmark cu - farm" })], 5);
+    expect(rows).toHaveLength(1);
+  });
+
+  it("ignores a blank account on a transaction", () => {
+    expect(accountsForBusiness(accounts, [tx({ business_id: 5, account: "  " })], 5)).toEqual([
+      "Landmark CU - Farm",
+    ]);
+  });
+
+  it("is empty with no business chosen", () => {
+    expect(accountsForBusiness(accounts, [], null)).toEqual([]);
+  });
+});
+
+describe("defaultAccountFor", () => {
+  const accounts = [account("Landmark CU - Farm", 454.54, 5), account("5553 N Lyd Check", 852.64, 4)];
+
+  it("starts on this business's account", () => {
+    expect(defaultAccountFor(accounts, [], 5)).toBe("Landmark CU - Farm");
+  });
+
+  it("starts on nothing rather than another business's account", () => {
+    expect(defaultAccountFor(accounts, [], 99)).toBe("");
   });
 });

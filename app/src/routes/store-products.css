@@ -1,3 +1,5 @@
+@import "./store-orders.css";
+
 .product-panel {
   border: 1px solid var(--ink);
   background: var(--page);
@@ -232,6 +234,26 @@ button.batch-entry__action:disabled {
 
 @media (max-width: 420px) {
   .attribution-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Creating and editing a product, and discarding stock. Same control
+   styling as the store's other forms. */
+.product-form {
+  border: 1px solid var(--hairline);
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.product-form__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 420px) {
+  .product-form__fields {
     grid-template-columns: 1fr;
   }
 }

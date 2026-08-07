@@ -12,6 +12,7 @@ import {
   type Direction,
   type RealTransaction,
 } from "../lib/books-data";
+import { accountsForBusiness, defaultAccountFor } from "../lib/books-report";
 import { categoriesFor, fetchTaxCategories, type TaxCategory } from "../lib/tax";
 import { useWorkspace } from "../lib/workspace";
 import "./books-transactions.css";
@@ -34,6 +35,11 @@ export default function BooksTransactions() {
   const { business } = useWorkspace();
   const businessId = business?.id ?? null;
   const [result, setResult] = useState<Fetch>({ state: "loading" });
+
+  // Which business the *entry* is for. Defaults to the one you're viewing,
+  // but an entry can be logged against any business you belong to — the
+  // cheque book doesn't care which page you happened to be on.
+  const [entryBusinessId, setEntryBusinessId] = useState<number | null>(null);
 
   const [showForm, setShowForm] = useState(false);
   const [save, setSave] = useState<Save>({ state: "idle" });
@@ -58,7 +64,6 @@ export default function BooksTransactions() {
   const load = useCallback(async () => {
     const data = await fetchBooksData();
     setResult({ state: "ok", data });
-    setAccount((cur) => cur || data.accounts[0]?.name || "");
     return data;
   }, []);
 
@@ -86,18 +91,44 @@ export default function BooksTransactions() {
   const data = result.state === "ok" ? result.data : null;
   const types = useMemo(() => typeMap(data?.types ?? []), [data?.types]);
   const rows: RealTransaction[] = data ? data.transactions.filter((t) => t.business_id === businessId) : [];
+  const totals = summarise(rows, types);
+
+  // The entry follows the page unless you deliberately point it elsewhere,
+  // and switching business in the topbar resets it — otherwise a half-typed
+  // farm entry would quietly stay attached to the farm after you'd moved on.
+  useEffect(() => {
+    setEntryBusinessId(businessId);
+  }, [businessId]);
+
+  const entryBusiness = data?.businesses.find((b) => b.id === entryBusinessId) ?? null;
+
+  // Accounts belong to a business. This was `data.accounts[0]` across every
+  // business — sorted by name that is the rental account, which is what put
+  // "5553 N Lyd Check" on a farm entry.
+  const accountOptions = useMemo(
+    () => (data ? accountsForBusiness(data.accounts, data.transactions, entryBusinessId) : []),
+    [data, entryBusinessId],
+  );
+
+  // Re-default whenever the entry's business changes, rather than leaving
+  // the previous business's account sitting in the field.
+  useEffect(() => {
+    if (!data) return;
+    setAccount(defaultAccountFor(data.accounts, data.transactions, entryBusinessId));
+  }, [data, entryBusinessId]);
+
   // Keyed on the direction of the type being entered, so an expense form
-  // doesn't offer income lines.
+  // doesn't offer income lines — and on the *entry's* business type, so
+  // logging a rental expense offers Schedule E's categories, not the farm's.
   const direction = types.get(type.trim())?.direction;
   const categoryOptions =
     direction === "income" || direction === "expense"
-      ? categoriesFor(taxCategories, business?.type ?? "", direction)
+      ? categoriesFor(taxCategories, entryBusiness?.type ?? "", direction)
       : [];
-  const totals = summarise(rows, types);
 
   const amountNum = Number(amount);
   const canSave =
-    businessId !== null &&
+    entryBusinessId !== null &&
     date !== "" &&
     payer.trim() !== "" &&
     amount.trim() !== "" &&
@@ -105,11 +136,11 @@ export default function BooksTransactions() {
     amountNum !== 0;
 
   const handleSave = async () => {
-    if (!canSave || businessId === null) return;
+    if (!canSave || entryBusinessId === null) return;
     setSave({ state: "saving" });
     try {
       await addTransaction({
-        businessId,
+        businessId: entryBusinessId,
         date,
         type,
         category: category.trim() || "Uncategorised",
@@ -200,9 +231,31 @@ export default function BooksTransactions() {
           {showForm && (
             <div className="entry-form">
               <div className="eyebrow" style={{ marginBottom: 10 }}>
-                New entry · {business?.name}
+                New entry
+                {entryBusiness && entryBusiness.id !== businessId && " · for another business"}
               </div>
               <div className="entry-form__grid entry-form__grid--wide">
+                {/* Which set of books this lands in. Defaults to the one
+                    you're looking at; the picker is here because a cheque
+                    written for the rental shouldn't need a page change to
+                    record.
+
+                    Labelled "Business for this entry" rather than
+                    "Business": the topbar's switcher already owns that name,
+                    and two controls sharing an accessible name on one page
+                    is a real ambiguity for anyone navigating by label. */}
+                <select
+                  className="entry-form__field"
+                  value={entryBusinessId ?? ""}
+                  onChange={(e) => setEntryBusinessId(e.target.value === "" ? null : Number(e.target.value))}
+                  aria-label="Business for this entry"
+                >
+                  {data.businesses.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
                 <input
                   className="entry-form__field mono"
                   type="date"
@@ -261,6 +314,9 @@ export default function BooksTransactions() {
                   aria-label="Payer"
                   required
                 />
+                {/* Only this business's accounts. Still a datalist rather
+                    than a select so a new account name can be typed — but
+                    the list no longer offers another business's. */}
                 <input
                   className="entry-form__field"
                   placeholder="Account"
@@ -269,8 +325,8 @@ export default function BooksTransactions() {
                   list="ledger-accounts"
                 />
                 <datalist id="ledger-accounts">
-                  {data.accounts.map((a) => (
-                    <option key={a.id} value={a.name} />
+                  {accountOptions.map((name) => (
+                    <option key={name} value={name} />
                   ))}
                 </datalist>
                 <input

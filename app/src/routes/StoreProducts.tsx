@@ -6,6 +6,7 @@ import { addInventoryBatch, fetchStoreData, formatUnitPrice, type StoreData } fr
 import { fetchAnimals, type RealAnimal } from "../lib/herd";
 import { fetchLactations, openLactation, type RealLactation } from "../lib/lactations";
 import {
+  byAnimal,
   enteredEntries,
   fetchMilkProduct,
   recordMilkings,
@@ -99,6 +100,19 @@ export default function StoreProducts() {
     ? data!.production.filter((r) => r.product_id === selected.id)
     : [];
   const discardsForSelected = selected ? data!.discards.filter((d) => d.product_id === selected.id) : [];
+
+  // Totalled per animal, so the list is bounded by the herd rather than by
+  // how many times you've milked.
+  const perAnimalHistory = byAnimal(productionForSelected);
+  const historySpan = (() => {
+    if (perAnimalHistory.length === 0) return "";
+    const first = perAnimalHistory.reduce((m, r) => (r.first < m ? r.first : m), perAnimalHistory[0].first);
+    const last = perAnimalHistory.reduce((m, r) => (r.last > m ? r.last : m), perAnimalHistory[0].last);
+    const total = Math.round(perAnimalHistory.reduce((s, r) => s + r.total, 0) * 1000) / 1000;
+    return first === last
+      ? `${total} ${selected?.unit ?? ""} on ${first}`.trim()
+      : `${total} ${selected?.unit ?? ""} between ${first} and ${last}`.trim();
+  })();
 
   const qtyNum = usingPerAnimal ? perAnimalTotal : Number(quantity);
   const perAnimalProblem = usingPerAnimal ? validateMilkings(sheet, todayIso(), date) : null;
@@ -334,24 +348,40 @@ export default function StoreProducts() {
                 </div>
               )}
 
-              <div className="eyebrow" style={{ margin: "20px 0 10px" }}>
-                Attributed to animals
+              {/* History, not input — the form above records new milk, this
+                  reports what has already been recorded. Retitled because
+                  two stacked ear-tag lists read as the same thing twice.
+                  Totalled per animal rather than one cell per record: the
+                  latter grows without bound and never answers "how much has
+                  she given". */}
+              <div className="eyebrow" style={{ margin: "20px 0 4px" }}>
+                Where this milk came from
               </div>
-              {productionForSelected.length > 0 ? (
-                <div className="attribution-grid">
-                  {productionForSelected.map((r) => {
-                    const animal = animalsById.get(r.animal_id);
-                    return (
-                      <div className="attribution-cell" key={r.id}>
-                        <EarTag tag={animal?.ear_tag ?? "?"} accent="herd" />
-                        <span style={{ flex: 1, fontSize: 15 }}>{animal?.barn_name ?? "Unknown animal"}</span>
-                        <span className="mono" style={{ fontSize: 15, fontWeight: 500 }}>
-                          {r.quantity}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+              {perAnimalHistory.length > 0 ? (
+                <>
+                  <p style={{ fontSize: 13, color: "var(--ink-muted)", marginBottom: 10 }}>
+                    {historySpan}
+                  </p>
+                  <div className="attribution-grid">
+                    {perAnimalHistory.map((row) => {
+                      const animal = animalsById.get(row.animalId);
+                      return (
+                        <div className="attribution-cell" key={row.animalId}>
+                          <EarTag tag={animal?.ear_tag ?? "?"} accent="herd" />
+                          <span className="attribution-cell__name">
+                            {animal?.barn_name ?? "Unknown animal"}
+                            <span className="attribution-cell__days">
+                              {row.days} day{row.days === 1 ? "" : "s"}
+                            </span>
+                          </span>
+                          <span className="mono" style={{ fontSize: 15, fontWeight: 500 }}>
+                            {row.total}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               ) : (
                 <p style={{ fontSize: 13, color: "var(--ink-muted)", marginBottom: 14 }}>
                   No per-animal production recorded for {selected.name}.

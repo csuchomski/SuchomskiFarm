@@ -1,0 +1,65 @@
+@import "./books-reports.css";
+
+/* The filing schedule. Reads like the paper form: line number, category,
+   amount — with subtotals ruled off. */
+
+.tax-head {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-bottom: 16px;
+}
+
+.tax-schedule {
+  font-size: 21px;
+  text-wrap: pretty;
+}
+
+.tax-years {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tax-subtotal {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 8px;
+  font-size: 15px;
+  font-weight: 500;
+  border-top: 2px solid var(--ink);
+}
+
+.tax-net {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: baseline;
+  margin-top: 32px;
+  padding: 16px 8px;
+  border-top: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+}
+
+.tax-net__value {
+  font-size: 21px;
+  font-weight: 500;
+}
+
+/* Printing the schedule is a legitimate way to file it, so drop the app
+   furniture and let the form run down the page. */
+@media print {
+  .ops-shell__body > *:not(.ops-shell__main),
+  .topbar,
+  .tax-years,
+  .stat-row {
+    display: none !important;
+  }
+
+  .ops-shell__main {
+    padding: 0 !important;
+  }
+}

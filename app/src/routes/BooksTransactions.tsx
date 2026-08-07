@@ -12,6 +12,7 @@ import {
   type Direction,
   type RealTransaction,
 } from "../lib/books-data";
+import { categoriesFor, fetchTaxCategories, type TaxCategory } from "../lib/tax";
 import { useWorkspace } from "../lib/workspace";
 import "./books-transactions.css";
 
@@ -44,6 +45,11 @@ export default function BooksTransactions() {
   const [payer, setPayer] = useState("");
   const [amount, setAmount] = useState("");
 
+  // The schedule vocabulary for this business type, used to suggest
+  // categories that map to a line. Absent before migration 018, in which
+  // case the field simply falls back to plain free text.
+  const [taxCategories, setTaxCategories] = useState<TaxCategory[]>([]);
+
   const [showNewType, setShowNewType] = useState(false);
   const [newTypeLabel, setNewTypeLabel] = useState("");
   const [newTypeDirection, setNewTypeDirection] = useState<Exclude<Direction, "unknown">>("expense");
@@ -66,9 +72,27 @@ export default function BooksTransactions() {
     };
   }, [load]);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchTaxCategories()
+      .then((c) => !cancelled && setTaxCategories(c))
+      // Suggestions are a convenience; the page must still work without them.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const data = result.state === "ok" ? result.data : null;
   const types = useMemo(() => typeMap(data?.types ?? []), [data?.types]);
   const rows: RealTransaction[] = data ? data.transactions.filter((t) => t.business_id === businessId) : [];
+  // Keyed on the direction of the type being entered, so an expense form
+  // doesn't offer income lines.
+  const direction = types.get(type.trim())?.direction;
+  const categoryOptions =
+    direction === "income" || direction === "expense"
+      ? categoriesFor(taxCategories, business?.type ?? "", direction)
+      : [];
   const totals = summarise(rows, types);
 
   const amountNum = Number(amount);
@@ -210,12 +234,25 @@ export default function BooksTransactions() {
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                 />
+                {/* A datalist rather than a select: every category the
+                    schedule knows is offered, so entries land on a line by
+                    default, but a category nobody anticipated can still be
+                    typed. Anything unmatched shows up on Books → Taxes as
+                    unmapped rather than being silently lost. */}
                 <input
                   className="entry-form__field"
                   placeholder="Category"
+                  list="tax-category-options"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                 />
+                <datalist id="tax-category-options">
+                  {categoryOptions.map((c) => (
+                    <option key={c.id} value={c.label}>
+                      {c.schedule_line ? `line ${c.schedule_line}` : ""}
+                    </option>
+                  ))}
+                </datalist>
                 <input
                   className="entry-form__field"
                   placeholder="Payer"

@@ -220,3 +220,77 @@ describe("Books reports page", () => {
     expect(screen.queryByText("Rents received")).toBeNull();
   });
 });
+
+// ─── the tax pages ─────────────────────────────────────────────────────
+
+vi.mock("../lib/tax", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/tax")>()),
+  fetchTaxCategories: vi.fn(async () => [
+    { id: 1, business_type: "farm", direction: "income", label: "Other farm income", schedule_line: "8", sort_order: 70 },
+    { id: 2, business_type: "farm", direction: "expense", label: "Feed", schedule_line: "16", sort_order: 70 },
+    { id: 3, business_type: "farm", direction: "expense", label: "Repairs & maintenance", schedule_line: "25", sort_order: 180 },
+  ]),
+  fetchBusinessTypes: vi.fn(async () => [
+    { code: "farm", label: "Farm", schedule_code: "F", schedule_label: "Schedule F — Profit or Loss From Farming" },
+  ]),
+  fetchAssets: vi.fn(async () => [
+    { id: 1, business_id: 5, kind: "asset", name: "Tractor", value: 18000 },
+    { id: 2, business_id: 5, kind: "liability", name: "Equipment loan", value: 6000 },
+  ]),
+}));
+
+describe("Books taxes page", () => {
+  it("puts each category on its schedule line", async () => {
+    const { default: BooksTaxes } = await import("./BooksTaxes");
+    await mount(BooksTaxes, "Part II — Expenses");
+
+    expect(screen.getAllByText(/Schedule F — Profit or Loss From Farming/).length).toBeGreaterThan(0);
+    // $20 income on line 8, $30 of feed on line 16.
+    expect(screen.getByText("8")).toBeTruthy();
+    expect(screen.getByText("16")).toBeTruthy();
+    expect(screen.getAllByText("$30.00").length).toBeGreaterThan(0);
+  });
+
+  it("keeps a line with nothing on it, because the form has one", async () => {
+    const { default: BooksTaxes } = await import("./BooksTaxes");
+    await mount(BooksTaxes, "Part II — Expenses");
+    // Line 25 — no repairs this year, but it's on the paper form.
+    expect(screen.getByText("25")).toBeTruthy();
+    expect(screen.getByText("Repairs & maintenance")).toBeTruthy();
+  });
+
+  it("flags money that lands on no line", async () => {
+    // The "Venmo" $5 entry is categorised "Other farm income", which does
+    // map — so nothing should be unmapped here.
+    const { default: BooksTaxes } = await import("./BooksTaxes");
+    await mount(BooksTaxes, "Part II — Expenses");
+    expect(screen.queryByText(/don't match a line/)).toBeNull();
+  });
+
+  it("shows the net for the schedule", async () => {
+    const { default: BooksTaxes } = await import("./BooksTaxes");
+    await mount(BooksTaxes, "Part II — Expenses");
+    // Income 20 + 5 = 25, expenses 30, net −5.
+    expect(screen.getByText("Net profit or loss — Schedule F")).toBeTruthy();
+    expect(screen.getAllByText("−$5.00").length).toBeGreaterThan(0);
+  });
+});
+
+describe("Balance sheet page", () => {
+  it("adds cash to assets and subtracts liabilities", async () => {
+    const { default: BooksBalanceSheet } = await import("./BooksBalanceSheet");
+    await mount(BooksBalanceSheet, "Liabilities");
+
+    // Cash is both accounts: Landmark 444.54 plus the unlisted Venmo 5.00
+    // = 449.54. Add the 18,000 tractor, subtract the 6,000 loan.
+    expect(screen.getAllByText("$18,449.54").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("$6,000.00").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("$12,449.54").length).toBeGreaterThan(0);
+  });
+
+  it("shows the liability that had no UI before", async () => {
+    const { default: BooksBalanceSheet } = await import("./BooksBalanceSheet");
+    await mount(BooksBalanceSheet, "Liabilities");
+    expect(screen.getByText("Equipment loan")).toBeTruthy();
+  });
+});

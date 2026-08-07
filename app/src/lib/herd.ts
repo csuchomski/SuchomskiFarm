@@ -10,7 +10,7 @@ import { herdSchema } from "./supabase";
  */
 
 const ANIMAL_COLUMNS =
-  "id, ear_tag, barn_name, sex, class, status, birth_date, sire_id, dam_id, notes, purpose, origin";
+  "id, ear_tag, barn_name, sex, class, status, birth_date, sire_id, dam_id, notes, purpose, origin, record_type";
 
 export interface RealAnimal {
   id: string;
@@ -25,7 +25,18 @@ export interface RealAnimal {
   notes: string | null;
   purpose: string;
   origin: string;
+  /** 'herd' for an animal that lives here; 'reference' for one that exists
+   * only to be named in a pedigree — an AI bull you buy straws from. Reads
+   * that walk ancestry need both; anything that counts, feeds or milks the
+   * herd wants only 'herd'. See lib/sires.ts. */
+  record_type: string;
 }
+
+/** The animals this farm actually keeps. Reference rows are ancestors and
+ * catalogue bulls, not livestock, and counting them would overstate the
+ * herd on every screen that shows a total. */
+export const herdOnly = (animals: RealAnimal[]): RealAnimal[] =>
+  animals.filter((a) => a.record_type !== "reference");
 
 export interface BreedShare {
   breedId: string;

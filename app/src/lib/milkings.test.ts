@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  byAnimal,
   enteredEntries,
   findMilkProduct,
   milkForLactation,
@@ -213,5 +214,44 @@ describe("findMilkProduct", () => {
   it("carries the product's own unit rather than assuming gallons", () => {
     const found = findMilkProduct([{ id: 7, name: "Milk", unit: "litre", type_code: "milk" }]);
     expect(found).toEqual({ id: 7, name: "Milk", unit: "litre" });
+  });
+});
+
+describe("byAnimal", () => {
+  it("totals a cow's records into one row", () => {
+    const rows = byAnimal([
+      rec({ id: "a", animal_id: "a1", quantity: 5, produced_date: "2026-08-04" }),
+      rec({ id: "b", animal_id: "a1", quantity: 4, produced_date: "2026-08-07" }),
+    ]);
+    expect(rows).toEqual([{ animalId: "a1", total: 9, days: 2, first: "2026-08-04", last: "2026-08-07" }]);
+  });
+
+  it("counts distinct days, not records", () => {
+    // Milked twice on one day is one day of production, not two.
+    const rows = byAnimal([
+      rec({ id: "am", animal_id: "a1", quantity: 4, produced_date: "2026-08-04" }),
+      rec({ id: "pm", animal_id: "a1", quantity: 3, produced_date: "2026-08-04" }),
+    ]);
+    expect(rows[0]).toMatchObject({ total: 7, days: 1 });
+  });
+
+  it("puts the heaviest producer first", () => {
+    const rows = byAnimal([
+      rec({ id: "x", animal_id: "light", quantity: 2 }),
+      rec({ id: "y", animal_id: "heavy", quantity: 9 }),
+    ]);
+    expect(rows.map((r) => r.animalId)).toEqual(["heavy", "light"]);
+  });
+
+  it("is bounded by the herd, not the number of records", () => {
+    // The bug this replaces: one cell per record grew without limit.
+    const many = Array.from({ length: 200 }, (_, i) =>
+      rec({ id: `r${i}`, animal_id: i % 2 ? "a1" : "a2", quantity: 1, produced_date: `2026-01-${(i % 28) + 1}` }),
+    );
+    expect(byAnimal(many)).toHaveLength(2);
+  });
+
+  it("is empty for no records", () => {
+    expect(byAnimal([])).toEqual([]);
   });
 });

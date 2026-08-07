@@ -14,7 +14,8 @@ const a = (id: string, over: Partial<RealAnimal> = {}): RealAnimal => ({
   dam_id: null,
   notes: null,
   purpose: "dairy",
-  origin: "born_here",
+  origin: "born_on_farm",
+  record_type: "herd",
   ...over,
 });
 

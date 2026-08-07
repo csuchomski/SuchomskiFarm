@@ -7,6 +7,7 @@ import {
   fetchAnimals,
   fetchBreedComposition,
   formatAge,
+  herdOnly,
   type BreedShare,
   type RealAnimal,
 } from "../lib/herd";
@@ -50,7 +51,12 @@ export default function Animals() {
     };
   }, []);
 
-  const all = result.state === "ok" ? result.rows : EMPTY_ANIMALS;
+  // `rows` is everything fetched, including reference bulls — the add/edit
+  // form needs them so a calf can be given an AI sire. The list itself shows
+  // only the animals that live here; a catalogue bull isn't livestock and
+  // would overstate every count on the page.
+  const rows = result.state === "ok" ? result.rows : EMPTY_ANIMALS;
+  const all = useMemo(() => herdOnly(rows), [rows]);
   const breeds = result.state === "ok" ? result.breeds : EMPTY_BREEDS;
 
   // Classes come from the data, so a class nobody anticipated still gets a
@@ -100,7 +106,7 @@ export default function Animals() {
       {adding && result.state === "ok" && (
         <div style={{ paddingTop: 16 }}>
           <AnimalForm
-            herd={all}
+            herd={rows}
             farmId={farmId}
             onCancel={() => setAdding(false)}
             onSaved={(saved) => {

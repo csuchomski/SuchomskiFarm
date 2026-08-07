@@ -143,6 +143,56 @@ export function unattributedMilk(records: RealProductionRecord[], lactations: Re
   );
 }
 
+/**
+ * Production totalled per animal.
+ *
+ * The Store screen used to render one cell per production record, which is
+ * unbounded — two cows milked daily is well over a thousand cells in a
+ * year, all-time, with no way to read "how much has she given". Grouping by
+ * animal bounds it to the size of the herd and answers the question the
+ * section is actually asking.
+ *
+ * `days` counts distinct dates rather than records, so a cow milked twice
+ * on one day counts as one day.
+ */
+export interface AnimalProduction {
+  animalId: string;
+  total: number;
+  days: number;
+  first: string;
+  last: string;
+}
+
+export function byAnimal(
+  // Structural rather than RealProductionRecord: store-data.ts declares its
+  // own production record type without `note`, and this only ever reads
+  // three fields. Taking the minimum lets both callers pass theirs.
+  records: { animal_id: string; quantity: number; produced_date: string }[],
+): AnimalProduction[] {
+  const acc = new Map<string, { total: number; dates: Set<string> }>();
+
+  for (const r of records) {
+    const entry = acc.get(r.animal_id) ?? { total: 0, dates: new Set<string>() };
+    entry.total += Number(r.quantity);
+    entry.dates.add(r.produced_date);
+    acc.set(r.animal_id, entry);
+  }
+
+  return [...acc]
+    .map(([animalId, { total, dates }]) => {
+      const sorted = [...dates].sort();
+      return {
+        animalId,
+        total: round3(total),
+        days: dates.size,
+        first: sorted[0],
+        last: sorted[sorted.length - 1],
+      };
+    })
+    // Heaviest producer first — that's what the section is read for.
+    .sort((a, b) => b.total - a.total || a.animalId.localeCompare(b.animalId));
+}
+
 /** Batches with no milking behind them — stock added straight from the
  *  Store screen. Real inventory, just not traceable to an animal. */
 export function unattributedBatches(

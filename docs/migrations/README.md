@@ -26,6 +26,7 @@ database, don't take the table's word for it.
 | ~~012~~ | ~~Drop the duplicate `reserve_product`~~ | — | **Already run, 2026-08-06 — was a no-op.** The duplicate was already absent. |
 | ~~014~~ | ~~Fix `business_members` policy recursion~~ | — | **Already run, 2026-08-06.** Unblocked the business switcher. |
 | ~~015~~ | ~~Lactation constraints~~ | — | **Already run, 2026-08-06.** Check constraint validated; rejections verified. |
+| ~~016~~ | ~~Genetics uniqueness + unsavable options~~ | — | **Already run, 2026-08-07.** One result per animal per marker/condition. Also retired two dropdown options (`origin 'born_here'`, `status 'dead'`) that the `animals` check constraints always rejected. |
 
 ## A policy change can break writes, not just reads
 

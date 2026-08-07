@@ -89,8 +89,10 @@ Four items were reviewed and are no longer open.
 - **`discards` had no `business_id`** — fixed by migration 020, along with
   `discard_inventory()` inserting rows without one. That was the *third*
   instance of the same bug, after 017 (`reserve_product`) and 019
-  (`complete_scheduled_pickup`). Every write path that 010's policies touched
-  had to be found by hand; there is still no test that would catch a fourth.
+  (`complete_scheduled_pickup`). There was a fourth —
+  `herd.record_production`, fixed by 021 — found by the audit query written
+  at the same time rather than by reading another function body. See
+  `docs/migrations/audit-business-scoping.sql`.
 - **Today's "Log milking" button** — fixed, along with two more links written
   before the pages they wanted existed. "Log milking" and "No milking logged
   today" now go to `/milkings`, and "orders not picked up" goes to

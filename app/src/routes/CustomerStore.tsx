@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import { CustomerShell } from "../components/shell/CustomerShell";
+import { CustomerShell, type CustomerTab } from "../components/shell/CustomerShell";
 import { CustomerAuth } from "../components/auth/CustomerAuth";
 import { Button, Callout, Pill } from "../components/ui";
 import { useAuth, signOut } from "../lib/auth";
 import {
   cancelOrder,
   fetchMyOrders,
+  fetchProfile,
   fetchShop,
   reserve,
   type CustomerOrder,
+  type CustomerProfile,
   type ShopProduct,
 } from "../lib/customer";
 import {
@@ -27,7 +29,13 @@ import "./customer-store.css";
 type Fetch =
   | { state: "loading" }
   | { state: "error"; message: string }
-  | { state: "ok"; products: ShopProduct[]; orders: CustomerOrder[]; schedules: Schedule[] };
+  | {
+      state: "ok";
+      products: ShopProduct[];
+      orders: CustomerOrder[];
+      schedules: Schedule[];
+      profile: CustomerProfile | null;
+    };
 
 const price = (n: number | null, unit: string) => (n === null ? `— per ${unit}` : `$${Number(n).toFixed(2)} per ${unit}`);
 
@@ -44,15 +52,19 @@ export default function CustomerStore() {
   const [subscribing, setSubscribing] = useState<number | null>(null);
   const [subDay, setSubDay] = useState<string>("Thursday");
   const [subQty, setSubQty] = useState("");
+  const [tab, setTab] = useState<CustomerTab>("Store");
 
   const load = useCallback(async () => {
     if (!userId) return;
-    const [products, orders, schedules] = await Promise.all([
+    const [products, orders, schedules, profile] = await Promise.all([
       fetchShop(),
       fetchMyOrders(userId),
       fetchMySchedules(userId),
+      // The account tab needs a name to show. A missing profile is not an
+      // error — the row is created by a trigger and may lag a fresh signup.
+      fetchProfile(userId).catch(() => null),
     ]);
-    setResult({ state: "ok", products, orders, schedules });
+    setResult({ state: "ok", products, orders, schedules, profile });
   }, [userId]);
 
   useEffect(() => {
@@ -180,11 +192,26 @@ export default function CustomerStore() {
   const activeSchedules = schedules.filter((s) => s.cancelled_at === null);
   const today = new Date().toISOString().slice(0, 10);
   const past = orders.filter((o) => o.cancelled_date || o.picked_up_date);
+  const profile = result.state === "ok" ? result.profile : null;
+  const profileName =
+    `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim() ||
+    profile?.email ||
+    session?.user.email ||
+    "Your account";
+  const collected = orders.filter((o) => o.picked_up_date);
+  const spent = Math.round(collected.reduce((sum, o) => sum + Number(o.total_cost ?? 0), 0) * 100) / 100;
+
   const productName = (id: number) => products.find((p) => p.id === id)?.name ?? "Item";
   const productUnit = (id: number) => products.find((p) => p.id === id)?.unit ?? "";
 
   return (
-    <CustomerShell>
+    <CustomerShell
+      activeTab={tab}
+      onTabChange={setTab}
+      counts={{ Pickup: open.length + activeSchedules.length }}
+    >
+      {tab === "Store" && (
+        <>
       <div className="shop-hero">
         <div className="eyebrow">
           {new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}
@@ -324,6 +351,28 @@ export default function CustomerStore() {
       {result.state === "ok" && products.length === 0 && (
         <p style={{ padding: 24, fontSize: 14, color: "var(--ink-muted)" }}>Nothing in the store just now.</p>
       )}
+        </>
+      )}
+
+      {tab === "Pickup" && (
+        <>
+      {(notice || actionError) && (
+        <div style={{ padding: "16px 16px 0" }}>
+          {notice && <p style={{ fontSize: 13, color: "var(--herd-green)" }}>{notice}</p>}
+          {actionError && <p style={{ fontSize: 13, color: "var(--red)" }}>{actionError}</p>}
+        </div>
+      )}
+
+      {open.length === 0 && activeSchedules.length === 0 && (
+        <div className="shop-empty">
+          <div className="serif" style={{ fontSize: 21, marginBottom: 6 }}>
+            Nothing waiting
+          </div>
+          <p className="text-wrap-pretty">
+            Anything you reserve, and any weekly pickup you start, shows up here.
+          </p>
+        </div>
+      )}
 
       {activeSchedules.length > 0 && (
         <>
@@ -391,10 +440,42 @@ export default function CustomerStore() {
         </div>
       ))}
 
+        </>
+      )}
+
+      {tab === "Account" && (
+        <>
+      <div className="shop-account">
+        <div className="serif" style={{ fontSize: 21, marginBottom: 4 }}>
+          {profileName}
+        </div>
+        <div className="shop-account__rows">
+          {profile?.email && (
+            <div className="shop-account__row">
+              <span className="eyebrow">Email</span>
+              <span>{profile.email}</span>
+            </div>
+          )}
+          {profile?.phone && (
+            <div className="shop-account__row">
+              <span className="eyebrow">Phone</span>
+              <span>{profile.phone}</span>
+            </div>
+          )}
+          <div className="shop-account__row">
+            <span className="eyebrow">Collected</span>
+            <span>
+              {collected.length} order{collected.length === 1 ? "" : "s"}
+              {spent > 0 && ` · $${spent.toFixed(2)}`}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {past.length > 0 && (
         <>
           <div className="shop-pickups-title serif" style={{ fontSize: 21 }}>
-            Earlier
+            History
           </div>
           {past.map((o) => (
             <div className="shop-pickup" key={o.id}>
@@ -431,6 +512,8 @@ export default function CustomerStore() {
           Sign out
         </button>
       </div>
+        </>
+      )}
     </CustomerShell>
   );
 }

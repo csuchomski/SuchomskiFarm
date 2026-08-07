@@ -63,6 +63,27 @@ Worth knowing before building:
   key on `ledger_transactions` today, so this likely needs one (a hash of
   date + amount + payer + account, or an `external_id` column).
 
+## Raised 2026-08-07 by the customer pickup screen
+
+### Correcting a completed order
+
+A customer can now close out their own pickup from `/shop` — quantity, payment
+method, and an amount that follows from the product's price. That figure is
+self-reported: the app takes their word for "I paid by check", the same way it
+takes the farmer's word on the Orders page.
+
+Nothing corrects it afterwards. `complete_pickup` is one-way — there is no
+"un-complete", and the Orders page shows `amount_paid` without letting anyone
+change it. So a customer who picks Venmo and pays cash, or confirms a pickup
+they haven't actually made, leaves a wrong row that only a SQL statement can
+fix.
+
+Worth knowing before building: the same objection as "edit milking records"
+applies, and harder. A completed order has already consumed batches and may
+have written a `herd.meat_sales` split against the animals that supplied it.
+Editing the payment fields alone is safe and probably enough; editing the
+quantity is not, and should either be refused or unwind the rest.
+
 ## Carried over from earlier sessions
 
 - **Health** — the whole module. Deliberately last; may never be built.

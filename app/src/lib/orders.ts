@@ -1,3 +1,4 @@
+import { FALLBACK_PAYMENT_METHODS, methodCodes } from "./payment-methods";
 import { supabase } from "./supabase";
 
 /**
@@ -16,11 +17,6 @@ import { supabase } from "./supabase";
  * call that would otherwise fail deep inside plpgsql with a message written
  * for a developer.
  */
-
-/** The only two the database accepts — complete_pickup raises on anything
- * else. Kept in lockstep with that check deliberately. */
-export const PAYMENT_METHODS = ["Cash", "Venmo"] as const;
-export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export type OrderStatus = "reserved" | "completed" | "cancelled";
 
@@ -211,13 +207,19 @@ export function byCustomer(orders: RealOrder[]): CustomerSummary[] {
  * Checked here so a mistake is a sentence rather than a plpgsql exception.
  * These mirror complete_pickup's own guards: it rounds the final quantity to
  * three places and raises 'Invalid final quantity' outside 0..ordered, and
- * 'Invalid payment method' on anything but Cash or Venmo.
+ * 'Invalid payment method' on anything not in public.payment_methods.
+ *
+ * `allowed` is the list the page fetched from that table. It defaults to the
+ * pre-022 pair rather than to "anything goes" — a caller that forgot to pass
+ * it should get the narrow answer the database used to give, not a form that
+ * accepts a method and fails on submit.
  */
 export function validatePickup(input: {
   order: Pick<RealOrder, "quantity" | "status">;
   finalQuantity: string;
   paymentMethod: string;
   amountPaid: string;
+  allowed?: string[];
 }): string | null {
   if (input.order.status !== "reserved") return "That order isn't open any more.";
 
@@ -233,8 +235,9 @@ export function validatePickup(input: {
     return `They reserved ${ordered} — collecting more than that needs a new order.`;
   }
 
-  if (input.paymentMethod !== "" && !PAYMENT_METHODS.includes(input.paymentMethod as PaymentMethod)) {
-    return `Payment has to be ${PAYMENT_METHODS.join(" or ")}.`;
+  const allowed = input.allowed ?? methodCodes(FALLBACK_PAYMENT_METHODS);
+  if (input.paymentMethod !== "" && !allowed.includes(input.paymentMethod)) {
+    return `Payment has to be ${allowed.join(" or ")}.`;
   }
 
   const paidRaw = input.amountPaid.trim();
@@ -245,6 +248,44 @@ export function validatePickup(input: {
   }
 
   return null;
+}
+
+/**
+ * The customer confirming their own collection, which is a narrower thing
+ * than the farmer's pickup form and so has its own rules:
+ *
+ * - a payment method is required. The farmer can record "collected, not
+ *   paid" because they are standing there and know; a customer ticking their
+ *   own order off without saying how they paid is just a gap in the books.
+ * - the amount isn't theirs to type. It's the product's price times what
+ *   they took, computed by amountDue below — the farmer can still correct a
+ *   figure on the orders page.
+ *
+ * Used for a one-off order and for a week of a standing order alike; since
+ * migration 022 the database applies the same ceiling to both.
+ */
+export function validateCollection(input: {
+  ordered: number;
+  quantity: string;
+  paymentMethod: string;
+  allowed: string[];
+}): string | null {
+  const raw = input.quantity.trim();
+  if (raw === "") return "How much did you pick up?";
+  const qty = Number(raw);
+  if (!Number.isFinite(qty)) return "The amount collected has to be a number.";
+  if (qty <= 0) return "Collecting nothing isn't a pickup — cancel it instead.";
+  if (qty > input.ordered) return `This is for ${input.ordered}. Anything more needs a separate order.`;
+  if (input.paymentMethod === "") return "How did you pay?";
+  if (!input.allowed.includes(input.paymentMethod)) return `Payment has to be ${input.allowed.join(" or ")}.`;
+  return null;
+}
+
+/** What's owed for a collection. Null when the product has no price, which
+ * is not the same as free — it's recorded as unpriced rather than as $0. */
+export function amountDue(price: number | null | undefined, quantity: number): number | null {
+  if (price === null || price === undefined) return null;
+  return Math.round(Number(price) * quantity * 100) / 100;
 }
 
 export function validateReserve(input: { productId: string; quantity: string; customerId: string; available: number }): string | null {
@@ -276,7 +317,9 @@ export function validateReserve(input: { productId: string; quantity: string; cu
 export async function completePickup(input: {
   orderId: number;
   finalQuantity: number;
-  paymentMethod: PaymentMethod | null;
+  /** A code from public.payment_methods. The function checks it against that
+   * table, so a value from anywhere else is refused there. */
+  paymentMethod: string | null;
   amountPaid: number | null;
 }): Promise<void> {
   const { error } = await supabase.rpc("complete_pickup", {

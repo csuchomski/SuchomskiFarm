@@ -211,3 +211,55 @@
   color: var(--ink-muted);
   font-size: 14px;
 }
+
+/* Confirming a pickup, on the Pickup tab. Same flat panel as the weekly
+   subscribe form — it sits inside the same card and shouldn't read as a
+   different kind of thing. */
+
+.shop-collect {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+
+.shop-collect__what {
+  font-size: 17px;
+  margin-bottom: 10px;
+}
+
+.shop-collect__ordered {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.shop-collect__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* The shared field is a fixed 96px for the store's inline "Qty" box; here it
+   fills its half of the row instead. */
+.shop-collect__field .shop-qty-field {
+  width: 100%;
+}
+
+.shop-collect__due {
+  font-size: 15px;
+  margin: 4px 0 10px;
+}
+
+/* Two equal halves, and a grid rather than the flex row above it: the two
+   buttons carry different padding, and under flex that left the primary
+   action 20px narrower than "Cancel" (129 vs 149, measured at 320px) no
+   matter what flex-basis and box-sizing said. `minmax(0, 1fr)` is the part
+   that matters — a bare `1fr` won't shrink below its content. */
+.shop-collect .shop-subscribe__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.shop-collect .shop-subscribe__row > * {
+  box-sizing: border-box;
+  min-width: 0;
+}

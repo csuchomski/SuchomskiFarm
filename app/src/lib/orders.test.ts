@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  amountDue,
   byCustomer,
   customerName,
   customerShort,
@@ -7,6 +8,7 @@ import {
   expectedValue,
   isOpen,
   totalsOf,
+  validateCollection,
   validatePickup,
   validateReserve,
   type Customer,
@@ -226,6 +228,14 @@ describe("validatePickup", () => {
     expect(validatePickup({ ...base, paymentMethod: "Cheque" })).toMatch(/Cash or Venmo/);
   });
 
+  it("takes the list of methods from the caller, who read it from the table", () => {
+    // Without `allowed` it falls back to what the functions accepted before
+    // migration 022, so Check is refused…
+    expect(validatePickup({ ...base, paymentMethod: "Check" })).toMatch(/Cash or Venmo/);
+    // …and accepted once the page has actually fetched the list.
+    expect(validatePickup({ ...base, paymentMethod: "Check", allowed: ["Cash", "Venmo", "Check"] })).toBeNull();
+  });
+
   it("rejects a negative payment", () => {
     expect(validatePickup({ ...base, amountPaid: "-5" })).toMatch(/can't be negative/);
   });
@@ -266,5 +276,60 @@ describe("isOpen", () => {
     expect(isOpen(order({ status: "reserved" }))).toBe(true);
     expect(isOpen(order({ status: "completed" }))).toBe(false);
     expect(isOpen(order({ status: "cancelled" }))).toBe(false);
+  });
+});
+
+describe("validateCollection", () => {
+  const base = { ordered: 4, quantity: "4", paymentMethod: "Check", allowed: ["Cash", "Venmo", "Check"] };
+
+  it("accepts the whole thing, paid for", () => {
+    expect(validateCollection(base)).toBeNull();
+  });
+
+  it("accepts taking less than was reserved", () => {
+    expect(validateCollection({ ...base, quantity: "2.5" })).toBeNull();
+  });
+
+  it("refuses more than was reserved, and says what it was for", () => {
+    // Since migration 022 the database refuses this too, for a customer.
+    expect(validateCollection({ ...base, quantity: "40" })).toMatch(/This is for 4\./);
+  });
+
+  it("refuses nothing at all, which is a cancellation rather than a pickup", () => {
+    expect(validateCollection({ ...base, quantity: "0" })).toMatch(/cancel it instead/);
+  });
+
+  it("requires a payment method, unlike the farmer's form", () => {
+    // complete_pickup accepts a null method — "collected, not paid" is a real
+    // state the farmer records. A customer ticking their own order off
+    // without saying how is just a hole in the books.
+    expect(validateCollection({ ...base, paymentMethod: "" })).toMatch(/How did you pay/);
+  });
+
+  it("refuses a method that isn't on the list", () => {
+    expect(validateCollection({ ...base, paymentMethod: "Barter" })).toMatch(/Cash or Venmo or Check/);
+  });
+
+  it("wants a number", () => {
+    expect(validateCollection({ ...base, quantity: "" })).toMatch(/How much/);
+    expect(validateCollection({ ...base, quantity: "some" })).toMatch(/has to be a number/);
+  });
+});
+
+describe("amountDue", () => {
+  it("prices a collection from the product's price", () => {
+    expect(amountDue(10, 2)).toBe(20);
+    expect(amountDue(6.5, 1.5)).toBe(9.75);
+  });
+
+  it("rounds to the cent", () => {
+    expect(amountDue(3.33, 3)).toBe(9.99);
+    // 0.1 * 3 is 0.30000000000000004 in floating point.
+    expect(amountDue(0.1, 3)).toBe(0.3);
+  });
+
+  it("is null for an unpriced product, which is not the same as free", () => {
+    expect(amountDue(null, 2)).toBeNull();
+    expect(amountDue(undefined, 2)).toBeNull();
   });
 });

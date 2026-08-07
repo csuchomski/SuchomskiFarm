@@ -84,6 +84,16 @@ vi.mock("../lib/orders", async (importOriginal) => ({
   fetchCustomers: vi.fn(async () => customers),
 }));
 
+// Since migration 022 the payment list is a table read, not a constant.
+vi.mock("../lib/payment-methods", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/payment-methods")>()),
+  fetchPaymentMethods: vi.fn(async () => [
+    { code: "Cash", label: "Cash", active: true, sort_order: 10 },
+    { code: "Venmo", label: "Venmo", active: true, sort_order: 20 },
+    { code: "Check", label: "Check", active: true, sort_order: 30 },
+  ]),
+}));
+
 vi.mock("../lib/store-data", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/store-data")>()),
   fetchStoreData: vi.fn(async () => ({

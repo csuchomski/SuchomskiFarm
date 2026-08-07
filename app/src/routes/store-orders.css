@@ -1,0 +1,47 @@
+/* Orders, customers and the books pages share these controls, so the store
+   and the ledger don't end up with two different-looking selects. */
+
+.order-select {
+  font: inherit;
+  font-size: 14px;
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--hairline);
+  border-radius: 0;
+}
+
+.order-select:disabled {
+  color: var(--ink-faint);
+}
+
+.order-form {
+  border: 1px solid var(--hairline);
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.order-form__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.pickup-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  padding: 12px 8px 20px;
+}
+
+.pickup-row .order-select {
+  width: auto;
+}
+
+@media (max-width: 420px) {
+  .order-form__fields {
+    grid-template-columns: 1fr;
+  }
+}

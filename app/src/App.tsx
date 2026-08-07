@@ -7,7 +7,13 @@ import Milkings from "./routes/Milkings";
 import Genetics from "./routes/Genetics";
 import Sires from "./routes/Sires";
 import StoreProducts from "./routes/StoreProducts";
+import StoreOrders from "./routes/StoreOrders";
+import StoreCustomers from "./routes/StoreCustomers";
 import BooksTransactions from "./routes/BooksTransactions";
+import BooksAccounts from "./routes/BooksAccounts";
+import BooksReports from "./routes/BooksReports";
+import BooksBalanceSheet from "./routes/BooksBalanceSheet";
+import BooksTaxes from "./routes/BooksTaxes";
 import CustomerStore from "./routes/CustomerStore";
 import { AuthProvider } from "./lib/auth";
 import { WorkspaceProvider } from "./lib/workspace";
@@ -41,7 +47,13 @@ export default function App() {
                 <Route path="/genetics" element={<Genetics />} />
                 <Route path="/sires" element={<Sires />} />
                 <Route path="/store/products" element={<StoreProducts />} />
+                <Route path="/store/orders" element={<StoreOrders />} />
+                <Route path="/store/customers" element={<StoreCustomers />} />
                 <Route path="/books/transactions" element={<BooksTransactions />} />
+                <Route path="/books/accounts" element={<BooksAccounts />} />
+                <Route path="/books/reports" element={<BooksReports />} />
+                <Route path="/books/balance-sheet" element={<BooksBalanceSheet />} />
+                <Route path="/books/taxes" element={<BooksTaxes />} />
               </Route>
             </Route>
             {/* Customer store sits outside the auth gate — a customer isn't

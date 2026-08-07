@@ -9,6 +9,8 @@ import Sires from "./routes/Sires";
 import StoreProducts from "./routes/StoreProducts";
 import StoreOrders from "./routes/StoreOrders";
 import StoreCustomers from "./routes/StoreCustomers";
+import StoreSchedules from "./routes/StoreSchedules";
+import StoreForecast from "./routes/StoreForecast";
 import BooksTransactions from "./routes/BooksTransactions";
 import BooksAccounts from "./routes/BooksAccounts";
 import BooksReports from "./routes/BooksReports";
@@ -49,6 +51,8 @@ export default function App() {
                 <Route path="/store/products" element={<StoreProducts />} />
                 <Route path="/store/orders" element={<StoreOrders />} />
                 <Route path="/store/customers" element={<StoreCustomers />} />
+                <Route path="/store/schedules" element={<StoreSchedules />} />
+                <Route path="/store/forecast" element={<StoreForecast />} />
                 <Route path="/books/transactions" element={<BooksTransactions />} />
                 <Route path="/books/accounts" element={<BooksAccounts />} />
                 <Route path="/books/reports" element={<BooksReports />} />

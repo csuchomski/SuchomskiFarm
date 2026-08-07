@@ -11,12 +11,23 @@ import {
   type CustomerOrder,
   type ShopProduct,
 } from "../lib/customer";
+import {
+  cancelSchedule,
+  createSchedule,
+  fetchMySchedules,
+  nextPickup,
+  skipWeek,
+  untilLabel,
+  WEEKDAYS,
+  type Schedule,
+  type Weekday,
+} from "../lib/schedules";
 import "./customer-store.css";
 
 type Fetch =
   | { state: "loading" }
   | { state: "error"; message: string }
-  | { state: "ok"; products: ShopProduct[]; orders: CustomerOrder[] };
+  | { state: "ok"; products: ShopProduct[]; orders: CustomerOrder[]; schedules: Schedule[] };
 
 const price = (n: number | null, unit: string) => (n === null ? `— per ${unit}` : `$${Number(n).toFixed(2)} per ${unit}`);
 
@@ -29,11 +40,19 @@ export default function CustomerStore() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Which product's "every week" panel is open, and what it's set to.
+  const [subscribing, setSubscribing] = useState<number | null>(null);
+  const [subDay, setSubDay] = useState<string>("Thursday");
+  const [subQty, setSubQty] = useState("");
 
   const load = useCallback(async () => {
     if (!userId) return;
-    const [products, orders] = await Promise.all([fetchShop(), fetchMyOrders(userId)]);
-    setResult({ state: "ok", products, orders });
+    const [products, orders, schedules] = await Promise.all([
+      fetchShop(),
+      fetchMyOrders(userId),
+      fetchMySchedules(userId),
+    ]);
+    setResult({ state: "ok", products, orders, schedules });
   }, [userId]);
 
   useEffect(() => {
@@ -58,6 +77,65 @@ export default function CustomerStore() {
   // The storefront needs to know who's collecting, so it asks before showing
   // anything rather than letting someone fill a basket and hit a wall.
   if (!session) return <CustomerAuth />;
+
+  const handleSubscribe = async (product: ShopProduct) => {
+    if (!userId) return;
+    const quantity = Number(subQty);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      setActionError("How much do you want every week?");
+      return;
+    }
+    setBusyId(product.id);
+    setActionError(null);
+    try {
+      await createSchedule({
+        // business_id comes off the product, matching how the database
+        // scopes a one-off order.
+        businessId: product.business_id,
+        customerId: userId,
+        productId: product.id,
+        quantity,
+        day: subDay as Weekday,
+        startDate: null,
+      });
+      await load();
+      setSubscribing(null);
+      setSubQty("");
+      setNotice(`Every ${subDay}: ${quantity} ${product.unit} of ${product.name.toLowerCase()}.`);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleSkip = async (schedule: Schedule, date: string) => {
+    setBusyId(schedule.id);
+    setActionError(null);
+    try {
+      await skipWeek(schedule, date);
+      await load();
+      setNotice(`Skipped ${date}. The week after is unchanged.`);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleStopSchedule = async (schedule: Schedule) => {
+    setBusyId(schedule.id);
+    setActionError(null);
+    try {
+      await cancelSchedule(schedule.id);
+      await load();
+      setNotice("Weekly pickup stopped.");
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const handleReserve = async (product: ShopProduct) => {
     if (!userId) return;
@@ -98,6 +176,9 @@ export default function CustomerStore() {
   const products = result.state === "ok" ? result.products : [];
   const orders = result.state === "ok" ? result.orders : [];
   const open = orders.filter((o) => !o.cancelled_date && !o.picked_up_date);
+  const schedules = result.state === "ok" ? result.schedules : [];
+  const activeSchedules = schedules.filter((s) => s.cancelled_at === null);
+  const today = new Date().toISOString().slice(0, 10);
   const past = orders.filter((o) => o.cancelled_date || o.picked_up_date);
   const productName = (id: number) => products.find((p) => p.id === id)?.name ?? "Item";
   const productUnit = (id: number) => products.find((p) => p.id === id)?.unit ?? "";
@@ -177,12 +258,107 @@ export default function CustomerStore() {
                   </button>
                 </div>
               )}
+
+              {/* Every week, rather than once. Offered even when the shelf is
+                  empty today: a standing order is a commitment to future
+                  weeks, and the weeks you most want to lock in are the ones
+                  where stock is tight. */}
+              {subscribing === p.id ? (
+                <div className="shop-subscribe">
+                  <div className="shop-subscribe__row">
+                    <input
+                      className="shop-qty-field"
+                      type="number"
+                      min="0"
+                      step="0.001"
+                      inputMode="decimal"
+                      placeholder="Qty"
+                      value={subQty}
+                      onChange={(e) => setSubQty(e.target.value)}
+                      aria-label={`Weekly quantity of ${p.name}`}
+                    />
+                    <select
+                      className="shop-qty-field"
+                      value={subDay}
+                      onChange={(e) => setSubDay(e.target.value)}
+                      aria-label="Pickup day"
+                    >
+                      {WEEKDAYS.map((d) => (
+                        <option key={d} value={d}>
+                          {d}s
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="shop-subscribe__row">
+                    <button
+                      className="shop-reserve-btn"
+                      onClick={() => void handleSubscribe(p)}
+                      disabled={busyId === p.id}
+                    >
+                      {busyId === p.id ? "Starting…" : "Start weekly pickup"}
+                    </button>
+                    <Button onClick={() => setSubscribing(null)}>Cancel</Button>
+                  </div>
+                  <p className="shop-subscribe__note">
+                    Same pickup every week until you stop it. You can skip any week.
+                  </p>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="shop-subscribe-link"
+                  onClick={() => {
+                    setSubscribing(p.id);
+                    setSubQty("");
+                    setActionError(null);
+                  }}
+                >
+                  or get it every week →
+                </button>
+              )}
             </div>
           );
         })}
 
       {result.state === "ok" && products.length === 0 && (
         <p style={{ padding: 24, fontSize: 14, color: "var(--ink-muted)" }}>Nothing in the store just now.</p>
+      )}
+
+      {activeSchedules.length > 0 && (
+        <>
+          <div className="shop-pickups-title serif">Every week</div>
+          {activeSchedules.map((sch) => {
+            const next = nextPickup(sch, today);
+            return (
+              <div className="shop-pickup" key={`sched-${sch.id}`}>
+                <div className="shop-product__top">
+                  <div>
+                    <div className="serif shop-product__name">
+                      {sch.quantity} {productUnit(sch.product_id)} {productName(sch.product_id).toLowerCase()}
+                    </div>
+                    <div className="mono shop-product__price">
+                      Every {sch.day} · next {next ?? "—"} ({untilLabel(next, today)})
+                    </div>
+                  </div>
+                  <Pill variant="outline-green">weekly</Pill>
+                </div>
+                <div className="shop-product__actions">
+                  <Button
+                    onClick={() => next && void handleSkip(sch, next)}
+                    disabled={busyId === sch.id || !next}
+                    style={{ flex: 1 }}
+                  >
+                    Skip {next ? next.slice(5) : "next"}
+                  </Button>
+                  <Button onClick={() => void handleStopSchedule(sch)} disabled={busyId === sch.id} style={{ flex: 1 }}>
+                    Stop
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </>
       )}
 
       <div className="shop-pickups-title serif">Your pickups</div>

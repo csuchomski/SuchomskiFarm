@@ -36,8 +36,9 @@ export const allGroups: NavGroup[] = [
     items: [
       { label: "Products", to: "/store/products" },
       { label: "Orders", to: "/store/orders" },
+      { label: "Schedules", to: "/store/schedules" },
+      { label: "Forecast", to: "/store/forecast" },
       { label: "Customers", to: "/store/customers" },
-      { label: "Schedules" },
     ],
   },
   {

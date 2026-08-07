@@ -1,0 +1,160 @@
+@import "../components/herd/genetics.css";
+
+/* The Genetics page. Reuses .gene-select from the animal-record section so
+   the two screens don't drift into two different-looking dropdowns. */
+
+.pairing-controls {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+
+.pairing-result {
+  border: 1px solid var(--hairline);
+  margin-bottom: 8px;
+}
+
+.pairing-verdict {
+  padding: 12px 14px;
+  font-size: 15px;
+  border-bottom: 1px solid var(--hairline);
+  text-wrap: pretty;
+}
+
+.pairing-verdict--risk {
+  background: color-mix(in srgb, var(--red) 8%, transparent);
+  color: var(--red);
+  font-weight: 500;
+}
+
+.pairing-verdict--watch {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+.pairing-verdict--clear,
+.pairing-verdict--unknown {
+  color: var(--ink-muted);
+}
+
+.pairing-row {
+  display: grid;
+  grid-template-columns: 64px 1fr 150px 90px 1.2fr;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.pairing-row:last-child {
+  border-bottom: 0;
+}
+
+.pairing-row__parents {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.pairing-row__note {
+  font-size: 13px;
+  color: var(--ink-muted);
+  text-wrap: pretty;
+}
+
+.marker-spreads {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.marker-spread {
+  border: 1px solid var(--hairline);
+  padding: 12px;
+}
+
+.marker-spread__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.marker-spread__row:last-child {
+  border-bottom: 0;
+}
+
+.condition-row {
+  display: grid;
+  grid-template-columns: 1fr 90px 2fr;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.condition-row__animals {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.animal-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 8px;
+  font-size: 13px;
+  color: var(--ink);
+  border: 1px solid var(--hairline);
+}
+
+.animal-chip--affected {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.animal-chip__tone {
+  font-size: 11px;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.animal-chip--affected .animal-chip__tone {
+  color: var(--red);
+}
+
+/* Phones: the pairing table folds to label-over-detail and the condition
+   rows drop the inheritance column, so neither scrolls sideways. */
+@media (max-width: 860px) {
+  .pairing-row {
+    grid-template-columns: 64px 1fr 90px;
+    row-gap: 4px;
+  }
+
+  .pairing-row__parents,
+  .pairing-row__note {
+    grid-column: 1 / -1;
+  }
+
+  .condition-row {
+    grid-template-columns: 1fr 90px;
+  }
+
+  .condition-row__animals {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 420px) {
+  .pairing-row {
+    grid-template-columns: 1fr 90px;
+  }
+
+  .marker-spreads {
+    grid-template-columns: 1fr;
+  }
+}

@@ -4,6 +4,8 @@ import Animals from "./routes/Animals";
 import AnimalRecord from "./routes/AnimalRecord";
 import Lactations from "./routes/Lactations";
 import Milkings from "./routes/Milkings";
+import Genetics from "./routes/Genetics";
+import Sires from "./routes/Sires";
 import StoreProducts from "./routes/StoreProducts";
 import BooksTransactions from "./routes/BooksTransactions";
 import CustomerStore from "./routes/CustomerStore";
@@ -36,6 +38,8 @@ export default function App() {
                 <Route path="/animals/:tag" element={<AnimalRecord />} />
                 <Route path="/lactations" element={<Lactations />} />
                 <Route path="/milkings" element={<Milkings />} />
+                <Route path="/genetics" element={<Genetics />} />
+                <Route path="/sires" element={<Sires />} />
                 <Route path="/store/products" element={<StoreProducts />} />
                 <Route path="/books/transactions" element={<BooksTransactions />} />
               </Route>

@@ -6,6 +6,8 @@ import { Button, Callout, EarTag, Pill, StatTile } from "../components/ui";
 import { AnimalForm } from "../components/herd/AnimalForm";
 import { Pedigree } from "../components/herd/Pedigree";
 import { OffspringEditor } from "../components/herd/OffspringEditor";
+import { GeneticsSection } from "../components/herd/GeneticsSection";
+import { BreedEditor } from "../components/herd/BreedEditor";
 import {
   describeBreeding,
   fetchAnimalByTag,
@@ -36,6 +38,11 @@ export default function AnimalRecord() {
   const [result, setResult] = useState<Fetch>({ state: "loading" });
   const [editing, setEditing] = useState(false);
   const [linking, setLinking] = useState(false);
+  const [editingBreeds, setEditingBreeds] = useState(false);
+  // Bumped after a breed edit to re-run the fetch below. Composition is
+  // written as a delete-then-insert, so the ids change and there's no saved
+  // row to merge into state — a re-read is the honest way to show the result.
+  const [reloadKey, setReloadKey] = useState(0);
   const { farmId } = useWorkspace();
 
   useEffect(() => {
@@ -74,7 +81,7 @@ export default function AnimalRecord() {
     return () => {
       cancelled = true;
     };
-  }, [tag]);
+  }, [tag, reloadKey]);
 
   if (result.state === "loading") {
     return (
@@ -196,9 +203,32 @@ export default function AnimalRecord() {
 
       <div className="record-body">
         <div>
-          <div className="serif" style={{ fontSize: 21, marginBottom: 12 }}>
-            Breeding
+          <div className="section__head" style={{ marginBottom: 12 }}>
+            <div className="serif" style={{ fontSize: 21 }}>
+              Breeding
+            </div>
+            {farmId && !editingBreeds && (
+              <button type="button" className="link-button mono" onClick={() => setEditingBreeds(true)}>
+                {breeds.length > 0 ? "edit" : "+ Record composition"}
+              </button>
+            )}
           </div>
+
+          {editingBreeds && (
+            <div style={{ marginBottom: 24 }}>
+              <BreedEditor
+                animalId={animal.id}
+                farmId={farmId}
+                current={breeds.map((b) => ({ breedId: b.breedId, percent: b.percent }))}
+                onCancel={() => setEditingBreeds(false)}
+                onSaved={() => {
+                  setEditingBreeds(false);
+                  setReloadKey((k) => k + 1);
+                }}
+              />
+            </div>
+          )}
+
           {breeds.length > 0 ? (
             <div style={{ marginBottom: 24 }}>
               {breeds.map((b) => (
@@ -214,9 +244,11 @@ export default function AnimalRecord() {
               ))}
             </div>
           ) : (
-            <p style={{ fontSize: 13, color: "var(--ink-muted)", marginBottom: 24 }}>
-              No breed composition recorded for {name}.
-            </p>
+            !editingBreeds && (
+              <p style={{ fontSize: 13, color: "var(--ink-muted)", marginBottom: 24 }}>
+                No breed composition recorded for {name}.
+              </p>
+            )
           )}
 
           {animal.notes && (
@@ -238,6 +270,8 @@ export default function AnimalRecord() {
             farmId={farmId}
             canWrite={animal.sex === "female" && animal.class !== "calf"}
           />
+
+          <GeneticsSection animalId={animal.id} farmId={farmId} />
 
           <div style={{ marginTop: 24 }}>
             <Callout>

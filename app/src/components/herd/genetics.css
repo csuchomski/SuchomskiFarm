@@ -1,0 +1,120 @@
+/* Genetics section on the animal record, and the shared control styling the
+   Genetics page reuses. Flat paper, hairlines, no radius — same as the rest
+   of the Herd design system. */
+
+.gene-markers {
+  display: flex;
+  flex-direction: column;
+}
+
+.gene-marker {
+  display: grid;
+  grid-template-columns: 1fr 190px 56px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.gene-marker__label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gene-marker__note {
+  font-size: 12px;
+  color: var(--ink-muted);
+  text-wrap: pretty;
+}
+
+.gene-select {
+  font: inherit;
+  font-size: 14px;
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--hairline);
+  border-radius: 0;
+}
+
+.gene-select:disabled {
+  color: var(--ink-faint);
+}
+
+.gene-add {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--hairline);
+}
+
+.gene-add .gene-select {
+  width: auto;
+  min-width: 160px;
+  flex: 1;
+}
+
+.gene-conditions {
+  display: flex;
+  flex-direction: column;
+}
+
+.gene-condition {
+  display: grid;
+  grid-template-columns: 1fr 90px 150px 64px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.gene-condition__name {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-muted);
+  text-wrap: pretty;
+}
+
+.gene-condition__inheritance {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* Phones: the explanatory columns fold away and each row becomes label over
+   control, so nothing has to scroll sideways. */
+@media (max-width: 640px) {
+  .gene-marker {
+    grid-template-columns: 1fr 140px;
+    gap: 8px;
+  }
+
+  .gene-marker > :last-child {
+    display: none;
+  }
+
+  .gene-condition {
+    grid-template-columns: 1fr 140px;
+    row-gap: 6px;
+  }
+
+  .gene-condition__inheritance {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .gene-marker,
+  .gene-condition {
+    grid-template-columns: 1fr;
+  }
+
+  .gene-marker__note {
+    display: none;
+  }
+}

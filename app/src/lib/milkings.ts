@@ -205,8 +205,14 @@ export function unattributedBatches(
 
 /**
  * The product a milking produces. Chosen by type_code, with a name match
- * as a fallback for before migration 008 — the same rule the dashboard
- * uses, so the two can't disagree about what counts as milk.
+ * as a fallback — the same rule the dashboard uses, so the two can't
+ * disagree about what counts as milk.
+ *
+ * The fallback was written for before migration 008 populated type_code.
+ * 008 has since been confirmed run, but the fallback still earns its place:
+ * the backfill was deliberately conservative and left one product untyped,
+ * and any product added without a type would be invisible to milk detection
+ * without it.
  *
  * Returns null rather than guessing when the business sells no milk: a
  * hardcoded product id would write eggs against a cow on any farm whose
@@ -229,7 +235,8 @@ export function findMilkProduct(
 // ─── access ────────────────────────────────────────────────────────────
 
 /** Products for a business, enough to find the milk one. Retries without
- *  type_code for before migration 008, matching lib/dashboard-data.ts. */
+ *  selecting type_code at all, for a database where 008 hasn't run and the
+ *  column doesn't exist — matching lib/dashboard-data.ts. */
 export async function fetchMilkProduct(businessId: number): Promise<MilkProduct | null> {
   const withType = await supabase
     .from("products")

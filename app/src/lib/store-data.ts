@@ -92,10 +92,13 @@ export async function fetchStoreData(scope: StoreScope): Promise<StoreData> {
       .from("inventory_batches")
       .select("id, product_id, produced_date, quantity, reserved, herd_animal_id")
       .eq("business_id", businessId),
-    // discards got no business_id in 010, so it can't be filtered server-side.
-    // Narrowed below to the scoped products instead — a discard belongs to
-    // whichever business owns its product.
-    supabase.from("discards").select("id, product_id, product_name, quantity, reason, batch_produced_date"),
+    // Scoped server-side since migration 020 gave discards a business_id.
+    // It used to be the one store table 010 missed, narrowed client-side by
+    // matching product ids instead.
+    supabase
+      .from("discards")
+      .select("id, product_id, product_name, quantity, reason, batch_produced_date")
+      .eq("business_id", businessId),
     farmId
       ? supabase
           .schema("herd")
@@ -129,13 +132,9 @@ export async function fetchStoreData(scope: StoreScope): Promise<StoreData> {
     };
   });
 
-  const scopedProductIds = new Set(products.map((p) => p.id));
-
   return {
     products,
-    discards: ((discardsRes.data ?? []) as RealDiscard[]).filter(
-      (d) => d.product_id === null || scopedProductIds.has(d.product_id),
-    ),
+    discards: (discardsRes.data ?? []) as RealDiscard[],
     production: (productionRes.data ?? []) as RealProductionRecord[],
   };
 }

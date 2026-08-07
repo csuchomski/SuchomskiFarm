@@ -1,7 +1,12 @@
 -- 008 — Give products a type, so "milk today" stops meaning "product whose
 --       name contains the word milk".
 --
--- STATUS: PROPOSAL. Not run. Additive and independent.
+-- STATUS: RUN. Confirmed 2026-08-07 by querying the database, not by
+-- anyone recording it here — it had evidently been run some time earlier.
+--   product_types      6 rows, exactly the seed below
+--   products.type_code present, with its foreign key
+--   backfill           3 of 4 products typed; the fourth left null, which is
+--                      what the conservative backfill is supposed to do
 --
 -- The dashboard currently identifies milk with a regex on the product name.
 -- That works at four products and breaks quietly at forty — a "Milk soap"

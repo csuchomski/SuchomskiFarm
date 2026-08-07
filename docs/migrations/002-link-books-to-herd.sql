@@ -1,9 +1,15 @@
 -- 002 — Link per-animal costs and revenue to the ledger transactions they
 --       came from. This is what makes the "Attributed to" column real.
 --
--- STATUS: PROPOSAL. Not run.
--- Depends on: 001 (farm-scope the public schema). Running this first is
--- possible but creates the cross-tenant hole 001 exists to close.
+-- STATUS: RUN, 2026-08-07. Verified: ledger_transaction_id present on both
+-- herd.cost_entries and herd.revenue_entries.
+--
+-- Depends on: 001 — which is stale. 001 was superseded, and the cross-tenant
+-- hole it existed to close is handled instead by the business-as-tenant work
+-- in 005/007/010. This was run without it on that basis.
+--
+-- Nothing writes these columns yet: this unblocks "Attributed to" rather
+-- than delivering it.
 --
 -- Purely additive: two nullable columns and their indexes. Nothing is
 -- rewritten, so rollback is clean until the columns are populated.

@@ -12,8 +12,9 @@ database, don't take the table's word for it.
 
 | # | What | Risk | Notes |
 |---|---|---|---|
-| 008 | Product types | Low | Small, isolated, immediately visible on the dashboard. |
-| 002 | Link books to per-animal costs | Low | Additive. Makes "Attributed to" possible. |
+| ~~008~~ | ~~Product types~~ | — | **Already run** — discovered 2026-08-07, not by this file. `product_types` holds all six seeded rows, `products.type_code` exists with its foreign key, and the backfill has typed 3 of 4 products (the fourth was left null by the conservative backfill, as designed). This table said "not run" for weeks; see the warning above. |
+| ~~002~~ | ~~Link books to per-animal costs~~ | — | **Already run, 2026-08-07.** Two nullable columns and their indexes on `herd.cost_entries` and `herd.revenue_entries`. Its stated dependency on 001 is moot: 001 was superseded, and the cross-tenant hole it guarded is closed by the business-as-tenant work in 005/007/010. |
+| ~~020~~ | ~~Scope discards to a business~~ | — | **Already run, 2026-08-07.** The one store table 010 missed. Also fixes `discard_inventory` inserting rows with no `business_id` — the third instance of that bug, after 017 and 019. |
 | ~~001~~ | ~~`businesses.farm_id`~~ | — | **Superseded.** Pointed the link the wrong way; see `../business-as-tenant.md`. |
 | ~~003~~ | ~~Transaction types~~ | — | **Already run.** |
 | ~~004~~ | ~~Business types and modules~~ | — | **Already run.** `business_type_modules` is populated for all three types. |

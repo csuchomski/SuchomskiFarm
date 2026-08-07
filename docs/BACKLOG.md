@@ -66,21 +66,46 @@ Worth knowing before building:
 ## Carried over from earlier sessions
 
 - **Health** — the whole module. Deliberately last; may never be built.
-- **Depreciation register** — depreciation is currently a plain expense
-  category you type a figure into. A real register (basis, in-service date,
-  method, recovery period, accumulated depreciation) is a separate build, and
-  would let Books → Taxes compute line 14 rather than take it on trust.
-- **Migrations 008 and 002** — never run. 008 populates `products.type_code`,
-  which milk detection currently falls back to name-matching for. 002 links
-  books to per-animal costs.
-- **`herd.discards` has no `business_id`** — migration 010 scoped the rest of
-  the store and missed it, so discards are filtered app-side by product
-  instead of server-side. Works, but it's the one table in the store that
-  isn't scoped by the database.
-- **Today's "Log milking" button** routes to `/store/products` rather than
-  `/milkings`.
+- **Depreciation register** — see the decision below.
 - **No PR-triggered CI** — tests run locally and on deploy, but a pull
   request doesn't run them.
+
+## Closed 2026-08-07
+
+Four items were reviewed and are no longer open.
+
+- **Migration 008** — was *already run*, and had been for some time. The
+  migrations README said otherwise, which is exactly the failure its own
+  header warns about: check the database, don't trust the table. Milk
+  detection has had `type_code` to work from all along; the name-matching
+  fallback in `findMilkProduct` is dead weight rather than the live path.
+- **Migration 002** — run. Two nullable columns linking `herd.cost_entries`
+  and `herd.revenue_entries` to a ledger transaction. Its stated dependency
+  on 001 was stale: 001 was superseded, and the cross-tenant hole it existed
+  to close is handled by the business-as-tenant work instead. Nothing writes
+  these columns yet — it unblocks "Attributed to" rather than delivering it.
+- **`discards` had no `business_id`** — fixed by migration 020, along with
+  `discard_inventory()` inserting rows without one. That was the *third*
+  instance of the same bug, after 017 (`reserve_product`) and 019
+  (`complete_scheduled_pickup`). Every write path that 010's policies touched
+  had to be found by hand; there is still no test that would catch a fourth.
+- **Today's "Log milking" button** — fixed, along with two more links written
+  before the pages they wanted existed. "Log milking" and "No milking logged
+  today" now go to `/milkings`, and "orders not picked up" goes to
+  `/store/orders` rather than all three landing on Products.
+
+## Decisions, not open questions
+
+**Depreciation stays a category.** Books → Taxes puts whatever figure you
+record against "Depreciation & section 179" on Schedule F line 14 and does
+not compute it. Building a real register means tracking cost basis,
+placed-in-service date, method, recovery period, convention, Section 179 and
+bonus elections, and accumulated depreciation per asset — a subsystem, and
+one where being subtly wrong is worse than not doing it, because the number
+goes on a filed return. Recommendation: leave it as a category and take the
+figure from whoever files for you. Revisit only if you want the app to be the
+system of record for fixed assets, which is a different decision from wanting
+Schedule F to add up.
 
 ## A standing note on verification
 

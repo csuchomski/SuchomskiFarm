@@ -58,7 +58,7 @@ export default function Today() {
         title="Today"
         actions={
           <>
-            <Button onClick={() => navigate("/store/products")}>Log milking</Button>
+            <Button onClick={() => navigate("/milkings")}>Log milking</Button>
             <Button variant="filled" onClick={() => navigate("/books/transactions")}>
               Add entry
             </Button>
@@ -253,7 +253,7 @@ function NeedsList({ data }: { data: DashboardData }) {
       tone: "herd",
       title: `${data.openOrders} order${data.openOrders === 1 ? "" : "s"} not picked up`,
       detail: "Neither collected nor cancelled",
-      to: "/store/products",
+      to: "/store/orders",
     });
   }
 
@@ -271,7 +271,7 @@ function NeedsList({ data }: { data: DashboardData }) {
       tone: "ochre",
       title: "No milking logged today",
       detail: "Nothing recorded against any animal",
-      to: "/store/products",
+      to: "/milkings",
     });
   }
 

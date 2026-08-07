@@ -176,3 +176,38 @@
   color: var(--ink-muted);
   text-wrap: pretty;
 }
+
+/* The Account tab: who you are and what you've collected. */
+
+.shop-account {
+  padding: 20px 16px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.shop-account__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.shop-account__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: baseline;
+}
+
+.shop-account__row > span:last-child {
+  text-align: right;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Shown on the Pickup tab when there's nothing waiting — better than a
+   heading over an empty list. */
+.shop-empty {
+  padding: 32px 16px;
+  color: var(--ink-muted);
+  font-size: 14px;
+}

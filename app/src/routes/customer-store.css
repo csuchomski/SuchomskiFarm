@@ -281,3 +281,21 @@
   font-weight: 400;
   color: var(--red);
 }
+
+/* The date heading over each day's rows. `.shop-pickup` draws its own top
+   hairline, so the group needs no rule of its own — the heading sits in the
+   gap above the first one. */
+
+.shop-history__heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 20px 16px 6px;
+}
+
+.shop-history__day-total {
+  flex: none;
+  font-size: 13px;
+  color: var(--ink-muted);
+}

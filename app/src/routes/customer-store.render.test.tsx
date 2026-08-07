@@ -40,12 +40,28 @@ const orders = [
     quantity: 1.5,
     status: "completed",
     reserved_date: "2026-06-10T00:00:00Z",
-    picked_up_date: "2026-06-24T00:00:00Z",
+    picked_up_date: "2026-06-24T17:00:00Z",
     cancelled_date: null,
     unit_price: 10,
     total_cost: 15,
     amount_paid: 15,
     payment_method: "Cash",
+  },
+  // Same day as order 9, so one heading covers two rows and has a subtotal
+  // worth showing. Reserved earlier than 9 but collected the same day —
+  // grouping goes on when it finished, not when it was reserved.
+  {
+    id: 10,
+    product_id: 3,
+    quantity: 1,
+    status: "completed",
+    reserved_date: "2026-06-02T00:00:00Z",
+    picked_up_date: "2026-06-24T20:00:00Z",
+    cancelled_date: null,
+    unit_price: 7,
+    total_cost: 7,
+    amount_paid: 7,
+    payment_method: "Venmo",
   },
   // Collected, part paid — $20 of milk against $12 handed over.
   {
@@ -54,7 +70,7 @@ const orders = [
     quantity: 2,
     status: "completed",
     reserved_date: "2026-06-01T00:00:00Z",
-    picked_up_date: "2026-06-03T00:00:00Z",
+    picked_up_date: "2026-06-03T17:00:00Z",
     cancelled_date: null,
     unit_price: 10,
     total_cost: 20,
@@ -69,7 +85,7 @@ const orders = [
     quantity: 4,
     status: "completed",
     reserved_date: "2026-05-01T00:00:00Z",
-    picked_up_date: "2026-05-02T00:00:00Z",
+    picked_up_date: "2026-05-02T17:00:00Z",
     cancelled_date: null,
     unit_price: null,
     total_cost: null,
@@ -83,7 +99,7 @@ const orders = [
     status: "cancelled",
     reserved_date: "2026-05-20T00:00:00Z",
     picked_up_date: null,
-    cancelled_date: "2026-05-21T00:00:00Z",
+    cancelled_date: "2026-05-21T17:00:00Z",
     unit_price: null,
     total_cost: null,
     amount_paid: null,
@@ -202,8 +218,8 @@ describe("Shop tabs", () => {
     expect(screen.getByText("Meghan Suchomski")).toBeTruthy();
     expect(screen.getByText("meghan@example.com")).toBeTruthy();
     expect(screen.getByText("555-0100")).toBeTruthy();
-    // Three collected orders: $15 + $20, and one that was never priced.
-    expect(screen.getByText(/3 orders · \$35\.00/)).toBeTruthy();
+    // Four collected orders: $15 + $7 + $20, and one that was never priced.
+    expect(screen.getByText(/4 orders · \$42\.00/)).toBeTruthy();
     expect(screen.getByText("History")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
   });
@@ -214,8 +230,9 @@ describe("Shop tabs", () => {
 
     const rows = [...document.querySelectorAll(".shop-pickup")].map((r) => r.textContent ?? "");
 
-    // Paid in full: the cost, and what it was paid by.
-    expect(rows.some((t) => /Collected .*· Cash/.test(t) && t.includes("$15.00"))).toBe(true);
+    // Paid in full: the cost, and what it was paid by. The date isn't on the
+    // row any more — it's the heading over the group.
+    expect(rows.some((t) => t.includes("Cash") && t.includes("$15.00"))).toBe(true);
 
     // Part paid: the cost, plus what's still outstanding.
     const short = rows.find((t) => t.includes("$20.00"));
@@ -232,6 +249,34 @@ describe("Shop tabs", () => {
     const cancelled = rows.find((t) => t.includes("Cancelled"));
     expect(cancelled).toBeTruthy();
     expect(cancelled).not.toContain("$");
+  });
+
+  it("groups history under one heading per day, newest first", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: /Account/ }));
+
+    const days = [...document.querySelectorAll(".shop-history__day")];
+    // 24 June (two orders), 3 June, 21 May, 2 May.
+    expect(days.length).toBe(4);
+
+    // Matched on the parts rather than the whole string: the label is
+    // formatted in the viewer's locale, so "June 24" and "24 June" are both
+    // correct and neither is worth pinning.
+    const labels = days.map((d) => d.querySelector(".shop-history__heading .eyebrow")?.textContent ?? "");
+    expect(labels[0]).toMatch(/June.*24|24.*June/);
+    expect(labels[1]).toMatch(/June.*3|3.*June/);
+    expect(labels[2]).toMatch(/May.*21|21.*May/);
+    expect(labels[3]).toMatch(/May.*2|2.*May/);
+
+    const totals = days.map((d) => d.querySelector(".shop-history__day-total")?.textContent ?? null);
+
+    // The day with two pickups carries both, and totals them: $15 + $7.
+    expect(days[0].querySelectorAll(".shop-pickup").length).toBe(2);
+    expect(totals[0]).toBe("$22.00");
+
+    // A day whose only order was cancelled has nothing to total.
+    expect(days[2].textContent).toContain("Cancelled");
+    expect(totals[2]).toBeNull();
   });
 
   it("goes back to Store when the tab is pressed again", async () => {

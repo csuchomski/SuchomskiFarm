@@ -8,6 +8,7 @@ import {
   fetchMyOrders,
   fetchProfile,
   fetchShop,
+  groupByDate,
   outstanding,
   reserve,
   type CustomerOrder,
@@ -51,6 +52,22 @@ type Collecting = { kind: "order" | "schedule"; id: number } | null;
 const price = (n: number | null, unit: string) => (n === null ? `— per ${unit}` : `$${Number(n).toFixed(2)} per ${unit}`);
 
 const money = (n: number | null) => (n === null ? "—" : `$${n.toFixed(2)}`);
+
+/**
+ * A history heading: "Wednesday 24 June" this year, "24 June 2025" before
+ * that. Parsed as local midday so the label can't slip a day on a timezone
+ * that's behind UTC.
+ */
+const dayLabel = (isoDay: string): string => {
+  const d = new Date(`${isoDay}T12:00:00`);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString(undefined, {
+    weekday: sameYear ? "long" : undefined,
+    day: "numeric",
+    month: "long",
+    year: sameYear ? undefined : "numeric",
+  });
+};
 
 /** "Cash, Venmo or Check" — the payment list read as a sentence rather than
  * as a comma-separated dump. */
@@ -651,40 +668,50 @@ export default function CustomerStore() {
           <div className="shop-pickups-title serif" style={{ fontSize: 21 }}>
             History
           </div>
-          {past.map((o) => {
-            const gap = outstanding(o);
-            return (
-              <div className="shop-pickup" key={o.id}>
-                <div className="shop-product__top">
-                  <div>
-                    <div className="serif shop-product__name" style={{ color: "var(--ink-muted)" }}>
-                      {o.quantity} {productUnit(o.product_id)} {productName(o.product_id).toLowerCase()}
-                    </div>
-                    <div className="mono shop-product__price">
-                      {o.cancelled_date
-                        ? "Cancelled"
-                        : `Collected ${new Date(o.picked_up_date!).toLocaleDateString()}`}
-                      {o.payment_method && ` · ${o.payment_method}`}
-                    </div>
-                  </div>
-                  {/* Only on a collected order. A cancellation cost nothing,
-                      and an unpriced one shows a dash rather than $0.00 —
-                      four of the completed orders on this farm have no price
-                      at all, and calling those free would be a claim. */}
-                  {o.picked_up_date && (
-                    <div className="mono shop-history__cost">
-                      {money(o.total_cost === null ? null : Number(o.total_cost))}
-                      {gap !== null && gap !== 0 && (
-                        <div className="shop-history__gap">
-                          {gap > 0 ? `$${gap.toFixed(2)} still owed` : `$${Math.abs(gap).toFixed(2)} over`}
+          {groupByDate(past).map((day) => (
+            <div className="shop-history__day" key={day.date}>
+              {/* The date moves up here, so the rows underneath stop
+                  repeating it and can say the thing that differs between
+                  them instead. */}
+              <div className="shop-history__heading">
+                <span className="eyebrow">{dayLabel(day.date)}</span>
+                {day.total !== null && <span className="mono shop-history__day-total">{money(day.total)}</span>}
+              </div>
+
+              {day.orders.map((o) => {
+                const gap = outstanding(o);
+                return (
+                  <div className="shop-pickup" key={o.id}>
+                    <div className="shop-product__top">
+                      <div>
+                        <div className="serif shop-product__name" style={{ color: "var(--ink-muted)" }}>
+                          {o.quantity} {productUnit(o.product_id)} {productName(o.product_id).toLowerCase()}
+                        </div>
+                        <div className="mono shop-product__price">
+                          {o.cancelled_date ? "Cancelled" : (o.payment_method ?? "Collected")}
+                        </div>
+                      </div>
+                      {/* Only on a collected order. A cancellation cost
+                          nothing, and an unpriced one shows a dash rather
+                          than $0.00 — four of the completed orders on this
+                          farm have no price at all, and calling those free
+                          would be a claim. */}
+                      {o.picked_up_date && (
+                        <div className="mono shop-history__cost">
+                          {money(o.total_cost === null ? null : Number(o.total_cost))}
+                          {gap !== null && gap !== 0 && (
+                            <div className="shop-history__gap">
+                              {gap > 0 ? `$${gap.toFixed(2)} still owed` : `$${Math.abs(gap).toFixed(2)} over`}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </>
       )}
 

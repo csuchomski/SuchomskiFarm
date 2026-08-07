@@ -46,6 +46,64 @@ export interface CustomerOrder {
 }
 
 /**
+ * The day a past order finished — collected, or failing that cancelled.
+ *
+ * Local, not UTC. `picked_up_date` is a timestamptz, and slicing the ISO
+ * string would put a 7pm Wisconsin pickup on the following day, which is
+ * neither what happened nor what the row next to it renders.
+ */
+export function historyDate(order: Pick<CustomerOrder, "picked_up_date" | "cancelled_date">): string | null {
+  const iso = order.picked_up_date ?? order.cancelled_date;
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+export interface HistoryDay {
+  /** Local yyyy-mm-dd, which is what the heading renders and what the
+   * ordering sorts on. */
+  date: string;
+  orders: CustomerOrder[];
+  /**
+   * What the collected orders that day came to, or null when none of them
+   * carried a price. Zero and null are different answers: zero would say
+   * the day was free.
+   */
+  total: number | null;
+}
+
+/**
+ * Past orders as days, newest first.
+ *
+ * Sorted on the day the order finished rather than the day it was reserved,
+ * which is the order they arrive in — a reservation made in May and
+ * collected in July belongs under July.
+ */
+export function groupByDate(orders: CustomerOrder[]): HistoryDay[] {
+  const days = new Map<string, CustomerOrder[]>();
+  for (const o of orders) {
+    const date = historyDate(o);
+    if (!date) continue;
+    const bucket = days.get(date);
+    if (bucket) bucket.push(o);
+    else days.set(date, [o]);
+  }
+
+  return [...days.entries()]
+    .sort((a, b) => (a[0] < b[0] ? 1 : a[0] > b[0] ? -1 : 0))
+    .map(([date, dayOrders]) => {
+      const priced = dayOrders.filter((o) => o.picked_up_date && o.total_cost !== null);
+      return {
+        date,
+        orders: dayOrders,
+        total: priced.length === 0 ? null : Math.round(priced.reduce((s, o) => s + Number(o.total_cost), 0) * 100) / 100,
+      };
+    });
+}
+
+/**
  * The gap between what a collected order cost and what was paid for it, or
  * null when there's nothing to compare.
  *

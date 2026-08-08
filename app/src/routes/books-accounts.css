@@ -1,0 +1,15 @@
+/* Editing or removing an account, opened under the row it belongs to. Same
+   flat panel as the attribution form on Transactions — both are "this row,
+   in more detail" and shouldn't look like different mechanisms. */
+
+.account-panel {
+  padding: 16px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--page);
+}
+
+.account-panel__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 12px;
+}

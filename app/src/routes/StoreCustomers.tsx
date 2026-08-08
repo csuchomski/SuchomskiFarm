@@ -10,8 +10,10 @@ import {
   type Customer,
   type RealOrder,
 } from "../lib/orders";
+import { isArchived } from "../lib/customers";
 import { useWorkspace } from "../lib/workspace";
 import "./store-orders.css";
+import "./store-customer.css";
 
 /**
  * Who buys, how much, and when they last came.
@@ -35,6 +37,10 @@ export default function StoreCustomers() {
   const { business } = useWorkspace();
   const businessId = business?.id ?? null;
   const [load, setLoad] = useState<Load>({ state: "loading" });
+  // Archived customers are off the list rather than gone. Kept behind a
+  // toggle instead of a separate page: the reason to look for one is almost
+  // always to put them back.
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,13 +70,17 @@ export default function StoreCustomers() {
   // never ordered, so a new signup is visible rather than absent.
   const rows = useMemo(
     () =>
-      [...customers].sort((a, b) => {
-        const sa = byId.get(a.id);
-        const sb = byId.get(b.id);
-        return (sb?.spent ?? -1) - (sa?.spent ?? -1) || customerName(a).localeCompare(customerName(b));
-      }),
-    [customers, byId],
+      customers
+        .filter((c) => showArchived || !isArchived(c))
+        .sort((a, b) => {
+          const sa = byId.get(a.id);
+          const sb = byId.get(b.id);
+          return (sb?.spent ?? -1) - (sa?.spent ?? -1) || customerName(a).localeCompare(customerName(b));
+        }),
+    [customers, byId, showArchived],
   );
+
+  const archivedCount = customers.filter(isArchived).length;
 
   const spending = summaries.reduce((s, r) => s + r.spent, 0);
   const buyers = summaries.filter((s) => s.orders > 0).length;
@@ -101,6 +111,14 @@ export default function StoreCustomers() {
             </Callout>
           ) : (
             <>
+              {archivedCount > 0 && (
+                <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 0 8px" }}>
+                  <button type="button" className="link-button mono" onClick={() => setShowArchived((v) => !v)}>
+                    {showArchived ? "hide archived" : `show ${archivedCount} archived`}
+                  </button>
+                </div>
+              )}
+
               <GridRow cols={COLS} mobileCols={COLS_SM} as="header">
                 <span>Customer</span>
                 <span className="hide-sm">Role</span>
@@ -118,9 +136,15 @@ export default function StoreCustomers() {
                 return (
                   <GridRow key={c.id} cols={COLS} mobileCols={COLS_SM} as="body" highlight={!s}>
                     <span style={{ minWidth: 0 }}>
-                      <span className="serif" style={{ fontSize: 17 }}>
+                      <Link className="serif customer-link" style={{ fontSize: 17 }} to={`/store/customers/${c.id}`}>
                         {shown}
-                      </span>
+                      </Link>
+                      {isArchived(c) && (
+                        <>
+                          {" "}
+                          <Pill variant="outline">archived</Pill>
+                        </>
+                      )}
                       <br />
                       <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
                         {contact || `${c.role} · no other contact details`}
@@ -144,8 +168,9 @@ export default function StoreCustomers() {
               })}
 
               <p style={{ fontSize: 13, color: "var(--ink-muted)", paddingTop: 16 }}>
-                Spend counts what was actually paid, so an order collected without payment shows as an order but not
-                as takings. Manage the orders themselves on <Link to="/store/orders">Orders</Link>.
+                Click a name to see everything they've bought, edit their details, or take them off the list. Spend
+                counts what was actually paid, so an order collected without payment shows as an order but not as
+                takings. Manage the orders themselves on <Link to="/store/orders">Orders</Link>.
               </p>
             </>
           )}

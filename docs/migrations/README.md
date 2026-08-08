@@ -31,6 +31,8 @@ database, don't take the table's word for it.
 | ~~019~~ | ~~Standing weekly orders~~ | — | **Already run, 2026-08-07.** Scopes `schedules` to a business, adds `cancelled_at`, narrows the stock hold from 7 days to 3, and fixes `complete_scheduled_pickup` leaving its order unscoped — the same bug as 017. Also relaxes `check_schedule_capacity`, which refused any subscription the current day's stock couldn't cover. |
 | ~~017~~ | ~~`reserve_product` sets `business_id`~~ | — | **Already run, 2026-08-07.** Every order the function created got `business_id` null, and `is_business_member(null)` is false — so any order placed after 010 was invisible to the farmer. Another instance of "a policy change can break writes" below. |
 | ~~021~~ | ~~`herd.record_production` scopes its batches~~ | — | **Already run, 2026-08-07.** The fourth instance of the unscoped-insert bug — and the first found by a query rather than by reading a function body. See below. |
+| ~~025~~ | ~~Ledger account admin~~ | — | **Already run, 2026-08-08.** `rename_ledger_account()` and `delete_ledger_account()`. Adding an account and editing its opening balance need neither — the grants and policy already allow them. Renaming does, because `ledger_transactions.account` is text: the account row and every transaction naming it have to move in one transaction or the money is stranded under the old name. |
+| ~~024~~ | ~~Customer admin~~ | — | **Already run, 2026-08-08.** `profiles.archived_at` plus `delete_customer()`, which refuses anyone with orders and names archiving instead. The interesting part is the **column-level grant**: `profiles` is granted per column, so a new column inherits nothing and the write failed with "permission denied for table profiles" while the policy passed. See below. |
 | ~~023~~ | ~~Schedule capacity~~ | — | **Already run, 2026-08-08.** `schedule_capacity(product_id)` returns seven rows — one per weekday — of forecast quantity free, so the shop can cap its new weekly-pickup dropdown without exposing production history or other customers' standing orders. Aggregates only; the hard limit is still `check_schedule_capacity`. |
 | ~~022~~ | ~~Payment methods~~ | — | **Already run, 2026-08-07.** `payment_methods` lookup seeded Cash/Venmo/Check, an FK from `orders.payment_method`, and both pickup functions validate against the table instead of a hard-coded `in ('Cash','Venmo')`. A fourth method is now one insert, no migration. Also stops a *customer* collecting more than their standing order is for. |
 
@@ -54,6 +56,26 @@ could see, sell or reserve against.
 It matches an insert's column list textually, so it will not catch an
 `insert … select *`, dynamic SQL, or a column list broken by a comment.
 A clean result means "none of the known shape", not a proof.
+
+## A new column inherits no privileges
+
+`public.profiles` is granted at the column level: `authenticated` holds
+UPDATE on exactly `email`, `first_name`, `last_name` and `phone`. 024 added
+`archived_at`, and the first rehearsal failed with
+
+```
+permission denied for table profiles
+```
+
+even though the RLS policy passed — `ALTER TABLE ... ADD COLUMN` grants
+nothing. The fix is one line (`grant update (archived_at) ... to
+authenticated`), but the failure is invisible from the SQL editor, which runs
+as superuser. Add a column to a column-granted table and you must grant it.
+
+The same check is why `role` is *not* granted: it's what `is_farmer()` reads,
+so UPDATE on it is the difference between a customer and someone holding
+every policy on products, inventory and orders. The customer page shows the
+role and doesn't offer to change it.
 
 ## A policy change can break writes, not just reads
 

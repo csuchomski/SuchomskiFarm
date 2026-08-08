@@ -39,8 +39,13 @@ vi.mock("../lib/auth", () => ({
 }));
 
 const customers = [
-  { id: "cust-1", first_name: "Meghan", last_name: "Suchomski", email: "meghan@example.com", phone: null, role: "buyer" },
-  { id: "cust-2", first_name: "", last_name: "", email: "quiet@example.com", phone: null, role: "buyer" },
+  { id: "cust-1", first_name: "Meghan", last_name: "Suchomski", email: "meghan@example.com", phone: null, role: "buyer",
+    archived_at: null, created_at: "2026-05-01T00:00:00Z" },
+  { id: "cust-2", first_name: "", last_name: "", email: "quiet@example.com", phone: null, role: "buyer",
+    archived_at: null, created_at: "2026-05-02T00:00:00Z" },
+  // Archived: off the list until the toggle is pressed.
+  { id: "cust-3", first_name: "Gone", last_name: "Away", email: "gone@example.com", phone: null, role: "buyer",
+    archived_at: "2026-07-01T00:00:00Z", created_at: "2026-04-01T00:00:00Z" },
 ];
 
 const orders = [
@@ -365,5 +370,29 @@ describe("Books transactions — the entry form", () => {
     const picker = screen.getByRole("combobox", { name: "Business for this entry" }) as HTMLSelectElement;
     expect(picker.value).toBe("5");
     expect(picker.textContent).toContain("Suchomski Family Farm");
+  });
+});
+
+describe("Customers page: archiving", () => {
+  it("keeps archived customers off the list until asked", async () => {
+    const { default: StoreCustomers } = await import("./StoreCustomers");
+    await mount(StoreCustomers, "Customers");
+
+    expect(screen.queryByText("Gone Away")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /show 1 archived/ }));
+    expect(screen.getByText("Gone Away")).toBeTruthy();
+    expect(screen.getByText("archived")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /hide archived/ }));
+    expect(screen.queryByText("Gone Away")).toBeNull();
+  });
+
+  it("links each customer to their own page", async () => {
+    const { default: StoreCustomers } = await import("./StoreCustomers");
+    await mount(StoreCustomers, "Customers");
+
+    const link = screen.getByText("Meghan Suchomski").closest("a");
+    expect(link?.getAttribute("href")).toBe("/store/customers/cust-1");
   });
 });

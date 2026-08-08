@@ -1,0 +1,61 @@
+/* One customer's page: their details, what they've bought, and the two ways
+   to take them off the list. */
+
+.customer-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: 16px 24px;
+  padding: 20px 0;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+  margin-top: 24px;
+}
+
+.customer-fact {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Purchase history, grouped the same way the shop's Account tab groups it. */
+
+.customer-day {
+  margin-top: 20px;
+}
+
+.customer-day__heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 6px;
+}
+
+.customer-day__total {
+  flex: none;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+/* Archiving and deleting. Set apart by a rule rather than by colour — a
+   destructive action shouldn't be the loudest thing on a page you opened to
+   read someone's phone number. */
+
+.customer-danger {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--hairline);
+}
+
+/* The name in the customers table. A link, but the row is a table row — an
+   underline on every one of them would read as noise. */
+
+.customer-link {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.customer-link:hover,
+.customer-link:focus-visible {
+  color: var(--herd-green);
+  text-decoration: underline;
+}

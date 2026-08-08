@@ -31,6 +31,7 @@ database, don't take the table's word for it.
 | ~~019~~ | ~~Standing weekly orders~~ | — | **Already run, 2026-08-07.** Scopes `schedules` to a business, adds `cancelled_at`, narrows the stock hold from 7 days to 3, and fixes `complete_scheduled_pickup` leaving its order unscoped — the same bug as 017. Also relaxes `check_schedule_capacity`, which refused any subscription the current day's stock couldn't cover. |
 | ~~017~~ | ~~`reserve_product` sets `business_id`~~ | — | **Already run, 2026-08-07.** Every order the function created got `business_id` null, and `is_business_member(null)` is false — so any order placed after 010 was invisible to the farmer. Another instance of "a policy change can break writes" below. |
 | ~~021~~ | ~~`herd.record_production` scopes its batches~~ | — | **Already run, 2026-08-07.** The fourth instance of the unscoped-insert bug — and the first found by a query rather than by reading a function body. See below. |
+| ~~026~~ | ~~Customers without logins~~ | — | **Already run, 2026-08-08.** Fixes the `insert own profile as customer` policy, which demanded `role = 'customer'` while the CHECK allows only `'buyer'`/`'farmer'` — unreachable since it was written. Drops `profiles_id_fkey` so a customer can exist without an `auth.users` row, adds `has_login`, and keeps the FK's cascade as a trigger on `auth.users`. `add_customer()` is the only thing that writes `has_login false`. |
 | ~~025~~ | ~~Ledger account admin~~ | — | **Already run, 2026-08-08.** `rename_ledger_account()` and `delete_ledger_account()`. Adding an account and editing its opening balance need neither — the grants and policy already allow them. Renaming does, because `ledger_transactions.account` is text: the account row and every transaction naming it have to move in one transaction or the money is stranded under the old name. |
 | ~~024~~ | ~~Customer admin~~ | — | **Already run, 2026-08-08.** `profiles.archived_at` plus `delete_customer()`, which refuses anyone with orders and names archiving instead. The interesting part is the **column-level grant**: `profiles` is granted per column, so a new column inherits nothing and the write failed with "permission denied for table profiles" while the policy passed. See below. |
 | ~~023~~ | ~~Schedule capacity~~ | — | **Already run, 2026-08-08.** `schedule_capacity(product_id)` returns seven rows — one per weekday — of forecast quantity free, so the shop can cap its new weekly-pickup dropdown without exposing production history or other customers' standing orders. Aggregates only; the hard limit is still `check_schedule_capacity`. |
@@ -56,6 +57,22 @@ could see, sell or reserve against.
 It matches an insert's column list textually, so it will not catch an
 `insert … select *`, dynamic SQL, or a column list broken by a comment.
 A clean result means "none of the known shape", not a proof.
+
+## A policy can contradict a constraint, and nothing will tell you
+
+`profiles` carried a policy requiring `role = 'customer'` for an insert, and
+a CHECK constraint allowing only `'buyer'` or `'farmer'`. Any insert
+satisfying one failed the other, so the policy was unreachable from the day
+it was written — and nothing reported it, because a policy is not validated
+against the constraints on the table it guards.
+
+It went unnoticed for as long as it did because the path it guards is a
+fallback: `on_auth_user_created` creates the profile through a security
+definer function, before any policy is consulted. 026 sets it to `'buyer'`,
+which is what the column defaults to and what every live row carries.
+
+Worth checking whenever a policy names a column value: does a constraint
+allow that value at all?
 
 ## A new column inherits no privileges
 

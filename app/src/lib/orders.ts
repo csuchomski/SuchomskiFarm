@@ -47,6 +47,9 @@ export interface Customer {
    * order — see docs/migrations/024-customer-admin.sql. */
   archived_at: string | null;
   created_at: string | null;
+  /** False for someone added at the farm, who has no auth.users row behind
+   * them and can't sign in. See docs/migrations/026. */
+  has_login: boolean;
 }
 
 const ORDER_COLUMNS =
@@ -74,7 +77,7 @@ export async function fetchOrders(businessId: number): Promise<RealOrder[]> {
 export async function fetchCustomers(): Promise<Customer[]> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, first_name, last_name, email, phone, role, archived_at, created_at")
+    .select("id, first_name, last_name, email, phone, role, archived_at, created_at, has_login")
     .order("first_name");
   if (error) throw new Error(`profiles: ${error.message}`);
   return (data ?? []) as Customer[];

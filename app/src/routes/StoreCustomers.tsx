@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
-import { Callout, GridRow, Pill, StatTile } from "../components/ui";
+import { Button, Callout, GridRow, Pill, StatTile } from "../components/ui";
 import {
   byCustomer,
   customerName,
@@ -10,7 +10,7 @@ import {
   type Customer,
   type RealOrder,
 } from "../lib/orders";
-import { isArchived } from "../lib/customers";
+import { addCustomer, hasLogin, isArchived, validateCustomer } from "../lib/customers";
 import { useWorkspace } from "../lib/workspace";
 import "./store-orders.css";
 import "./store-customer.css";
@@ -42,23 +42,34 @@ export default function StoreCustomers() {
   // always to put them back.
   const [showArchived, setShowArchived] = useState(false);
 
+  // Adding someone who buys at the gate. They get no login — see
+  // docs/migrations/026-customers-without-logins.sql for why that needed a
+  // foreign key removed rather than a form.
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState({ first_name: "", last_name: "", email: "", phone: "" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (businessId === null) {
+      setLoad({ state: "ok", orders: [], customers: [] });
+      return;
+    }
+    const [orders, customers] = await Promise.all([fetchOrders(businessId), fetchCustomers()]);
+    setLoad({ state: "ok", orders, customers });
+  }, [businessId]);
+
   useEffect(() => {
     let cancelled = false;
     setLoad({ state: "loading" });
-    (async () => {
-      if (businessId === null) {
-        setLoad({ state: "ok", orders: [], customers: [] });
-        return;
-      }
-      const [orders, customers] = await Promise.all([fetchOrders(businessId), fetchCustomers()]);
-      if (!cancelled) setLoad({ state: "ok", orders, customers });
-    })().catch(
+    refresh().catch(
       (err) => !cancelled && setLoad({ state: "error", message: err instanceof Error ? err.message : String(err) }),
     );
     return () => {
       cancelled = true;
     };
-  }, [businessId]);
+  }, [refresh]);
 
   const orders = load.state === "ok" ? load.orders : EMPTY_ORDERS;
   const customers = load.state === "ok" ? load.customers : EMPTY_CUSTOMERS;
@@ -87,7 +98,24 @@ export default function StoreCustomers() {
 
   return (
     <OpsShell searchPlaceholder="A customer…">
-      <PageHeader eyebrow={business ? `${business.name} · store` : "Store"} title="Customers" />
+      <PageHeader
+        eyebrow={business ? `${business.name} · store` : "Store"}
+        title="Customers"
+        actions={
+          <Button
+            variant="filled"
+            disabled={load.state !== "ok"}
+            onClick={() => {
+              setAdding((v) => !v);
+              setDraft({ first_name: "", last_name: "", email: "", phone: "" });
+              setError(null);
+              setNote(null);
+            }}
+          >
+            {adding ? "Cancel" : "New customer"}
+          </Button>
+        }
+      />
 
       {load.state === "loading" && (
         <p style={{ fontSize: 14, color: "var(--ink-muted)", padding: "16px 8px" }}>Loading…</p>
@@ -105,7 +133,84 @@ export default function StoreCustomers() {
             <StatTile value={summaries.reduce((s, r) => s + r.openOrders, 0) || "—"} label="Open orders" />
           </div>
 
-          {customers.length === 0 ? (
+          {error && <p style={{ fontSize: 13, color: "var(--red)", padding: "12px 0" }}>{error}</p>}
+          {note && <p style={{ fontSize: 13, color: "var(--herd-green)", padding: "12px 0" }}>{note}</p>}
+
+          {adding && (
+            <div className="order-form">
+              <div className="eyebrow" style={{ marginBottom: 8 }}>
+                Someone who buys at the farm
+              </div>
+              <div className="order-form__fields">
+                <label style={{ fontSize: 13 }}>
+                  <div className="eyebrow">First name</div>
+                  <input
+                    className="order-select"
+                    value={draft.first_name}
+                    aria-label="First name"
+                    onChange={(e) => setDraft((d) => ({ ...d, first_name: e.target.value }))}
+                  />
+                </label>
+                <label style={{ fontSize: 13 }}>
+                  <div className="eyebrow">Last name</div>
+                  <input
+                    className="order-select"
+                    value={draft.last_name}
+                    aria-label="Last name"
+                    onChange={(e) => setDraft((d) => ({ ...d, last_name: e.target.value }))}
+                  />
+                </label>
+                <label style={{ fontSize: 13 }}>
+                  <div className="eyebrow">Email (optional)</div>
+                  <input
+                    className="order-select"
+                    value={draft.email}
+                    aria-label="Email"
+                    onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
+                  />
+                </label>
+                <label style={{ fontSize: 13 }}>
+                  <div className="eyebrow">Phone (optional)</div>
+                  <input
+                    className="order-select"
+                    value={draft.phone}
+                    aria-label="Phone"
+                    onChange={(e) => setDraft((d) => ({ ...d, phone: e.target.value }))}
+                  />
+                </label>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
+                <Button
+                  variant="filled"
+                  size="sm"
+                  disabled={busy || validateCustomer(draft) !== null}
+                  onClick={() => {
+                    setBusy(true);
+                    setError(null);
+                    addCustomer(draft)
+                      .then(async () => {
+                        await refresh();
+                        setAdding(false);
+                        setNote(`Added ${`${draft.first_name} ${draft.last_name}`.trim() || draft.email}.`);
+                      })
+                      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  {busy ? "Adding…" : "Add customer"}
+                </Button>
+                {validateCustomer(draft) && (
+                  <span style={{ fontSize: 13, color: "var(--red)" }}>{validateCustomer(draft)}</span>
+                )}
+              </div>
+              <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 12 }}>
+                They won't be able to sign in — this is a name to reserve and record orders against, not an account.
+                Someone who wants the shop signs up there themselves.
+              </p>
+            </div>
+          )}
+
+          {customers.length === 0 && !adding ? (
             <Callout>
               No customer accounts yet. Someone signing up through the <Link to="/shop">shop</Link> appears here.
             </Callout>
@@ -143,6 +248,12 @@ export default function StoreCustomers() {
                         <>
                           {" "}
                           <Pill variant="outline">archived</Pill>
+                        </>
+                      )}
+                      {!hasLogin(c) && (
+                        <>
+                          {" "}
+                          <Pill variant="outline">no login</Pill>
                         </>
                       )}
                       <br />

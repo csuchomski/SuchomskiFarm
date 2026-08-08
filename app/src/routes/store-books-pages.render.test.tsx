@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
@@ -40,13 +40,24 @@ vi.mock("../lib/auth", () => ({
 
 const customers = [
   { id: "cust-1", first_name: "Meghan", last_name: "Suchomski", email: "meghan@example.com", phone: null, role: "buyer",
-    archived_at: null, created_at: "2026-05-01T00:00:00Z" },
+    archived_at: null, created_at: "2026-05-01T00:00:00Z", has_login: true },
   { id: "cust-2", first_name: "", last_name: "", email: "quiet@example.com", phone: null, role: "buyer",
-    archived_at: null, created_at: "2026-05-02T00:00:00Z" },
+    archived_at: null, created_at: "2026-05-02T00:00:00Z", has_login: true },
   // Archived: off the list until the toggle is pressed.
   { id: "cust-3", first_name: "Gone", last_name: "Away", email: "gone@example.com", phone: null, role: "buyer",
-    archived_at: "2026-07-01T00:00:00Z", created_at: "2026-04-01T00:00:00Z" },
+    archived_at: "2026-07-01T00:00:00Z", created_at: "2026-04-01T00:00:00Z", has_login: true },
+  // Added at the farm: no auth.users row behind them.
+  { id: "cust-4", first_name: "Gate", last_name: "Buyer", email: "", phone: "555-0123", role: "buyer",
+    archived_at: null, created_at: "2026-08-08T00:00:00Z", has_login: false },
 ];
+
+type AddPatch = Parameters<typeof import("../lib/customers").addCustomer>[0];
+const addCustomer = vi.fn(async (_p: AddPatch) => "new-id");
+
+vi.mock("../lib/customers", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/customers")>()),
+  addCustomer: (p: AddPatch) => addCustomer(p),
+}));
 
 const orders = [
   // Open: 2 gallons of Milk at $10 = $20 expected.
@@ -142,7 +153,10 @@ vi.mock("../lib/books-data", async (importOriginal) => ({
   fetchBooksData: vi.fn(async () => booksData),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  addCustomer.mockClear();
+});
 
 const mount = async (Component: React.ComponentType, settled: string | RegExp) => {
   render(
@@ -196,7 +210,7 @@ describe("Customers page", () => {
   it("shows someone who has never ordered rather than hiding them", async () => {
     const { default: StoreCustomers } = await import("./StoreCustomers");
     await mount(StoreCustomers, "Customers");
-    expect(screen.getByText("never")).toBeTruthy();
+    expect(screen.getAllByText("never").length).toBeGreaterThan(0);
   });
 });
 
@@ -394,5 +408,55 @@ describe("Customers page: archiving", () => {
 
     const link = screen.getByText("Meghan Suchomski").closest("a");
     expect(link?.getAttribute("href")).toBe("/store/customers/cust-1");
+  });
+});
+
+describe("Customers page: adding one", () => {
+  it("adds someone with a name and no email", async () => {
+    const { default: StoreCustomers } = await import("./StoreCustomers");
+    await mount(StoreCustomers, "Customers");
+
+    fireEvent.click(screen.getByRole("button", { name: "New customer" }));
+    fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Gate" } });
+    fireEvent.change(screen.getByLabelText("Phone"), { target: { value: "555-0123" } });
+
+    // A name is enough. profiles.email is NOT NULL but takes '' — someone
+    // buying eggs at the gate may not have an address to give you.
+    const submit = screen.getByRole("button", { name: "Add customer" }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(false);
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(addCustomer).toHaveBeenCalledTimes(1));
+    expect(addCustomer.mock.calls[0][0]).toMatchObject({ first_name: "Gate", email: "", phone: "555-0123" });
+  });
+
+  it("won't add someone with neither a name nor an email", async () => {
+    const { default: StoreCustomers } = await import("./StoreCustomers");
+    await mount(StoreCustomers, "Customers");
+
+    fireEvent.click(screen.getByRole("button", { name: "New customer" }));
+    expect(screen.getByText(/name or an email/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Add customer" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("marks a customer who can't sign in", async () => {
+    const { default: StoreCustomers } = await import("./StoreCustomers");
+    await mount(StoreCustomers, "Customers");
+
+    const row = [...document.querySelectorAll(".grid-row--body")].find((r) => r.textContent?.includes("Gate Buyer"))!;
+    expect(row.textContent).toContain("no login");
+
+    // Everyone else is left alone.
+    const meghan = [...document.querySelectorAll(".grid-row--body")].find((r) =>
+      r.textContent?.includes("Meghan Suchomski"),
+    )!;
+    expect(meghan.textContent).not.toContain("no login");
+  });
+
+  it("says plainly that this isn't an account", async () => {
+    const { default: StoreCustomers } = await import("./StoreCustomers");
+    await mount(StoreCustomers, "Customers");
+    fireEvent.click(screen.getByRole("button", { name: "New customer" }));
+    expect(screen.getByText(/won't be able to sign in/)).toBeTruthy();
   });
 });

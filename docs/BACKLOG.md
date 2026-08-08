@@ -7,21 +7,6 @@ priority is the owner's call and isn't recorded here.
 
 ## Requested 2026-08-07
 
-### Add a customer
-
-**Editing is done** — see "Closed 2026-08-08". What's left is *adding* one.
-
-A customer still only comes into existence by signing up through `/shop`, so
-there's no way to record someone who pays cash at the gate.
-
-Worth knowing: `profiles.id` is a foreign key to `auth.users`, so a customer
-row cannot simply be inserted without an account behind it. Either this needs
-an invite flow, or the schema needs a notion of a customer who has no login —
-that's a design decision, not just a form. Note that the insert policy on
-profiles requires `role = 'customer'` while the CHECK constraint allows only
-`'buyer'` or `'farmer'`, so that policy can never succeed as written; whoever
-builds this should fix or drop it rather than work around it.
-
 ### Edit milking records
 
 `herd.production_records` can be written from Milkings but never corrected.
@@ -130,6 +115,20 @@ Four items were reviewed and are no longer open.
   "Landmark CU - Realtor"), so the constraint matches how they're used; the
   form says so when a name clashes rather than the schema being changed
   underneath a text column that depends on names being unique.
+- **Add a customer** — Books → Customers has a form. The design decision it
+  needed: `profiles.id` was a foreign key to `auth.users`, so a customer
+  couldn't exist without an account, and the app can't create one (auth.signUp
+  would replace the farmer's session; the admin API needs the service_role
+  key). Migration 026 drops that foreign key and records `has_login` instead,
+  keeping the cascade it provided as a trigger. A customer added at the farm
+  can be reserved for, sold to and edited like any other; they just can't sign
+  in, and the list says so.
+
+  It also fixed a policy that could never have worked: the insert policy on
+  profiles required `role = 'customer'` while the CHECK constraint allows
+  only `'buyer'` or `'farmer'`, so any insert satisfying one failed the
+  other. Nothing reported it, because a policy isn't validated against the
+  constraints on the table it guards — see the migrations README.
 - **"Attributed to"** — the column exists and writes migration 002's link. A
   transaction can be split across animals, evenly by default and editable per
   animal, and partial attribution is allowed because a bill can be part

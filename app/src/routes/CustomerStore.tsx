@@ -17,19 +17,23 @@ import {
 } from "../lib/customer";
 import {
   cancelSchedule,
+  capacityFromStock,
   createSchedule,
   fetchMySchedules,
+  fetchScheduleCapacity,
   fulfilPickup,
   isHeld,
   nextPickup,
   skipWeek,
   untilLabel,
   WEEKDAYS,
+  type DayCapacity,
   type Schedule,
   type Weekday,
 } from "../lib/schedules";
 import { amountDue, completePickup, validateCollection } from "../lib/orders";
 import { fetchPaymentMethods, methodCodes, type PaymentMethodOption } from "../lib/payment-methods";
+import { maxOffer, quantityLabel, quantityOptions, stepFor } from "../lib/quantities";
 import "./customer-store.css";
 
 type Fetch =
@@ -52,6 +56,10 @@ type Collecting = { kind: "order" | "schedule"; id: number } | null;
 const price = (n: number | null, unit: string) => (n === null ? `— per ${unit}` : `$${Number(n).toFixed(2)} per ${unit}`);
 
 const money = (n: number | null) => (n === null ? "—" : `$${n.toFixed(2)}`);
+
+/** Stable identity so the quantity dropdown isn't handed a fresh array on
+ * every render. */
+const EMPTY_QUANTITIES: number[] = [];
 
 /**
  * A history heading: "Wednesday 24 June" this year, "24 June 2025" before
@@ -87,6 +95,11 @@ export default function CustomerStore() {
   const [subscribing, setSubscribing] = useState<number | null>(null);
   const [subDay, setSubDay] = useState<string>("Thursday");
   const [subQty, setSubQty] = useState("");
+  // What the farm expects to have free on each weekday, for the product
+  // whose panel is open. Fetched per product rather than for all of them:
+  // most visits never open the panel at all.
+  const [capacity, setCapacity] = useState<DayCapacity[] | null>(null);
+  const [capacityLoading, setCapacityLoading] = useState(false);
   const [tab, setTab] = useState<CustomerTab>("Store");
   // Confirming a collection: what's being handed over, how much of it, and
   // how it was paid for.
@@ -130,6 +143,39 @@ export default function CustomerStore() {
   // The storefront needs to know who's collecting, so it asks before showing
   // anything rather than letting someone fill a basket and hit a wall.
   if (!session) return <CustomerAuth />;
+
+  /**
+   * Opening the "every week" panel. The capacity read is what fills the
+   * quantity dropdown, so the panel opens in a "Checking…" state rather than
+   * with a list it would have to replace a moment later.
+   */
+  const openSubscribe = async (product: ShopProduct) => {
+    setSubscribing(product.id);
+    setSubQty("");
+    setActionError(null);
+    setCapacity(null);
+    setCapacityLoading(true);
+    const onShelf = capacityFromStock(product.available, new Date().toISOString().slice(0, 10));
+    try {
+      const rows = await fetchScheduleCapacity(product.id);
+      setCapacity(rows ?? onShelf);
+    } catch (err) {
+      // Not fatal: without the forecast the panel still works off what's on
+      // the shelf, which is the number the shop is already showing.
+      setCapacity(onShelf);
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCapacityLoading(false);
+    }
+  };
+
+  /** Changing the day changes the ceiling, so a quantity the new day can't
+   * cover has to go rather than sit there looking chosen. */
+  const changeSubDay = (day: string) => {
+    setSubDay(day);
+    const cap = capacity?.find((d) => d.weekday === day)?.available ?? 0;
+    if (subQty !== "" && Number(subQty) > cap) setSubQty("");
+  };
 
   const handleSubscribe = async (product: ShopProduct) => {
     if (!userId) return;
@@ -242,6 +288,16 @@ export default function CustomerStore() {
     "Your account";
   const collected = orders.filter((o) => o.picked_up_date);
   const spent = Math.round(collected.reduce((sum, o) => sum + Number(o.total_cost ?? 0), 0) * 100) / 100;
+
+  // The weekly-pickup panel. Until the capacity read lands there are still
+  // seven days to name — with no numbers against them, rather than numbers
+  // that are about to be replaced.
+  const capacityDays: DayCapacity[] =
+    capacity ?? WEEKDAYS.map((weekday) => ({ weekday, pickupDate: "", available: 0 }));
+  const subProduct = products.find((p) => p.id === subscribing) ?? null;
+  const subCap = capacityDays.find((d) => d.weekday === subDay)?.available ?? 0;
+  const subOptions =
+    subProduct && !capacityLoading ? quantityOptions(stepFor(subProduct), subCap) : EMPTY_QUANTITIES;
 
   const productName = (id: number) => products.find((p) => p.id === id)?.name ?? "Item";
   const productUnit = (id: number) => products.find((p) => p.id === id)?.unit ?? "";
@@ -406,26 +462,45 @@ export default function CustomerStore() {
               {subscribing === p.id ? (
                 <div className="shop-subscribe">
                   <div className="shop-subscribe__row">
-                    <input
-                      className="shop-qty-field"
-                      type="number"
-                      min="0"
-                      step="0.001"
-                      inputMode="decimal"
-                      placeholder="Qty"
-                      value={subQty}
-                      onChange={(e) => setSubQty(e.target.value)}
-                      aria-label={`Weekly quantity of ${p.name}`}
-                    />
+                    {/* Day first now: it decides what the quantity list can
+                        offer, so choosing it second would mean picking an
+                        amount and then watching it change. */}
                     <select
                       className="shop-qty-field"
                       value={subDay}
-                      onChange={(e) => setSubDay(e.target.value)}
+                      onChange={(e) => changeSubDay(e.target.value)}
                       aria-label="Pickup day"
                     >
-                      {WEEKDAYS.map((d) => (
-                        <option key={d} value={d}>
-                          {d}s
+                      {capacityDays.map((d) => {
+                        // The most that day could actually be signed up for,
+                        // not its raw forecast — otherwise a day showing
+                        // "0.3 gallon expected" would offer no quantities.
+                        const most = capacityLoading ? null : maxOffer(stepFor(p), d.available);
+                        return (
+                          <option key={d.weekday} value={d.weekday}>
+                            {d.weekday}s
+                            {most !== null && ` — ${most > 0 ? `${most} ${p.unit}` : "none"} expected`}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <select
+                      className="shop-qty-field"
+                      value={subQty}
+                      onChange={(e) => setSubQty(e.target.value)}
+                      disabled={subOptions.length === 0}
+                      aria-label={`Weekly quantity of ${p.name}`}
+                    >
+                      <option value="">
+                        {capacityLoading
+                          ? "Checking…"
+                          : subOptions.length === 0
+                            ? `No ${p.name.toLowerCase()} that day`
+                            : "How much?"}
+                      </option>
+                      {subOptions.map((q) => (
+                        <option key={q} value={String(q)}>
+                          {quantityLabel(q, p.unit)}
                         </option>
                       ))}
                     </select>
@@ -434,12 +509,16 @@ export default function CustomerStore() {
                     <button
                       className="shop-reserve-btn"
                       onClick={() => void handleSubscribe(p)}
-                      disabled={busyId === p.id}
+                      disabled={busyId === p.id || subQty === ""}
                     >
                       {busyId === p.id ? "Starting…" : "Start weekly pickup"}
                     </button>
                     <Button onClick={() => setSubscribing(null)}>Cancel</Button>
                   </div>
+                  <p className="shop-subscribe__note">
+                    Inventory fluctuates, if we don't have the quantity you're hoping for, try another day or ask us
+                    for help!
+                  </p>
                   <p className="shop-subscribe__note">
                     Same pickup every week until you stop it. You can skip any week.
                   </p>
@@ -448,11 +527,7 @@ export default function CustomerStore() {
                 <button
                   type="button"
                   className="shop-subscribe-link"
-                  onClick={() => {
-                    setSubscribing(p.id);
-                    setSubQty("");
-                    setActionError(null);
-                  }}
+                  onClick={() => void openSubscribe(p)}
                 >
                   or get it every week →
                 </button>

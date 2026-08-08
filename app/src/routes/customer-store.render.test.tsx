@@ -16,9 +16,39 @@ vi.mock("../lib/auth", () => ({
 }));
 
 const products = [
-  { id: 1, name: "Milk", unit: "gallon", price: 10, business_id: 5, available: 4 },
-  { id: 3, name: "Eggs", unit: "dozen", price: 7, business_id: 5, available: 0 },
+  { id: 1, name: "Milk", unit: "gallon", price: 10, business_id: 5, available: 4, type_code: "milk" },
+  { id: 3, name: "Eggs", unit: "dozen", price: 7, business_id: 5, available: 0, type_code: "eggs" },
 ];
+
+/**
+ * What public.schedule_capacity returns, per product. Milk grows through the
+ * week as production lands; Friday is deliberately flat at 0.3 — under a
+ * single half gallon, so that day has nothing to offer at all.
+ */
+const capacity: Record<number, { weekday: string; pickupDate: string; available: number }[]> = {
+  1: [
+    { weekday: "Saturday", pickupDate: "2026-08-08", available: 2 },
+    { weekday: "Sunday", pickupDate: "2026-08-09", available: 3.2 },
+    { weekday: "Monday", pickupDate: "2026-08-10", available: 6 },
+    { weekday: "Tuesday", pickupDate: "2026-08-11", available: 6 },
+    { weekday: "Wednesday", pickupDate: "2026-08-12", available: 6 },
+    { weekday: "Thursday", pickupDate: "2026-08-13", available: 1.5 },
+    { weekday: "Friday", pickupDate: "2026-08-14", available: 0.3 },
+  ],
+  3: [
+    { weekday: "Saturday", pickupDate: "2026-08-08", available: 1 },
+    { weekday: "Sunday", pickupDate: "2026-08-09", available: 1.4 },
+    { weekday: "Monday", pickupDate: "2026-08-10", available: 1.8 },
+    { weekday: "Tuesday", pickupDate: "2026-08-11", available: 2.2 },
+    { weekday: "Wednesday", pickupDate: "2026-08-12", available: 2.7 },
+    { weekday: "Thursday", pickupDate: "2026-08-13", available: 3.1 },
+    { weekday: "Friday", pickupDate: "2026-08-14", available: 3.5 },
+  ],
+};
+
+const fetchScheduleCapacity = vi.fn(async (productId: number) => capacity[productId] ?? null);
+type CreateInput = Parameters<typeof import("../lib/schedules").createSchedule>[0];
+const createSchedule = vi.fn(async (_input: CreateInput) => ({}) as never);
 
 const orders = [
   {
@@ -152,6 +182,8 @@ vi.mock("../lib/schedules", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/schedules")>()),
   fetchMySchedules: vi.fn(async () => [dueToday, notDueYet]),
   fulfilPickup: (input: FulfilInput) => fulfilPickup(input),
+  fetchScheduleCapacity: (productId: number) => fetchScheduleCapacity(productId),
+  createSchedule: (input: CreateInput) => createSchedule(input),
 }));
 
 type CompleteInput = Parameters<typeof import("../lib/orders").completePickup>[0];
@@ -175,6 +207,8 @@ afterEach(() => {
   cleanup();
   completePickup.mockClear();
   fulfilPickup.mockClear();
+  createSchedule.mockClear();
+  fetchScheduleCapacity.mockClear();
 });
 
 const mount = async () => {
@@ -390,5 +424,107 @@ describe("Collecting an order", () => {
       amountPaid: 40,
     });
     expect(completePickup).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Starting a weekly pickup. The quantity used to be a free-text box, which
+ * would take any number the customer typed and let the insert decide — and
+ * for a first pickup more than three days out, check_schedule_capacity waves
+ * everything through, so nothing decided at all.
+ */
+describe("Starting a weekly pickup", () => {
+  const openPanel = async (product = "Milk") => {
+    await mount();
+    const cards = [...document.querySelectorAll(".shop-product")];
+    const card = cards.find((c) => c.textContent?.includes(product))!;
+    fireEvent.click(card.querySelector(".shop-subscribe-link")!);
+    await waitFor(() => expect(fetchScheduleCapacity).toHaveBeenCalled());
+    return card;
+  };
+
+  const options = (label: string) =>
+    [...(screen.getByLabelText(label) as HTMLSelectElement).options].map((o) => o.textContent);
+
+  it("offers milk by the half gallon, capped at the day's forecast", async () => {
+    await openPanel();
+    fireEvent.change(screen.getByLabelText("Pickup day"), { target: { value: "Sunday" } });
+
+    // Sunday forecasts 3.2 gallons, so the list stops at 3 — 3.5 would be
+    // more than the farm expects to have.
+    expect(options("Weekly quantity of Milk")).toEqual([
+      "How much?",
+      "0.5 gallon",
+      "1 gallon",
+      "1.5 gallon",
+      "2 gallon",
+      "2.5 gallon",
+      "3 gallon",
+    ]);
+  });
+
+  it("offers eggs by the dozen, not the half dozen", async () => {
+    await openPanel("Eggs");
+    fireEvent.change(screen.getByLabelText("Pickup day"), { target: { value: "Thursday" } });
+
+    // 3.1 dozen forecast — three whole dozen.
+    expect(options("Weekly quantity of Eggs")).toEqual(["How much?", "1 dozen", "2 dozen", "3 dozen"]);
+  });
+
+  it("re-caps the list when the day changes", async () => {
+    await openPanel();
+    fireEvent.change(screen.getByLabelText("Pickup day"), { target: { value: "Monday" } });
+    expect(options("Weekly quantity of Milk").length).toBe(13); // 0.5 … 6
+
+    fireEvent.change(screen.getByLabelText("Pickup day"), { target: { value: "Thursday" } });
+    expect(options("Weekly quantity of Milk")).toEqual(["How much?", "0.5 gallon", "1 gallon", "1.5 gallon"]);
+  });
+
+  it("drops a chosen quantity the new day can't cover", async () => {
+    await openPanel();
+    fireEvent.change(screen.getByLabelText("Pickup day"), { target: { value: "Monday" } });
+    fireEvent.change(screen.getByLabelText("Weekly quantity of Milk"), { target: { value: "5" } });
+    expect((screen.getByLabelText("Weekly quantity of Milk") as HTMLSelectElement).value).toBe("5");
+
+    // Thursday only forecasts 1.5 — 5 gallons can't quietly survive the move.
+    fireEvent.change(screen.getByLabelText("Pickup day"), { target: { value: "Thursday" } });
+    expect((screen.getByLabelText("Weekly quantity of Milk") as HTMLSelectElement).value).toBe("");
+  });
+
+  it("offers nothing on a day that can't cover a single step", async () => {
+    await openPanel();
+    fireEvent.change(screen.getByLabelText("Pickup day"), { target: { value: "Friday" } });
+
+    // 0.3 of a gallon is not half a gallon, and "0" is not an offer.
+    expect(options("Weekly quantity of Milk")).toEqual(["No milk that day"]);
+    expect((screen.getByLabelText("Weekly quantity of Milk") as HTMLSelectElement).disabled).toBe(true);
+  });
+
+  it("says what each day is expected to have, so another day is a real suggestion", async () => {
+    await openPanel();
+    expect(options("Pickup day")).toContain("Mondays — 6 gallon expected");
+    expect(options("Pickup day")).toContain("Fridays — none expected");
+  });
+
+  it("carries the note about inventory", async () => {
+    const card = await openPanel();
+    expect(card.textContent).toContain(
+      "Inventory fluctuates, if we don't have the quantity you're hoping for, try another day or ask us for help!",
+    );
+  });
+
+  it("won't start until a quantity is chosen, then sends the one that was", async () => {
+    await openPanel();
+    fireEvent.change(screen.getByLabelText("Pickup day"), { target: { value: "Monday" } });
+
+    const start = screen.getByRole("button", { name: "Start weekly pickup" }) as HTMLButtonElement;
+    expect(start.disabled).toBe(true);
+
+    fireEvent.change(screen.getByLabelText("Weekly quantity of Milk"), { target: { value: "2.5" } });
+    expect(start.disabled).toBe(false);
+    fireEvent.click(start);
+
+    await waitFor(() => expect(createSchedule).toHaveBeenCalledTimes(1));
+    expect(createSchedule.mock.calls[0][0]).toMatchObject({ productId: 1, quantity: 2.5, day: "Monday" });
   });
 });

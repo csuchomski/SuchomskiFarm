@@ -20,6 +20,10 @@ export interface ShopProduct {
   name: string;
   unit: string;
   price: number | null;
+  /** Milk, eggs, meat… — what the weekly-pickup dropdown steps by. Null on a
+   * product migration 008's conservative backfill didn't type, which is why
+   * stepFor() falls back to the unit. */
+  type_code: string | null;
   /** Which store this belongs to. Needed when a customer starts a weekly
    * pickup: schedules are business-scoped since migration 019, the same way
    * orders have been since 010. */
@@ -134,7 +138,7 @@ export async function fetchProfile(userId: string): Promise<CustomerProfile | nu
 
 export async function fetchShop(): Promise<ShopProduct[]> {
   const [productsRes, batchesRes] = await Promise.all([
-    supabase.from("products").select("id, name, unit, price, business_id").order("name"),
+    supabase.from("products").select("id, name, unit, price, business_id, type_code").order("name"),
     supabase.from("inventory_batches").select("product_id, quantity, reserved"),
   ]);
   if (productsRes.error) throw new Error(`products: ${productsRes.error.message}`);

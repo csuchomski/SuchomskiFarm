@@ -14,6 +14,20 @@ import {
 } from "../lib/books-data";
 import { accountsForBusiness, defaultAccountFor } from "../lib/books-report";
 import { categoriesFor, fetchTaxCategories, type TaxCategory } from "../lib/tax";
+import {
+  attribute,
+  byTransaction,
+  fetchAttributions,
+  fetchExpenseCategories,
+  REVENUE_CATEGORIES,
+  splitEvenly,
+  unattribute,
+  unattributed,
+  validateAttribution,
+  type Attribution,
+  type ExpenseCategory,
+} from "../lib/attribution";
+import { fetchAnimals, type RealAnimal } from "../lib/herd";
 import { useWorkspace } from "../lib/workspace";
 import "./books-transactions.css";
 
@@ -23,18 +37,31 @@ type Save = { state: "idle" } | { state: "saving" } | { state: "saved" } | { sta
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const money = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const COLS = "96px 1fr 140px 120px 120px 120px 110px";
-/** Seven tracks need ~800px. On a phone a ledger line is a date, what it
- *  was, and how much — category, type, payer and account are detail you
- *  open the entry for. */
+const COLS = "96px 1fr 130px 110px 110px 110px 130px 110px";
+/** Eight tracks need ~900px. On a phone a ledger line is a date, what it
+ *  was, and how much — category, type, payer, account and what it was for
+ *  are detail you open the entry for. */
 const COLS_SM = "72px 1fr 88px";
 
 export default function BooksTransactions() {
   // The business is chosen once, in the topbar, and every screen follows it —
   // rather than Books keeping a second selector that could disagree with it.
-  const { business } = useWorkspace();
+  const { business, farmId } = useWorkspace();
   const businessId = business?.id ?? null;
   const [result, setResult] = useState<Fetch>({ state: "loading" });
+
+  // Attributing a transaction to the animals it was for. Migration 002 put
+  // the link on herd.cost_entries and herd.revenue_entries and nothing has
+  // written it until now.
+  const [animals, setAnimals] = useState<RealAnimal[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
+  const [attributions, setAttributions] = useState<Attribution[]>([]);
+  const [attributing, setAttributing] = useState<number | null>(null);
+  const [attrRows, setAttrRows] = useState<{ animalId: string; amount: string }[]>([]);
+  const [attrCategory, setAttrCategory] = useState("");
+  const [attrRevenue, setAttrRevenue] = useState("other");
+  const [attrBusy, setAttrBusy] = useState(false);
+  const [attrError, setAttrError] = useState<string | null>(null);
 
   // Which business the *entry* is for. Defaults to the one you're viewing,
   // but an entry can be logged against any business you belong to — the
@@ -93,6 +120,55 @@ export default function BooksTransactions() {
   const rows: RealTransaction[] = data ? data.transactions.filter((t) => t.business_id === businessId) : [];
   const totals = summarise(rows, types);
 
+  const refreshAttributions = useCallback(async (ids: number[]) => {
+    setAttributions(await fetchAttributions(ids));
+  }, []);
+
+  // Only a business with a herd behind it can attribute anything. A rental's
+  // transactions have no animals to point at, so the column stays out of the
+  // way rather than showing a dash on every row.
+  const canAttribute = Boolean(farmId);
+
+  useEffect(() => {
+    if (!canAttribute) return;
+    let cancelled = false;
+    Promise.all([fetchAnimals(), fetchExpenseCategories()])
+      .then(([a, c]) => {
+        if (cancelled) return;
+        setAnimals(a);
+        setExpenseCategories(c);
+      })
+      // The ledger still works without the herd; the column simply has
+      // nothing to render.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [canAttribute]);
+
+  const rowIds = rows.map((t) => t.id).join(",");
+  useEffect(() => {
+    if (!canAttribute || rowIds === "") {
+      setAttributions([]);
+      return;
+    }
+    let cancelled = false;
+    fetchAttributions(rowIds.split(",").map(Number))
+      .then((a) => !cancelled && setAttributions(a))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [canAttribute, rowIds]);
+
+  const attributionsByTx = useMemo(() => byTransaction(attributions), [attributions]);
+  const animalById = useMemo(() => new Map(animals.map((a) => [a.id, a])), [animals]);
+  const animalLabel = (id: string) => {
+    const a = animalById.get(id);
+    if (!a) return "unknown";
+    return a.barn_name?.trim() || a.ear_tag;
+  };
+
   // The entry follows the page unless you deliberately point it elsewhere,
   // and switching business in the topbar resets it — otherwise a half-typed
   // farm entry would quietly stay attached to the farm after you'd moved on.
@@ -125,6 +201,77 @@ export default function BooksTransactions() {
     direction === "income" || direction === "expense"
       ? categoriesFor(taxCategories, entryBusiness?.type ?? "", direction)
       : [];
+
+  // ── attributing ──
+  const attrTx = rows.find((t) => t.id === attributing) ?? null;
+  const attrDirection = attrTx ? directionOf(attrTx, types) : "unknown";
+  const attrTotal = attrTx ? Math.abs(Number(attrTx.amount)) : 0;
+  const attrProblem =
+    attrTx && (attrDirection === "income" || attrDirection === "expense")
+      ? validateAttribution({
+          total: attrTotal,
+          direction: attrDirection,
+          rows: attrRows,
+          categoryId: attrCategory,
+          revenueCategory: attrRevenue,
+        })
+      : null;
+
+  const openAttribute = (t: RealTransaction) => {
+    setAttributing(t.id);
+    setAttrError(null);
+    // One empty row to start. The even split only becomes meaningful once
+    // there's more than one animal, and pre-filling the whole amount against
+    // a single animal you haven't chosen yet would be a guess.
+    setAttrRows([{ animalId: "", amount: String(Math.abs(Number(t.amount)).toFixed(2)) }]);
+    setAttrCategory(expenseCategories[0]?.id ?? "");
+    setAttrRevenue("other");
+  };
+
+  /** Adding or removing an animal re-splits, because the previous amounts
+   * were a split across a different number of them. */
+  const resplit = (next: { animalId: string; amount: string }[]) => {
+    const parts = splitEvenly(attrTotal, next.length);
+    return next.map((r, i) => ({ ...r, amount: parts[i]?.toFixed(2) ?? "" }));
+  };
+
+  const handleAttribute = async () => {
+    if (!attrTx || attrProblem || !farmId) return;
+    if (attrDirection !== "income" && attrDirection !== "expense") return;
+    setAttrBusy(true);
+    setAttrError(null);
+    try {
+      await attribute({
+        transactionId: attrTx.id,
+        farmId,
+        date: attrTx.date,
+        direction: attrDirection,
+        note: attrTx.note ?? "",
+        categoryId: attrCategory,
+        revenueCategory: attrRevenue,
+        rows: attrRows,
+      });
+      await refreshAttributions(rows.map((t) => t.id));
+      setAttributing(null);
+    } catch (err) {
+      setAttrError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAttrBusy(false);
+    }
+  };
+
+  const handleUnattribute = async (row: Attribution) => {
+    setAttrBusy(true);
+    setAttrError(null);
+    try {
+      await unattribute(row);
+      await refreshAttributions(rows.map((t) => t.id));
+    } catch (err) {
+      setAttrError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAttrBusy(false);
+    }
+  };
 
   const amountNum = Number(amount);
   const canSave =
@@ -417,13 +564,6 @@ export default function BooksTransactions() {
             </div>
           )}
 
-          <div style={{ margin: "16px 0" }}>
-            <Callout>
-              <strong style={{ fontWeight: 500 }}>No "Attributed to" column yet.</strong> Nothing links a
-              transaction to an animal in the schema today — that needs{" "}
-              <code>docs/migrations/002-link-books-to-herd.sql</code>, which hasn't been run.
-            </Callout>
-          </div>
 
           <GridRow cols={COLS} mobileCols={COLS_SM} as="header">
             <span>Date</span>
@@ -432,6 +572,7 @@ export default function BooksTransactions() {
             <span className="hide-sm">Type</span>
             <span className="hide-sm">Payer</span>
             <span className="hide-sm">Account</span>
+            <span className="hide-sm">Attributed to</span>
             <span className="text-right">Amount</span>
           </GridRow>
 
@@ -439,8 +580,10 @@ export default function BooksTransactions() {
             const direction = directionOf(t, types);
             const sign = direction === "income" ? "+" : direction === "expense" ? "−" : "";
             const label = types.get(t.type.trim())?.label ?? t.type ?? "(blank)";
+            const mine = attributionsByTx.get(t.id) ?? [];
             return (
-              <GridRow cols={COLS} mobileCols={COLS_SM} as="body" className="mono" key={t.id}>
+              <div key={t.id}>
+              <GridRow cols={COLS} mobileCols={COLS_SM} as="body" className="mono">
                 <span>{t.date}</span>
                 <span style={{ fontFamily: "var(--font-sans)" }}>{t.note || "—"}</span>
                 <span className="hide-sm">{t.category}</span>
@@ -453,6 +596,24 @@ export default function BooksTransactions() {
                 </span>
                 <span className="hide-sm" style={{ color: "var(--ink-muted)" }}>{t.payer || "—"}</span>
                 <span className="hide-sm" style={{ color: "var(--ink-muted)" }}>{t.account || "—"}</span>
+                <span className="hide-sm attributed-cell">
+                  {mine.length > 0 ? (
+                    <button type="button" className="link-button mono" onClick={() => openAttribute(t)}>
+                      {mine.map((a) => animalLabel(a.animalId)).join(", ")}
+                    </button>
+                  ) : canAttribute && (direction === "income" || direction === "expense") ? (
+                    <button
+                      type="button"
+                      className="link-button mono"
+                      style={{ color: "var(--ink-faint)" }}
+                      onClick={() => openAttribute(t)}
+                    >
+                      attribute
+                    </button>
+                  ) : (
+                    <span style={{ color: "var(--ink-faint)" }}>—</span>
+                  )}
+                </span>
                 <span
                   className="text-right"
                   style={{
@@ -465,6 +626,143 @@ export default function BooksTransactions() {
                   {money(Math.abs(Number(t.amount)))}
                 </span>
               </GridRow>
+
+              {attributing === t.id && (
+                <div className="attribute-panel">
+                  <div className="eyebrow" style={{ marginBottom: 8 }}>
+                    Who was this for? · {money(attrTotal)}
+                  </div>
+
+                  {mine.length > 0 && (
+                    <div className="attribute-existing">
+                      {mine.map((a) => (
+                        <div className="attribute-existing__row" key={a.id}>
+                          <span>{animalLabel(a.animalId)}</span>
+                          <span className="mono">{money(a.amount)}</span>
+                          <button
+                            type="button"
+                            className="link-button mono"
+                            disabled={attrBusy}
+                            onClick={() => void handleUnattribute(a)}
+                          >
+                            remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {attrRows.map((r, i) => (
+                    <div className="attribute-row" key={i}>
+                      <select
+                        className="order-select"
+                        value={r.animalId}
+                        aria-label={`Animal ${i + 1}`}
+                        onChange={(e) =>
+                          setAttrRows((prev) =>
+                            prev.map((x, j) => (j === i ? { ...x, animalId: e.target.value } : x)),
+                          )
+                        }
+                      >
+                        <option value="">Pick an animal…</option>
+                        {animals.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.barn_name?.trim() || a.ear_tag}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className="order-select"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        inputMode="decimal"
+                        value={r.amount}
+                        aria-label={`Amount ${i + 1}`}
+                        onChange={(e) =>
+                          setAttrRows((prev) => prev.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="link-button mono"
+                        onClick={() => setAttrRows((prev) => resplit(prev.filter((_, j) => j !== i)))}
+                      >
+                        remove
+                      </button>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    className="link-button mono"
+                    style={{ marginBottom: 12 }}
+                    onClick={() => setAttrRows((prev) => resplit([...prev, { animalId: "", amount: "" }]))}
+                  >
+                    + another animal (splits evenly)
+                  </button>
+
+                  <div className="attribute-row">
+                    {attrDirection === "expense" ? (
+                      <select
+                        className="order-select"
+                        value={attrCategory}
+                        aria-label="Expense category"
+                        onChange={(e) => setAttrCategory(e.target.value)}
+                      >
+                        <option value="">Pick a category…</option>
+                        {expenseCategories.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <select
+                        className="order-select"
+                        value={attrRevenue}
+                        aria-label="Income category"
+                        onChange={(e) => setAttrRevenue(e.target.value)}
+                      >
+                        {REVENUE_CATEGORIES.map((c) => (
+                          <option key={c.code} value={c.code}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <span />
+                    <span />
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
+                    <Button
+                      variant="filled"
+                      size="sm"
+                      disabled={attrBusy || attrProblem !== null}
+                      onClick={() => void handleAttribute()}
+                    >
+                      {attrBusy ? "Saving…" : "Attribute"}
+                    </Button>
+                    <Button size="sm" onClick={() => setAttributing(null)}>
+                      Close
+                    </Button>
+                    <span style={{ fontSize: 13, color: attrProblem ? "var(--red)" : "var(--ink-muted)" }}>
+                      {attrProblem ??
+                        (unattributed(attrTotal, attrRows) > 0
+                          ? `${money(unattributed(attrTotal, attrRows))} of this transaction stays unattributed, which is allowed.`
+                          : "The whole transaction is accounted for.")}
+                    </span>
+                  </div>
+
+                  {attrError && (
+                    <p className="mono" style={{ fontSize: 13, color: "var(--red)", marginTop: 8 }}>
+                      {attrError}
+                    </p>
+                  )}
+                </div>
+              )}
+              </div>
             );
           })}
 

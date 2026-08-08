@@ -131,3 +131,58 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Attributing a transaction to the animals it was for. Opens under the row
+   it belongs to, in the same flat-paper style as the entry form above. */
+
+.attributed-cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-muted);
+}
+
+.attribute-panel {
+  padding: 16px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--page);
+}
+
+.attribute-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 72px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.attribute-existing {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.attribute-existing__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 72px;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 14px;
+  padding: 4px 0;
+}
+
+/* On a phone the animal picker gets its own line. Sharing one with the
+   amount and "remove" left it 80px wide at 320px, which is not a control
+   you can read a barn name in. */
+@media (max-width: 640px) {
+  .attribute-row,
+  .attribute-existing__row {
+    grid-template-columns: minmax(0, 1fr) 72px;
+  }
+
+  .attribute-row > :first-child,
+  .attribute-existing__row > :first-child {
+    grid-column: 1 / -1;
+  }
+}

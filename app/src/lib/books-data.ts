@@ -4,8 +4,9 @@ import { supabase } from "./supabase";
  * Real-data access for Books. The ledger lives in the `public` schema and is
  * scoped by business, not by farm — see docs/books-herd-link.md.
  *
- * The mockup's "Attributed to" column isn't here: nothing links a ledger
- * transaction to an animal yet. That needs migration 002.
+ * "Attributed to" lives in lib/attribution.ts rather than here — the link
+ * runs the other way, from herd.cost_entries and herd.revenue_entries back
+ * to a ledger transaction, so it's a herd-schema read and not a books one.
  */
 
 export interface RealBusiness {

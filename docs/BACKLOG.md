@@ -22,17 +22,20 @@ the old name. The live "Venmo" row also carries `business_id` null, so
 whatever is built has to decide whether an account may be shared across
 businesses or whether that row should be split per business.
 
-### Add and edit customers
+### Add a customer
 
-Books → Customers lists profiles and what they've bought, but a customer only
-exists by signing up through `/shop`. There's no way to add someone who pays
-cash at the gate, or to fix a name — three of the current profiles have a
-blank `first_name`, which is why the list falls back to email.
+**Editing is done** — see "Closed 2026-08-08". What's left is *adding* one.
+
+A customer still only comes into existence by signing up through `/shop`, so
+there's no way to record someone who pays cash at the gate.
 
 Worth knowing: `profiles.id` is a foreign key to `auth.users`, so a customer
 row cannot simply be inserted without an account behind it. Either this needs
 an invite flow, or the schema needs a notion of a customer who has no login —
-that's a design decision, not just a form.
+that's a design decision, not just a form. Note that the insert policy on
+profiles requires `role = 'customer'` while the CHECK constraint allows only
+`'buyer'` or `'farmer'`, so that policy can never succeed as written; whoever
+builds this should fix or drop it rather than work around it.
 
 ### Edit milking records
 
@@ -105,8 +108,8 @@ Four items were reviewed and are no longer open.
 - **Migration 002** — run. Two nullable columns linking `herd.cost_entries`
   and `herd.revenue_entries` to a ledger transaction. Its stated dependency
   on 001 was stale: 001 was superseded, and the cross-tenant hole it existed
-  to close is handled by the business-as-tenant work instead. Nothing writes
-  these columns yet — it unblocks "Attributed to" rather than delivering it.
+  to close is handled by the business-as-tenant work instead. As of
+  2026-08-08 the columns are written — see "Attributed to" below.
 - **`discards` had no `business_id`** — fixed by migration 020, along with
   `discard_inventory()` inserting rows without one. That was the *third*
   instance of the same bug, after 017 (`reserve_product`) and 019
@@ -118,6 +121,22 @@ Four items were reviewed and are no longer open.
   before the pages they wanted existed. "Log milking" and "No milking logged
   today" now go to `/milkings`, and "orders not picked up" goes to
   `/store/orders` rather than all three landing on Products.
+
+## Closed 2026-08-08
+
+- **Edit and remove a customer** — Books → Customers is clickable. Each
+  customer has a page with their details, their purchase history grouped by
+  day, and lifetime figures. Name, email and phone are editable; `role` is
+  not, because `authenticated` holds column-level UPDATE on four columns and
+  role is deliberately withheld. Removing is archive-or-delete, decided by
+  whether they have orders — all three profiles here do, so archive is the
+  real one. Migration 024.
+- **"Attributed to"** — the column exists and writes migration 002's link. A
+  transaction can be split across animals, evenly by default and editable per
+  animal, and partial attribution is allowed because a bill can be part
+  household. Un-attributing is a soft delete, since neither entry table has a
+  DELETE policy. The on-screen callout claiming the migration hadn't been run
+  is gone; it had been wrong for a fortnight.
 
 ## Decisions, not open questions
 

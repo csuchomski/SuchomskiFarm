@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, GridRow, Pill, StatTile } from "../components/ui";
 import { fetchCustomers, fetchOrders, customerName, type Customer, type RealOrder } from "../lib/orders";
-import { deleteCustomer, isArchived, setArchived, updateCustomer, validateCustomer } from "../lib/customers";
+import { deleteCustomer, hasLogin, isArchived, setArchived, updateCustomer, validateCustomer } from "../lib/customers";
 import { groupByDate, outstanding, type CustomerOrder } from "../lib/customer";
 import { fetchStoreData, type ProductWithInventory } from "../lib/store-data";
 import { useWorkspace } from "../lib/workspace";
@@ -273,8 +273,9 @@ export default function StoreCustomerDetail() {
                 {problem && <span style={{ fontSize: 13, color: "var(--red)" }}>{problem}</span>}
               </div>
               <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 12 }}>
-                The email here is for contact. It isn't what they sign in with — that lives with their login and
-                can't be changed from the app.
+                {hasLogin(customer)
+                  ? "The email here is for contact. It isn't what they sign in with — that lives with their login and can't be changed from the app."
+                  : "They have no shop account, so none of this affects a login. A name or an email is enough; both are better."}
               </p>
             </div>
           ) : (
@@ -286,8 +287,18 @@ export default function StoreCustomerDetail() {
                 value={<Pill variant={customer.role === "farmer" ? "outline-green" : "outline"}>{customer.role}</Pill>}
               />
               <Fact
-                label="Signed up"
+                label={hasLogin(customer) ? "Signed up" : "Added"}
                 value={customer.created_at ? new Date(customer.created_at).toLocaleDateString() : "—"}
+              />
+              <Fact
+                label="Shop account"
+                value={
+                  hasLogin(customer) ? (
+                    "can sign in"
+                  ) : (
+                    <span style={{ color: "var(--ink-muted)" }}>none — added at the farm</span>
+                  )
+                }
               />
               <Fact label="Open orders" value={open.length === 0 ? "none" : String(open.length)} />
             </div>

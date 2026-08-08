@@ -29,14 +29,25 @@ export interface CustomerPatch {
  * field added to the form can't quietly become an update the grant refuses. */
 const EDITABLE = ["first_name", "last_name", "email", "phone"] as const;
 
+/**
+ * A name *or* an email, not both and not the email specifically.
+ *
+ * Someone who buys eggs at the gate may have neither an account nor an
+ * address to give you, and profiles.email is NOT NULL so it takes '' rather
+ * than null. What can't happen is having neither, because then nothing on a
+ * pickup list identifies them — the same rule add_customer() enforces, so
+ * the form and the database agree.
+ */
 export function validateCustomer(patch: CustomerPatch): string | null {
   const email = patch.email.trim();
-  if (email === "") return "An email is what identifies a customer with no name — it can't be blank.";
-  // Deliberately loose. The address here is for contact; it isn't what they
-  // sign in with, so it has no login to match.
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "That doesn't look like an email address.";
-  if (patch.first_name.trim() === "" && patch.last_name.trim() === "" && email === "") {
-    return "Give them a name or an email.";
+  const named = patch.first_name.trim() !== "" || patch.last_name.trim() !== "";
+  if (!named && email === "") return "Give them a name or an email.";
+
+  // Deliberately loose, and only applied when there is something to check.
+  // The address here is for contact; it isn't what they sign in with, so it
+  // has no login to match.
+  if (email !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return "That doesn't look like an email address.";
   }
   return null;
 }
@@ -97,3 +108,31 @@ export async function deleteCustomer(id: string): Promise<void> {
  * nuisance, hiding everyone is a broken page.
  */
 export const isArchived = (c: Customer): boolean => Boolean(c.archived_at);
+
+/**
+ * `!== false`, so a row that predates migration 026 — or arrives from a
+ * schema cache that does — reads as having a login, which is what every
+ * customer was before walk-ins existed. The opposite default would label the
+ * whole list "added at the farm".
+ */
+export const hasLogin = (c: Customer): boolean => c.has_login !== false;
+
+/**
+ * Create a customer with no login: someone who buys at the gate.
+ *
+ * There is no way to create the auth.users row an ordinary signup gets —
+ * auth.signUp would replace the farmer's own session, and the admin API needs
+ * the service_role key, which must never be in the frontend. Migration 026
+ * dropped the foreign key that required one, and this function is the only
+ * thing that writes has_login false.
+ */
+export async function addCustomer(patch: CustomerPatch): Promise<string> {
+  const { data, error } = await supabase.rpc("add_customer", {
+    p_first_name: patch.first_name.trim(),
+    p_last_name: patch.last_name.trim(),
+    p_email: patch.email.trim(),
+    p_phone: patch.phone.trim() === "" ? null : patch.phone.trim(),
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}

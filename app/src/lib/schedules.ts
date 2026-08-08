@@ -126,6 +126,55 @@ export function untilLabel(pickupIso: string | null, todayIso: string): string {
   return `in ${days} days`;
 }
 
+// ─── how much can be signed up for ─────────────────────────────────────
+
+export interface DayCapacity {
+  weekday: Weekday;
+  /** The next date that weekday falls on, today included. */
+  pickupDate: string;
+  /** Forecast quantity free that day. An estimate — the shop says so. */
+  available: number;
+}
+
+/**
+ * What the farm expects to have free on each of the next seven weekdays.
+ *
+ * Comes from public.schedule_capacity (migration 023) rather than being
+ * worked out here, because the two inputs are both behind RLS for a buyer:
+ * production history isn't theirs to read, and neither are other customers'
+ * standing orders. The function returns the aggregate and nothing else.
+ *
+ * Null when the function isn't deployed — the caller falls back to what's on
+ * the shelf today, which is a number the shop can see for itself.
+ */
+export async function fetchScheduleCapacity(productId: number): Promise<DayCapacity[] | null> {
+  const { data, error } = await supabase.rpc("schedule_capacity", { p_product_id: productId });
+  if (error) {
+    if (/does not exist|schema cache|not find the function/i.test(error.message)) return null;
+    throw new Error(`schedule_capacity: ${error.message}`);
+  }
+  return ((data ?? []) as { weekday: string; pickup_date: string; available: number }[]).map((row) => ({
+    weekday: row.weekday as Weekday,
+    pickupDate: row.pickup_date,
+    available: Number(row.available),
+  }));
+}
+
+/**
+ * The same seven days, every one of them offering what's on the shelf right
+ * now. Used only when schedule_capacity isn't there.
+ *
+ * Flat rather than growing with the days, deliberately: without the
+ * function there is no production rate to grow by, and inventing one would
+ * put quantities in the dropdown that nothing supports.
+ */
+export function capacityFromStock(available: number, todayIso: string): DayCapacity[] {
+  return Array.from({ length: 7 }, (_, i) => {
+    const date = addDays(todayIso, i);
+    return { weekday: WEEKDAYS[dayOfWeek(date)], pickupDate: date, available };
+  });
+}
+
 // ─── validation ────────────────────────────────────────────────────────
 
 export function validateSchedule(input: {

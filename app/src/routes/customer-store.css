@@ -160,15 +160,29 @@
   border-top: 1px solid var(--hairline);
 }
 
+/* Two equal halves. A grid rather than flex: the buttons in these rows
+   carry different padding, and under flex that left the primary action 20px
+   narrower than "Cancel" (129 vs 149, measured at 320px) whatever
+   flex-basis and box-sizing said. `minmax(0, 1fr)` is the part that matters
+   — a bare `1fr` won't shrink below its content. */
 .shop-subscribe__row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
   margin-bottom: 8px;
 }
 
 .shop-subscribe__row > * {
-  flex: 1;
+  box-sizing: border-box;
   min-width: 0;
+}
+
+/* The shared field is a fixed 96px for the store's inline "Qty" box. In
+   these rows it fills its half instead — as a grid item an explicit width
+   beats the default stretch, so without this a select sits at 96px in a
+   174px column. */
+.shop-subscribe__row .shop-qty-field {
+  width: 100%;
 }
 
 .shop-subscribe__note {
@@ -238,30 +252,9 @@
   gap: 4px;
 }
 
-/* The shared field is a fixed 96px for the store's inline "Qty" box; here it
-   fills its half of the row instead. */
-.shop-collect__field .shop-qty-field {
-  width: 100%;
-}
-
 .shop-collect__due {
   font-size: 15px;
   margin: 4px 0 10px;
-}
-
-/* Two equal halves, and a grid rather than the flex row above it: the two
-   buttons carry different padding, and under flex that left the primary
-   action 20px narrower than "Cancel" (129 vs 149, measured at 320px) no
-   matter what flex-basis and box-sizing said. `minmax(0, 1fr)` is the part
-   that matters — a bare `1fr` won't shrink below its content. */
-.shop-collect .shop-subscribe__row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-}
-
-.shop-collect .shop-subscribe__row > * {
-  box-sizing: border-box;
-  min-width: 0;
 }
 
 /* History rows: the amount sits opposite the product, matching the open

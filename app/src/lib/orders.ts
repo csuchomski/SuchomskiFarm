@@ -43,6 +43,10 @@ export interface Customer {
   email: string;
   phone: string | null;
   role: string;
+  /** Set by a farmer on the customer page. An archived customer keeps every
+   * order — see docs/migrations/024-customer-admin.sql. */
+  archived_at: string | null;
+  created_at: string | null;
 }
 
 const ORDER_COLUMNS =
@@ -70,7 +74,7 @@ export async function fetchOrders(businessId: number): Promise<RealOrder[]> {
 export async function fetchCustomers(): Promise<Customer[]> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, first_name, last_name, email, phone, role")
+    .select("id, first_name, last_name, email, phone, role, archived_at, created_at")
     .order("first_name");
   if (error) throw new Error(`profiles: ${error.message}`);
   return (data ?? []) as Customer[];

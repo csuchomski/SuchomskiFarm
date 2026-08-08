@@ -40,6 +40,8 @@ const customer = (over: Partial<Customer> = {}): Customer => ({
   email: "email" in over ? over.email! : "meghan@example.com",
   phone: null,
   role: over.role ?? "buyer",
+  archived_at: "archived_at" in over ? over.archived_at! : null,
+  created_at: over.created_at ?? "2026-05-01T00:00:00Z",
 });
 
 describe("customerName", () => {

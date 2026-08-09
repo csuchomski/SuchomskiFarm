@@ -6,7 +6,10 @@ import { MemoryRouter } from "react-router-dom";
 /**
  * Recording a calving. The parts worth driving: that a live calf can't be
  * saved without a sex (its animal record needs one), that twins are a second
- * row rather than a flag, and that a dairy dam is told she's freshening.
+ * row rather than a flag, that a dairy dam is told she's freshening, and that
+ * the service behind the calf defaults to the one the dates actually fit
+ * rather than the most recent — which is what decides the sire, and through
+ * the sire, the breeds the calf inherits.
  */
 
 const business = { id: 5, name: "Suchomski Family Farm", type: "farm" };
@@ -30,11 +33,40 @@ const animals = [
   { id: "cow-2", ear_tag: "1", barn_name: "Martha", sex: "female", class: "cow", status: "active", record_type: "herd", purpose: "beef" },
   { id: "calf-1", ear_tag: "99", barn_name: "Bess", sex: "female", class: "calf", status: "active", record_type: "herd", purpose: "dairy" },
   { id: "bull-1", ear_tag: "", barn_name: "Dutton", sex: "male", class: "bull", status: "active", record_type: "reference", purpose: "dairy" },
+  { id: "bull-2", ear_tag: "", barn_name: "Rip", sex: "male", class: "bull", status: "active", record_type: "reference", purpose: "beef" },
 ];
 
 vi.mock("../lib/herd", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/herd")>()),
   fetchAnimals: vi.fn(async () => animals),
+}));
+
+// Patience served twice, three weeks apart. At 280 days the first service is
+// due exactly on CALVED_ON and the second is three weeks past it, so the
+// first is the one that made the calf even though it isn't the latest.
+const CALVED_ON = "2026-10-08";
+
+const breedings = [
+  { id: "b1", animal_id: "cow-1", date: "2026-01-01", service_number: 1, method: "natural", technician: "",
+    sire_id: "bull-1", semen_lot_id: null, semen_type: "", naab_code_snapshot: "", voided: false,
+    void_reason: "", cost_entry_id: null, notes: "" },
+  { id: "b2", animal_id: "cow-1", date: "2026-01-22", service_number: 2, method: "natural", technician: "",
+    sire_id: "bull-2", semen_lot_id: null, semen_type: "", naab_code_snapshot: "", voided: false,
+    void_reason: "", cost_entry_id: null, notes: "" },
+];
+
+vi.mock("../lib/breedings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/breedings")>()),
+  fetchBreedings: vi.fn(async () => breedings),
+}));
+
+// No breed composition on file for anyone here, so gestation falls back to
+// the species setting — which is enough to date a service.
+vi.mock("../lib/gestation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/gestation")>()),
+  fetchBreeds: vi.fn(async () => []),
+  fetchComposition: vi.fn(async () => []),
+  fetchOverrides: vi.fn(async () => []),
 }));
 
 const calvings = [
@@ -56,6 +88,7 @@ vi.mock("../lib/repro", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/repro")>()),
   fetchCalvings: vi.fn(async () => calvings),
   fetchCalfOutcomes: vi.fn(async () => outcomes),
+  fetchGestationDays: vi.fn(async () => ({ dairy: 280, beef: 285 })),
   recordCalving: (i: CalvingInput) => recordCalving(i),
 }));
 
@@ -82,6 +115,8 @@ describe("Calvings", () => {
     expect(row.textContent).toContain("twins");
     // The live one by its own name, the stillborn one by what happened.
     expect(row.textContent).toContain("Bess, bull stillborn");
+    // The service behind it, so the sire on the calf is visible on the row.
+    expect(row.textContent).toContain("Bull · Dutton");
     expect(row.textContent).toContain("easy pull");
     expect(row.textContent).toContain("retained placenta");
     expect(row.textContent).toContain("78lb");
@@ -156,5 +191,49 @@ describe("Calvings", () => {
       presentation: "breech",
       retainedPlacenta: true,
     });
+  });
+
+  it("defaults to the service the dates fit, not the most recent one", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Record a calving" }));
+    fireEvent.change(screen.getByLabelText("Dam"), { target: { value: "cow-1" } });
+    fireEvent.change(screen.getByLabelText("Calving date"), { target: { value: CALVED_ON } });
+
+    const service = screen.getByLabelText("Service") as HTMLSelectElement;
+    expect(service.value).toBe("b1");
+    // And it says how each service dates against this calving.
+    expect(service.textContent).toContain("due today");
+    expect(service.textContent).toContain("21d early");
+  });
+
+  it("sends the chosen service, and keeps the choice when the date moves", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Record a calving" }));
+    fireEvent.change(screen.getByLabelText("Dam"), { target: { value: "cow-1" } });
+    fireEvent.change(screen.getByLabelText("Calving date"), { target: { value: CALVED_ON } });
+
+    fireEvent.change(screen.getByLabelText("Service"), { target: { value: "b2" } });
+    // Re-suggesting would quietly undo a deliberate pick.
+    fireEvent.change(screen.getByLabelText("Calving date"), { target: { value: "2026-10-10" } });
+    expect((screen.getByLabelText("Service") as HTMLSelectElement).value).toBe("b2");
+
+    fireEvent.change(screen.getByLabelText("Calf 1 sex"), { target: { value: "female" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record it" }));
+    await waitFor(() => expect(recordCalving).toHaveBeenCalledTimes(1));
+    expect(recordCalving.mock.calls[0][0]).toMatchObject({ breedingEventId: "b2" });
+  });
+
+  it("says so when there's no service to hang the calf on", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Record a calving" }));
+    fireEvent.change(screen.getByLabelText("Dam"), { target: { value: "cow-2" } });
+
+    expect(screen.queryByLabelText("Service")).toBeNull();
+    expect(screen.getByText(/No breeding logged for her before this date/)).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Calf 1 sex"), { target: { value: "male" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record it" }));
+    await waitFor(() => expect(recordCalving).toHaveBeenCalledTimes(1));
+    expect(recordCalving.mock.calls[0][0].breedingEventId).toBeNull();
   });
 });

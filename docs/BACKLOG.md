@@ -159,6 +159,23 @@ Four items were reviewed and are no longer open.
   DELETE policy. The on-screen callout claiming the migration hadn't been run
   is gone; it had been wrong for a fortnight.
 
+## Closed 2026-08-09
+
+- **A calf tied to the breeding that made it** — the calving form asks which
+  service is behind it and defaults to the one whose due date lands nearest
+  the calving, not the most recent. That matters exactly when it's hard: a cow
+  served in January, returned to heat and served again three weeks later, then
+  calving in October, conceived on the *first* service — and the obvious guess
+  puts the wrong bull on the calf. The pick is a suggestion; touching the field
+  makes it yours and changing the date won't undo it.
+
+  A live calf then inherits half its breeds from each parent, and Herd →
+  Breeds has a "Who is what" table for putting a composition on the animals
+  that have none. Inheritance only happens when **both** parents have one —
+  half a known composition and half of nothing isn't 50%, it's an unknown, and
+  a half-filled composition is worse than an empty one because everything
+  downstream divides by it. Migration 030.
+
 ## Raised 2026-08-08 by breeding records
 
 ### Carcass ultrasound
@@ -183,6 +200,21 @@ that farm yet.
 again and deserve their own pass.
 
 ## Decisions, not open questions
+
+**The AI cost stays on the cow.** Asked directly: should a straw's cost move
+to the calf it produced? No, and the schema already says so —
+`expense_categories 'breeding'` is `basis_type 'operating'` on the Schedule F
+line "Veterinary, breeding, and medicine", while `'acquisition'` is
+`basis_type 'basis'` and goes on no expense line at all. Breeding is an
+operating expense in the year it's paid, not a basis cost capitalised into an
+animal, so moving it onto the calf puts it in the wrong column of the return.
+It's also incurred before any calf exists, and most of the value in tracking
+it is the services that *don't* take — those have no calf to carry them.
+"What did this calf cost" stays answerable anyway: calving → breeding event →
+`cost_entries.source_ref_id`, derivable through the link without moving the
+money. Revisit only if the farm starts raising replacements to sell, where
+capitalising the cost into the animal is a real accounting choice — and that
+is a conversation with whoever files the return, not a code change.
 
 **Depreciation stays a category.** Books → Taxes puts whatever figure you
 record against "Depreciation & section 179" on Schedule F line 14 and does

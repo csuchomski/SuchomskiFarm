@@ -44,6 +44,8 @@ const breeds = [
 
 type SetInput = Parameters<typeof import("../lib/gestation").setOverride>[0];
 const setOverrideFn = vi.fn(async (_i: SetInput) => undefined);
+type Shares = Parameters<typeof import("../lib/gestation").setComposition>[1];
+const setCompositionFn = vi.fn(async (_id: string, _s: Shares) => undefined);
 
 vi.mock("../lib/gestation", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/gestation")>()),
@@ -54,11 +56,13 @@ vi.mock("../lib/gestation", async (importOriginal) => ({
   ]),
   fetchOverrides: vi.fn(async () => [{ id: "o1", breed_id: "je", gestation_days: 281 }]),
   setOverride: (i: SetInput) => setOverrideFn(i),
+  setComposition: (id: string, sh: Shares) => setCompositionFn(id, sh),
 }));
 
 afterEach(() => {
   cleanup();
   setOverrideFn.mockClear();
+  setCompositionFn.mockClear();
 });
 
 const mount = async () => {
@@ -68,11 +72,16 @@ const mount = async () => {
       <Breeds />
     </MemoryRouter>,
   );
-  await screen.findByText("Belted Galloway");
+  // "Belted Galloway" appears in both tables on this page — the breeds, and
+  // the animals that are one.
+  await screen.findAllByText("Belted Galloway");
 };
 
 const row = (name: string) =>
-  [...document.querySelectorAll(".grid-row--body")].find((r) => r.textContent?.includes(name))!;
+  [...document.querySelectorAll(".grid-row--body:not(.who-row)")].find((r) => r.textContent?.includes(name))!;
+
+const whoRow = (name: string) =>
+  [...document.querySelectorAll(".who-row")].find((r) => r.textContent?.includes(name))!;
 
 describe("Breeds", () => {
   it("shows each breed's default and who carries it", async () => {
@@ -131,5 +140,62 @@ describe("Breeds", () => {
 
     expect(screen.getByText(/not a plausible gestation/)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("Who is what", () => {
+  it("lists each animal's breeds, and says when there are none", async () => {
+    await mount();
+    expect(whoRow("Martha").textContent).toContain("Belted Galloway");
+    // Nobody has given the bull a composition, which is why his calves
+    // inherit nothing.
+    expect(whoRow("Patience").textContent).toContain("Jersey");
+  });
+
+  it("shows what an animal's own breeds mean for her gestation", async () => {
+    await mount();
+    // Jersey 279, but this farm says 281.
+    expect(whoRow("Patience").textContent).toContain("281d");
+    expect(whoRow("Martha").textContent).toContain("283d");
+  });
+
+  it("saves a composition that adds to 100", async () => {
+    await mount();
+    fireEvent.click([...whoRow("Martha").querySelectorAll("button")].find((b) => b.textContent === "change")!);
+    fireEvent.change(screen.getByLabelText("Breed 1 for Martha"), { target: { value: "bg" } });
+    fireEvent.change(screen.getByLabelText("Percent 1 for Martha"), { target: { value: "50" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /another breed/ }));
+    fireEvent.change(screen.getByLabelText("Breed 2 for Martha"), { target: { value: "je" } });
+    fireEvent.change(screen.getByLabelText("Percent 2 for Martha"), { target: { value: "50" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(setCompositionFn).toHaveBeenCalledTimes(1));
+    expect(setCompositionFn.mock.calls[0][1]).toEqual([
+      { breedId: "bg", percent: 50 },
+      { breedId: "je", percent: 50 },
+    ]);
+  });
+
+  it("won't save shares that don't come to 100", async () => {
+    await mount();
+    fireEvent.click([...whoRow("Martha").querySelectorAll("button")].find((b) => b.textContent === "change")!);
+    fireEvent.change(screen.getByLabelText("Breed 1 for Martha"), { target: { value: "bg" } });
+    fireEvent.change(screen.getByLabelText("Percent 1 for Martha"), { target: { value: "60" } });
+
+    expect(screen.getByText(/come to 60, not 100/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("won't take the same breed twice", async () => {
+    await mount();
+    fireEvent.click([...whoRow("Martha").querySelectorAll("button")].find((b) => b.textContent === "change")!);
+    fireEvent.change(screen.getByLabelText("Breed 1 for Martha"), { target: { value: "bg" } });
+    fireEvent.change(screen.getByLabelText("Percent 1 for Martha"), { target: { value: "50" } });
+    fireEvent.click(screen.getByRole("button", { name: /another breed/ }));
+    fireEvent.change(screen.getByLabelText("Breed 2 for Martha"), { target: { value: "bg" } });
+    fireEvent.change(screen.getByLabelText("Percent 2 for Martha"), { target: { value: "50" } });
+
+    expect(screen.getByText(/listed twice/)).toBeTruthy();
   });
 });

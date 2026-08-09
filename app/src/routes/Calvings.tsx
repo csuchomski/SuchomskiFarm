@@ -3,11 +3,17 @@ import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, GridRow, Pill, StatTile } from "../components/ui";
 import { fetchAnimals, type RealAnimal } from "../lib/herd";
+import { fetchBreedings, sireLabel, isActive as breedingStands, type Breeding } from "../lib/breedings";
+import { fetchBreeds, fetchComposition, fetchOverrides, gestationFor, type GestationInputs } from "../lib/gestation";
 import {
   ASSISTANCE,
   emptyCalf,
   fetchCalfOutcomes,
   fetchCalvings,
+  daysBetween,
+  dueDate,
+  fetchGestationDays,
+  likelyService,
   OUTCOMES,
   PRESENTATION,
   recordCalving,
@@ -35,7 +41,14 @@ const readable = (s: string) => s.replace(/_/g, " ");
 type Load =
   | { state: "loading" }
   | { state: "error"; message: string }
-  | { state: "ok"; calvings: Calving[]; outcomes: CalfOutcome[]; animals: RealAnimal[] };
+  | {
+      state: "ok";
+      calvings: Calving[];
+      outcomes: CalfOutcome[];
+      animals: RealAnimal[];
+      breedings: Breeding[];
+      gestation: GestationInputs;
+    };
 
 const COLS = "110px 1fr 150px 130px 110px";
 const COLS_SM = "92px 1fr 96px";
@@ -57,18 +70,34 @@ export default function Calvings() {
   const [retained, setRetained] = useState(false);
   const [notes, setNotes] = useState("");
   const [calves, setCalves] = useState<CalfDraft[]>([emptyCalf()]);
+  // Which service made this calf. Left as "" until a dam is chosen, then
+  // defaulted to the likeliest one rather than simply the most recent.
+  const [serviceId, setServiceId] = useState("");
+  const [servicePicked, setServicePicked] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!farmId) {
-      setLoad({ state: "ok", calvings: [], outcomes: [], animals: [] });
+      setLoad({ state: "ok", calvings: [], outcomes: [], animals: [], breedings: [], gestation: EMPTY_GESTATION });
       return;
     }
-    const [calvings, outcomes, animals] = await Promise.all([
+    const [calvings, outcomes, animals, breedings, breeds, composition, overrides, bySpecies] = await Promise.all([
       fetchCalvings(farmId),
       fetchCalfOutcomes(farmId),
       fetchAnimals(),
+      fetchBreedings(farmId),
+      fetchBreeds(farmId),
+      fetchComposition(farmId),
+      fetchOverrides(farmId),
+      fetchGestationDays(),
     ]);
-    setLoad({ state: "ok", calvings, outcomes, animals });
+    setLoad({
+      state: "ok",
+      calvings,
+      outcomes,
+      animals,
+      breedings,
+      gestation: { breeds, composition, overrides, bySpecies },
+    });
   }, [farmId]);
 
   useEffect(() => {
@@ -85,6 +114,8 @@ export default function Calvings() {
   const calvings = load.state === "ok" ? load.calvings : EMPTY_CALVINGS;
   const outcomes = load.state === "ok" ? load.outcomes : EMPTY_OUTCOMES;
   const animals = load.state === "ok" ? load.animals : EMPTY_ANIMALS;
+  const breedings = load.state === "ok" ? load.breedings : EMPTY_BREEDINGS;
+  const gestation = load.state === "ok" ? load.gestation : EMPTY_GESTATION;
 
   const byId = useMemo(() => new Map(animals.map((a) => [a.id, a])), [animals]);
   const name = (id: string | null | undefined) => {
@@ -100,6 +131,24 @@ export default function Calvings() {
   const outcomesFor = (calvingId: string) => outcomes.filter((o) => o.calving_id === calvingId);
   const problem = adding ? validateCalving({ damId, date, calves }) : null;
 
+  // Her standing services before this date — the ones that could have made
+  // the calf. A voided service made nothing.
+  const herServices = useMemo(
+    () => breedings.filter((b) => b.animal_id === damId && breedingStands(b) && b.date < date),
+    [breedings, damId, date],
+  );
+  const carried = dam ? gestationFor(dam, gestation) : null;
+  const suggested = likelyService(date, herServices, carried?.days);
+
+  // Suggest, don't impose: the moment the farmer touches the field it's
+  // theirs, and changing dam or date re-suggests rather than overwriting a
+  // deliberate choice.
+  useEffect(() => {
+    if (!servicePicked) setServiceId(suggested?.id ?? "");
+  }, [suggested?.id, servicePicked]);
+
+  const chosenService = herServices.find((b) => b.id === serviceId) ?? null;
+
   const liveCalves = outcomes.filter((o) => o.outcome === "live").length;
   const lost = outcomes.length - liveCalves;
 
@@ -112,6 +161,8 @@ export default function Calvings() {
     setRetained(false);
     setNotes("");
     setCalves([emptyCalf()]);
+    setServiceId("");
+    setServicePicked(false);
   };
 
   return (
@@ -242,6 +293,58 @@ export default function Calvings() {
                 </label>
               </div>
 
+              {/* Which service made the calf. This decides the sire on its
+                  record, and through the sire, the breeds it inherits. */}
+              {damId !== "" && (
+                <>
+                  <div className="eyebrow" style={{ margin: "20px 0 8px" }}>
+                    The service behind it
+                  </div>
+                  {herServices.length === 0 ? (
+                    <p style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+                      No breeding logged for her before this date, so the calf gets no sire. Log one on{" "}
+                      <Link to="/breedings">Breedings</Link> first if you know it.
+                    </p>
+                  ) : (
+                    <>
+                      <label style={{ fontSize: 13, display: "block", maxWidth: 460 }}>
+                        <div className="eyebrow">Service</div>
+                        <select
+                          className="order-select"
+                          style={{ width: "100%" }}
+                          value={serviceId}
+                          aria-label="Service"
+                          onChange={(e) => {
+                            setServiceId(e.target.value);
+                            setServicePicked(true);
+                          }}
+                        >
+                          <option value="">Not recorded</option>
+                          {herServices.map((b) => {
+                            const expected = carried ? dueDate(b.date, carried.days) : null;
+                            const off = expected ? daysBetween(expected, date) : null;
+                            return (
+                              <option key={b.id} value={b.id}>
+                                {b.date} · {sireLabel(b, name(b.sire_id))}
+                                {off !== null &&
+                                  ` · ${off === 0 ? "due today" : off > 0 ? `${off}d late` : `${-off}d early`}`}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </label>
+                      <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 8 }}>
+                        {chosenService
+                          ? `The calf's sire comes from this service${
+                              suggested && chosenService.id === suggested.id ? " — the closest fit to the date" : ""
+                            }. If both parents have breeds on file, it inherits half from each.`
+                          : "Without a service the calf has no sire, and no breeds to inherit."}
+                      </p>
+                    </>
+                  )}
+                </>
+              )}
+
               <div className="eyebrow" style={{ margin: "20px 0 8px" }}>
                 The calves
               </div>
@@ -365,6 +468,7 @@ export default function Calvings() {
                       presentation,
                       retainedPlacenta: retained,
                       notes,
+                      breedingEventId: serviceId === "" ? null : serviceId,
                     })
                       .then(async () => {
                         await refresh();
@@ -448,6 +552,10 @@ export default function Calvings() {
                       </span>
                     </span>
                     <span className="hide-sm" style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+                      {(() => {
+                        const svc = breedings.find((b) => b.id === c.breeding_event_id);
+                        return svc ? `${sireLabel(svc, name(svc.sire_id))} · ` : "";
+                      })()}
                       {readable(c.assistance)}
                       {c.presentation !== "anterior" && `, ${readable(c.presentation)}`}
                       {c.retained_placenta && ", retained placenta"}
@@ -480,3 +588,5 @@ export default function Calvings() {
 const EMPTY_CALVINGS: Calving[] = [];
 const EMPTY_OUTCOMES: CalfOutcome[] = [];
 const EMPTY_ANIMALS: RealAnimal[] = [];
+const EMPTY_BREEDINGS: Breeding[] = [];
+const EMPTY_GESTATION: GestationInputs = { breeds: [], composition: [], overrides: [], bySpecies: {} };

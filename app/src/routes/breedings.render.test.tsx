@@ -29,9 +29,9 @@ vi.mock("../lib/auth", () => ({
 }));
 
 const animals = [
-  { id: "cow-1", ear_tag: "1", barn_name: "Martha", sex: "female", class: "cow", status: "active", record_type: "herd" },
-  { id: "cow-2", ear_tag: "3", barn_name: "Abigail", sex: "female", class: "heifer", status: "active", record_type: "herd" },
-  { id: "bull-1", ear_tag: "", barn_name: "Dutton", sex: "male", class: "bull", status: "active", record_type: "reference" },
+  { id: "cow-1", ear_tag: "1", barn_name: "Martha", sex: "female", class: "cow", status: "active", record_type: "herd", purpose: "beef" },
+  { id: "cow-2", ear_tag: "3", barn_name: "Abigail", sex: "female", class: "heifer", status: "active", record_type: "herd", purpose: "dairy" },
+  { id: "bull-1", ear_tag: "", barn_name: "Dutton", sex: "male", class: "bull", status: "active", record_type: "reference", purpose: "dairy" },
 ];
 
 vi.mock("../lib/herd", async (importOriginal) => ({
@@ -75,10 +75,29 @@ vi.mock("../lib/breedings", async (importOriginal) => ({
   voidBreeding: (id: string, reason: string) => voidBreeding(id, reason),
 }));
 
+type CheckInput = Parameters<typeof import("../lib/repro").recordCheck>[0];
+const recordCheck = vi.fn(async (_i: CheckInput) => "check-1");
+
+// One standing service already checked in calf, so the row shows a result.
+const checks = [
+  { id: "p1", animal_id: "cow-1", date: "2026-08-05", method: "palpation", result: "pregnant",
+    estimated_days_bred: 4, estimated_conception_date: "2026-08-01", breeding_event_id: "b1",
+    technician: "", notes: "" },
+];
+
+vi.mock("../lib/repro", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/repro")>()),
+  fetchPregnancyChecks: vi.fn(async () => checks),
+  // Beef 283, dairy 279 — the farm's own settings.
+  fetchGestationDays: vi.fn(async () => ({ beef: 283, dairy: 279 })),
+  recordCheck: (i: CheckInput) => recordCheck(i),
+}));
+
 afterEach(() => {
   cleanup();
   recordBreeding.mockClear();
   voidBreeding.mockClear();
+  recordCheck.mockClear();
 });
 
 const mount = async () => {
@@ -204,5 +223,57 @@ describe("Breedings", () => {
 
     expect(screen.queryByText(/straw goes back into the tank/)).toBeNull();
     expect(screen.getByText(/marked voided/)).toBeTruthy();
+  });
+});
+
+describe("Pregnancy checks on a breeding", () => {
+  it("shows the latest result and how many days bred she was", async () => {
+    await mount();
+    const row = [...document.querySelectorAll(".grid-row--body")].find((r) => r.textContent?.includes("Martha"))!;
+    expect(row.textContent).toContain("pregnant");
+    expect(row.textContent).toContain("4d · palpation");
+  });
+
+  it("says so when a breeding hasn't been checked", async () => {
+    await mount();
+    const row = [...document.querySelectorAll(".grid-row--body")].find((r) => r.textContent?.includes("Abigail"))!;
+    expect(row.textContent).toContain("not yet");
+  });
+
+  it("works the due date out from the farm's gestation setting for her purpose", async () => {
+    await mount();
+    // Martha is beef, bred 2026-08-01, and beef gestation is 283 days.
+    const row = [...document.querySelectorAll(".grid-row--body")].find((r) => r.textContent?.includes("Martha"))!;
+    expect(row.textContent).toContain("2027-05-11");
+  });
+
+  it("records a check against the breeding it was opened from", async () => {
+    await mount();
+    const row = [...document.querySelectorAll(".grid-row--body")].find((r) => r.textContent?.includes("Martha"))!;
+    fireEvent.click([...row.querySelectorAll("button")].find((b) => b.textContent === "check")!);
+
+    fireEvent.change(screen.getByLabelText("Check date"), { target: { value: "2026-09-05" } });
+    fireEvent.change(screen.getByLabelText("Check method"), { target: { value: "ultrasound" } });
+    fireEvent.change(screen.getByLabelText("Check result"), { target: { value: "open" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record it" }));
+
+    await waitFor(() => expect(recordCheck).toHaveBeenCalledTimes(1));
+    expect(recordCheck.mock.calls[0][0]).toMatchObject({
+      animalId: "cow-1",
+      breedingEventId: "b1",
+      date: "2026-09-05",
+      method: "ultrasound",
+      result: "open",
+    });
+  });
+
+  it("won't accept a check dated before she was bred", async () => {
+    await mount();
+    const row = [...document.querySelectorAll(".grid-row--body")].find((r) => r.textContent?.includes("Martha"))!;
+    fireEvent.click([...row.querySelectorAll("button")].find((b) => b.textContent === "check")!);
+
+    fireEvent.change(screen.getByLabelText("Check date"), { target: { value: "2026-07-01" } });
+    expect(screen.getByText(/bred on 2026-08-01, after this check/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Record it" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

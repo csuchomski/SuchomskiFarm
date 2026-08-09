@@ -19,3 +19,23 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Recording a check against the breeding it belongs to. */
+
+.breeding-check__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  gap: 12px;
+}
+
+/* One calf in the calving form. Six fields is too many for a phone row, so
+   they wrap into as many columns as fit and the remove link takes the end. */
+
+.calf-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr));
+  gap: 12px;
+  align-items: end;
+  padding: 12px 0;
+  border-top: 1px solid var(--hairline);
+}

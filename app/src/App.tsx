@@ -9,6 +9,7 @@ import Sires from "./routes/Sires";
 import StoreProducts from "./routes/StoreProducts";
 import StoreOrders from "./routes/StoreOrders";
 import Breedings from "./routes/Breedings";
+import CalvingsPage from "./routes/Calvings";
 import StoreCustomers from "./routes/StoreCustomers";
 import StoreCustomerDetail from "./routes/StoreCustomerDetail";
 import StoreSchedules from "./routes/StoreSchedules";
@@ -51,6 +52,7 @@ export default function App() {
                 <Route path="/genetics" element={<Genetics />} />
                 <Route path="/sires" element={<Sires />} />
                 <Route path="/breedings" element={<Breedings />} />
+                <Route path="/calvings" element={<CalvingsPage />} />
                 <Route path="/store/products" element={<StoreProducts />} />
                 <Route path="/store/orders" element={<StoreOrders />} />
                 <Route path="/store/customers" element={<StoreCustomers />} />

@@ -129,6 +129,14 @@ Four items were reviewed and are no longer open.
   only `'buyer'` or `'farmer'`, so any insert satisfying one failed the
   other. Nothing reported it, because a policy isn't validated against the
   constraints on the table it guards — see the migrations README.
+- **Pregnancy checks and calvings** — a standing breeding on Herd →
+  Breedings can be checked (palpation, ultrasound, blood, milk test, visual;
+  pregnant, open, recheck, aborted), and the row then shows the result, how
+  many days bred she was, and when she's due — from the farm's own
+  `gestation_days_*` settings, blank rather than guessed if there's no figure
+  for her purpose. Herd → Calvings records the calving and its calves; a live
+  calf gets its own animal record with dam and sire filled in, and a dairy dam
+  freshens, which closes her previous lactation. Migration 028.
 - **Log a breeding** — Herd → Breedings. A cow or heifer, a date, and either
   an AI straw or a bull she was exposed to. Choosing a straw draws it from the
   tank and books its cost against *her*, so it reaches her margin rather than
@@ -145,17 +153,18 @@ Four items were reviewed and are no longer open.
 
 ## Raised 2026-08-08 by breeding records
 
-### Pregnancy checks and calvings
+### Carcass ultrasound
 
-`herd.pregnancy_checks`, `herd.ultrasound_scans` and `herd.calvings` all
-exist and are all empty, the same way `breeding_events` was. Breedings now
-have a page; nothing yet says whether one took.
+`herd.ultrasound_scans` is empty and unbuilt. It was listed here alongside
+pregnancy checks by mistake: its columns are `imf_pct`, `ribeye_area_sqin`,
+`backfat_in` and `rump_fat_in` — carcass ultrasound for beef seedstock
+evaluation, nothing to do with whether a cow is in calf. A pregnancy
+ultrasound is a `pregnancy_checks` row with `method = 'ultrasound'`, and that
+is built.
 
-Worth knowing: `record_breeding` already numbers services from the dam's
-last calving (`herd.calvings.date`), so a calving recorded later changes what
-the *next* service number will be — correctly — but does not renumber the
-breedings already logged. That's the right behaviour and worth not
-"fixing" by accident.
+Worth knowing before building: it's only worth anything to someone marketing
+breeding stock on carcass merit. Two beef females and a reference bull is not
+that farm yet.
 
 ### Embryo transfer
 

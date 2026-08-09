@@ -129,12 +129,41 @@ Four items were reviewed and are no longer open.
   only `'buyer'` or `'farmer'`, so any insert satisfying one failed the
   other. Nothing reported it, because a policy isn't validated against the
   constraints on the table it guards — see the migrations README.
+- **Log a breeding** — Herd → Breedings. A cow or heifer, a date, and either
+  an AI straw or a bull she was exposed to. Choosing a straw draws it from the
+  tank and books its cost against *her*, so it reaches her margin rather than
+  sitting on the tank; the bull and the straw both show on the record.
+  Voiding puts the straw back and withdraws the cost. Migration 027 — which
+  added no tables, because `breeding_events` had modelled all of it and never
+  been written to.
 - **"Attributed to"** — the column exists and writes migration 002's link. A
   transaction can be split across animals, evenly by default and editable per
   animal, and partial attribution is allowed because a bill can be part
   household. Un-attributing is a soft delete, since neither entry table has a
   DELETE policy. The on-screen callout claiming the migration hadn't been run
   is gone; it had been wrong for a fortnight.
+
+## Raised 2026-08-08 by breeding records
+
+### Pregnancy checks and calvings
+
+`herd.pregnancy_checks`, `herd.ultrasound_scans` and `herd.calvings` all
+exist and are all empty, the same way `breeding_events` was. Breedings now
+have a page; nothing yet says whether one took.
+
+Worth knowing: `record_breeding` already numbers services from the dam's
+last calving (`herd.calvings.date`), so a calving recorded later changes what
+the *next* service number will be — correctly — but does not renumber the
+breedings already logged. That's the right behaviour and worth not
+"fixing" by accident.
+
+### Embryo transfer
+
+`breeding_events.method` allows `'et'`, and `herd.embryo_lots` and
+`herd.embryo_transactions` exist with the same shape as the semen tables.
+`record_breeding` deliberately refuses `'et'` rather than half-supporting it
+— the donor dam, the embryo lot draw-down and its cost are the same problem
+again and deserve their own pass.
 
 ## Decisions, not open questions
 

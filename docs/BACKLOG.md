@@ -129,6 +129,14 @@ Four items were reviewed and are no longer open.
   only `'buyer'` or `'farmer'`, so any insert satisfying one failed the
   other. Nothing reported it, because a policy isn't validated against the
   constraints on the table it guards — see the migrations README.
+- **Gestation per breed** — due dates count forward by the dam's breed
+  rather than a species average, which had been giving a Jersey (279) and a
+  Brown Swiss (290) the same answer eleven days apart. `breeds.default_
+  gestation_days` was already seeded for all seventeen breeds and simply
+  wasn't read. Herd → Breeds shows each one and lets the farm set its own
+  figure, which beats the default here only; a cross is weighted across her
+  composition, and a cow with no breeds on file still falls back to the
+  species setting. Migration 029 adds only the key the upsert needs.
 - **Pregnancy checks and calvings** — a standing breeding on Herd →
   Breedings can be checked (palpation, ultrasound, blood, milk test, visual;
   pregnant, open, recheck, aborted), and the row then shows the result, how

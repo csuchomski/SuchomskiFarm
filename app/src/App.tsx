@@ -9,6 +9,7 @@ import Sires from "./routes/Sires";
 import StoreProducts from "./routes/StoreProducts";
 import StoreOrders from "./routes/StoreOrders";
 import Breedings from "./routes/Breedings";
+import BreedsPage from "./routes/Breeds";
 import CalvingsPage from "./routes/Calvings";
 import StoreCustomers from "./routes/StoreCustomers";
 import StoreCustomerDetail from "./routes/StoreCustomerDetail";
@@ -53,6 +54,7 @@ export default function App() {
                 <Route path="/sires" element={<Sires />} />
                 <Route path="/breedings" element={<Breedings />} />
                 <Route path="/calvings" element={<CalvingsPage />} />
+                <Route path="/breeds" element={<BreedsPage />} />
                 <Route path="/store/products" element={<StoreProducts />} />
                 <Route path="/store/orders" element={<StoreOrders />} />
                 <Route path="/store/customers" element={<StoreCustomers />} />

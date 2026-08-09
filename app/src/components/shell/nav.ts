@@ -29,6 +29,7 @@ export const allGroups: NavGroup[] = [
       { label: "Sires", to: "/sires" },
       { label: "Breedings", to: "/breedings" },
       { label: "Calvings", to: "/calvings" },
+      { label: "Breeds", to: "/breeds" },
       { label: "Health" },
     ],
   },

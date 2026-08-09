@@ -154,13 +154,15 @@ export const addDays = (iso: string, days: number): string =>
 export const daysBetween = (from: string, to: string): number => Math.round((parse(to) - parse(from)) / MS_DAY);
 
 /**
- * When she's due, from the day she was bred and the gestation length for her
- * purpose. Null when the farm has no figure for that purpose rather than
- * guessing one — a made-up due date is worse than none.
+ * When she's due: the day she was bred plus her gestation length.
+ *
+ * The length comes from lib/gestation.ts, which resolves it from her breeds
+ * — a Jersey and a Brown Swiss are eleven days apart, and this used to give
+ * them both the species average. Null when nothing on file yields a figure,
+ * because a made-up due date is worse than none.
  */
-export function dueDate(bredOn: string, purpose: string, gestation: Record<string, number>): string | null {
-  const days = gestation[purpose];
-  return days === undefined ? null : addDays(bredOn, days);
+export function dueDate(bredOn: string, gestationDays: number | null | undefined): string | null {
+  return gestationDays === null || gestationDays === undefined ? null : addDays(bredOn, gestationDays);
 }
 
 /** The latest check for a breeding, which is the one that counts — a recheck

@@ -88,9 +88,26 @@ const checks = [
 vi.mock("../lib/repro", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/repro")>()),
   fetchPregnancyChecks: vi.fn(async () => checks),
-  // Beef 283, dairy 279 — the farm's own settings.
+  // The species fallback, for an animal with no breed on file.
   fetchGestationDays: vi.fn(async () => ({ beef: 283, dairy: 279 })),
   recordCheck: (i: CheckInput) => recordCheck(i),
+}));
+
+/**
+ * Martha is a Belted Galloway (283 days) and Abigail has no composition on
+ * file, so she falls back to the beef average — which happens to be 283 too.
+ * The Jersey override is what proves a farm figure beats the breed default.
+ */
+const breeds = [
+  { id: "bg", code: "BG", name: "Belted Galloway", species_type: "beef", default_gestation_days: 283, active: true },
+  { id: "je", code: "JE", name: "Jersey", species_type: "dairy", default_gestation_days: 279, active: true },
+];
+
+vi.mock("../lib/gestation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/gestation")>()),
+  fetchBreeds: vi.fn(async () => breeds),
+  fetchComposition: vi.fn(async () => [{ animal_id: "cow-1", breed_id: "bg", percent: 100 }]),
+  fetchOverrides: vi.fn(async () => []),
 }));
 
 afterEach(() => {
@@ -240,11 +257,12 @@ describe("Pregnancy checks on a breeding", () => {
     expect(row.textContent).toContain("not yet");
   });
 
-  it("works the due date out from the farm's gestation setting for her purpose", async () => {
+  it("counts the due date from her breed's gestation, and says which breed", async () => {
     await mount();
-    // Martha is beef, bred 2026-08-01, and beef gestation is 283 days.
+    // Martha is a Belted Galloway, bred 2026-08-01: 283 days.
     const row = [...document.querySelectorAll(".grid-row--body")].find((r) => r.textContent?.includes("Martha"))!;
     expect(row.textContent).toContain("2027-05-11");
+    expect(row.textContent).toContain("283d Belted Galloway");
   });
 
   it("records a check against the breeding it was opened from", async () => {

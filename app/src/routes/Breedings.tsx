@@ -30,6 +30,13 @@ import {
   validateCheck,
   type PregnancyCheck,
 } from "../lib/repro";
+import {
+  fetchBreeds,
+  fetchComposition,
+  fetchOverrides,
+  gestationFor,
+  type GestationInputs,
+} from "../lib/gestation";
 import { useWorkspace } from "../lib/workspace";
 import "./store-orders.css";
 import "./breedings.css";
@@ -56,7 +63,7 @@ type Load =
       lots: SemenLot[];
       costs: Map<string, number>;
       checks: PregnancyCheck[];
-      gestation: Record<string, number>;
+      gestation: GestationInputs;
     };
 
 const COLS = "110px 1fr 150px 150px 100px 100px";
@@ -95,7 +102,15 @@ export default function Breedings() {
 
   const refresh = useCallback(async () => {
     if (!farmId) {
-      setLoad({ state: "ok", breedings: [], animals: [], lots: [], costs: new Map(), checks: [], gestation: {} });
+      setLoad({
+        state: "ok",
+        breedings: [],
+        animals: [],
+        lots: [],
+        costs: new Map(),
+        checks: [],
+        gestation: EMPTY_GESTATION,
+      });
       return;
     }
     const [breedings, animals, lots, costs, checks, gestation] = await Promise.all([
@@ -104,9 +119,10 @@ export default function Breedings() {
       fetchSemenLots(farmId),
       fetchBreedingCosts(farmId),
       fetchPregnancyChecks(farmId),
-      // A due date the farm has no gestation figure for is left blank, so a
-      // failure here costs the column and nothing else.
-      fetchGestationDays().catch(() => ({})),
+      // Her breeds decide her gestation; the species settings are only the
+      // fallback for an animal with no composition on file. A failure here
+      // costs the due-date column and nothing else.
+      loadGestation(farmId).catch(() => EMPTY_GESTATION),
     ]);
     setLoad({ state: "ok", breedings, animals, lots, costs, checks, gestation });
   }, [farmId]);
@@ -384,7 +400,8 @@ export default function Breedings() {
                 const cost = costs.get(b.id);
                 const check = latestCheck(checks, b.id);
                 const dam = byId.get(b.animal_id);
-                const due = dam ? dueDate(b.date, dam.purpose, gestation) : null;
+                const carried = dam ? gestationFor(dam, gestation) : null;
+                const due = dam ? dueDate(b.date, carried?.days) : null;
                 // Once she's confirmed open or aborted there is nothing left
                 // to be due, and a date sitting there would be a lie.
                 const stillCarrying = !b.voided && check?.result !== "open" && check?.result !== "aborted";
@@ -442,6 +459,7 @@ export default function Breedings() {
                               {daysBetween(todayIso(), due) >= 0
                                 ? `in ${daysBetween(todayIso(), due)}d`
                                 : `${-daysBetween(todayIso(), due)}d ago`}
+                              {carried && ` · ${carried.days}d ${carried.basis}`}
                             </span>
                           </>
                         )}
@@ -635,4 +653,17 @@ const EMPTY_ANIMALS: RealAnimal[] = [];
 const EMPTY_LOTS: SemenLot[] = [];
 const EMPTY_COSTS = new Map<string, number>();
 const EMPTY_CHECKS: PregnancyCheck[] = [];
-const EMPTY_GESTATION: Record<string, number> = {};
+const EMPTY_GESTATION: GestationInputs = { breeds: [], composition: [], overrides: [], bySpecies: {} };
+
+/** The four small reads a due date needs, in one round trip's worth of
+ * parallel. Kept here rather than in the lib so the lib stays pure enough to
+ * test without a database. */
+async function loadGestation(farmId: string): Promise<GestationInputs> {
+  const [breeds, composition, overrides, bySpecies] = await Promise.all([
+    fetchBreeds(farmId),
+    fetchComposition(farmId),
+    fetchOverrides(farmId),
+    fetchGestationDays(),
+  ]);
+  return { breeds, composition, overrides, bySpecies };
+}

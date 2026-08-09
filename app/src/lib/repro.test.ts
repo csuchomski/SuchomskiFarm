@@ -25,16 +25,16 @@ const check = (over: Partial<PregnancyCheck> = {}): PregnancyCheck => ({
 });
 
 describe("dueDate", () => {
-  const gestation = { beef: 283, dairy: 279 };
-
-  it("counts the farm's own gestation length for her purpose", () => {
-    expect(dueDate("2026-08-01", "beef", gestation)).toBe("2027-05-11");
-    expect(dueDate("2026-08-01", "dairy", gestation)).toBe("2027-05-07");
+  it("counts her gestation length forward from the service", () => {
+    // Belted Galloway 283, Jersey 279 — from herd.breeds, resolved by
+    // lib/gestation.ts rather than a species average.
+    expect(dueDate("2026-08-01", 283)).toBe("2027-05-11");
+    expect(dueDate("2026-08-01", 279)).toBe("2027-05-07");
   });
 
-  it("is null for a purpose the farm has no figure for, rather than a guess", () => {
-    expect(dueDate("2026-08-01", "dual", gestation)).toBeNull();
-    expect(dueDate("2026-08-01", "beef", {})).toBeNull();
+  it("is blank when nothing on file yields a figure, rather than a guess", () => {
+    expect(dueDate("2026-08-01", null)).toBeNull();
+    expect(dueDate("2026-08-01", undefined)).toBeNull();
   });
 });
 

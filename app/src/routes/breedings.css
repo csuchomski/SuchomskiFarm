@@ -1,0 +1,21 @@
+/* Voiding a breeding, opened under the row it belongs to — the same flat
+   panel the accounts and attribution pages use for "this row, in detail". */
+
+.breeding-void {
+  padding: 16px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--page);
+}
+
+.breeding-void__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 560px) {
+  .breeding-void__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

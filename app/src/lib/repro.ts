@@ -165,6 +165,39 @@ export function dueDate(bredOn: string, gestationDays: number | null | undefined
   return gestationDays === null || gestationDays === undefined ? null : addDays(bredOn, gestationDays);
 }
 
+/**
+ * Which service most likely made this calf.
+ *
+ * Not the latest before the calving, which is the obvious guess and is wrong
+ * exactly when it matters: a cow served in March, returned to heat, served
+ * again three weeks later and calving in December conceived on the *first*
+ * service — and crediting the second puts the wrong sire on the calf.
+ *
+ * So: the service whose expected calving date lands nearest the real one.
+ * Ties go to the earlier service, since a cow that held to the first was
+ * never in calf to the second.
+ */
+export function likelyService<T extends { id: string; date: string }>(
+  calvedOn: string,
+  services: T[],
+  gestationDays: number | null | undefined,
+): T | null {
+  const before = services.filter((s) => s.date < calvedOn).sort((a, b) => a.date.localeCompare(b.date));
+  if (before.length === 0) return null;
+  if (gestationDays === null || gestationDays === undefined) return before[before.length - 1];
+
+  let best = before[0];
+  let bestGap = Math.abs(daysBetween(addDays(best.date, gestationDays), calvedOn));
+  for (const s of before.slice(1)) {
+    const gap = Math.abs(daysBetween(addDays(s.date, gestationDays), calvedOn));
+    if (gap < bestGap) {
+      best = s;
+      bestGap = gap;
+    }
+  }
+  return best;
+}
+
 /** The latest check for a breeding, which is the one that counts — a recheck
  * supersedes the check that asked for it. */
 export function latestCheck(checks: PregnancyCheck[], breedingId: string): PregnancyCheck | null {
@@ -240,6 +273,9 @@ export async function recordCalving(input: {
   presentation: string;
   retainedPlacenta: boolean;
   notes?: string;
+  /** Which service made this calf. Null lets the database fall back to her
+   * most recent one, which is wrong whenever she was served twice. */
+  breedingEventId?: string | null;
 }): Promise<string> {
   const { data, error } = await herdSchema().rpc("record_calving", {
     p_dam_id: input.damId,
@@ -256,7 +292,7 @@ export async function recordCalving(input: {
     p_presentation: input.presentation,
     p_retained_placenta: input.retainedPlacenta,
     p_notes: (input.notes ?? "").trim(),
-    p_breeding_event_id: null,
+    p_breeding_event_id: input.breedingEventId ?? null,
   });
   if (error) throw new Error(error.message);
   return data as string;

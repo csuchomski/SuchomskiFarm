@@ -8,7 +8,10 @@ import {
   fetchBreeds,
   fetchComposition,
   fetchOverrides,
+  gestationFor,
+  setComposition,
   setOverride,
+  validateComposition,
   validateGestation,
   type Breed,
   type BreedShare,
@@ -35,6 +38,9 @@ type Load =
 const COLS = "1fr 110px 130px 130px 160px";
 const COLS_SM = "1fr 90px 90px";
 
+const WHO_COLS = "1fr 1fr 110px";
+const WHO_COLS_SM = "1fr 1fr";
+
 export default function Breeds() {
   const { business, farmId } = useWorkspace();
 
@@ -44,6 +50,12 @@ export default function Breeds() {
   const [note, setNote] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [days, setDays] = useState("");
+
+  // Who is what. Composition is per animal, but it belongs on this page:
+  // it's the other half of "which breeds are on this farm", and it's what
+  // lets a calf inherit anything.
+  const [composingId, setComposingId] = useState<string | null>(null);
+  const [shares, setShares] = useState<{ breedId: string; percent: string }[]>([]);
 
   const refresh = useCallback(async () => {
     if (!farmId) {
@@ -88,6 +100,44 @@ export default function Breeds() {
 
   const inUse = breeds.filter((b) => carriedBy(b.id).length > 0);
   const problem = editingId ? validateGestation(days) : null;
+  const shareProblem = composingId ? validateComposition(shares) : null;
+
+  const herd = useMemo(() => animals.filter((a) => a.status === "active"), [animals]);
+  const inputs = useMemo(
+    () => ({ breeds, composition, overrides, bySpecies: {} }),
+    [breeds, composition, overrides],
+  );
+  const sharesFor = (animalId: string) => composition.filter((c) => c.animal_id === animalId);
+  const breedName = (id: string) => breeds.find((b) => b.id === id)?.name ?? "unknown";
+
+  const startCompose = (animal: RealAnimal) => {
+    const mine = sharesFor(animal.id);
+    setComposingId(animal.id);
+    setShares(
+      mine.length > 0
+        ? mine.map((c) => ({ breedId: c.breed_id, percent: String(Number(c.percent)) }))
+        : [{ breedId: "", percent: "100" }],
+    );
+    setError(null);
+    setNote(null);
+  };
+
+  const saveShares = (animal: RealAnimal) => {
+    if (shareProblem) return;
+    setBusy(true);
+    setError(null);
+    setComposition(
+      animal.id,
+      shares.filter((s) => s.breedId !== "").map((s) => ({ breedId: s.breedId, percent: Number(s.percent) })),
+    )
+      .then(async () => {
+        await refresh();
+        setComposingId(null);
+        setNote(`${animal.barn_name?.trim() || animal.ear_tag} updated.`);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setBusy(false));
+  };
 
   const startEdit = (breed: Breed) => {
     const mine = overrides.find((o) => o.breed_id === breed.id);
@@ -240,10 +290,130 @@ export default function Breeds() {
             );
           })}
 
-          <p style={{ fontSize: 13, color: "var(--ink-muted)", paddingTop: 16 }}>
-            A cow with no breed composition on file falls back to the species average from the farm's settings —
-            283 days for beef, 279 for dairy — which is where every due date came from before breeds were read.
+          <div className="serif" style={{ fontSize: 21, margin: "32px 0 4px" }}>
+            Who is what
+          </div>
+          <p style={{ fontSize: 13, color: "var(--ink-muted)", marginBottom: 12 }}>
+            A calf born here inherits half its breeds from each parent — but only when both parents have a
+            composition on file. A bull with none leaves his calves with none, and they fall back to the species
+            average from the farm's settings: 283 days for beef, 279 for dairy.
           </p>
+
+          <GridRow cols={WHO_COLS} mobileCols={WHO_COLS_SM} as="header">
+            <span>Animal</span>
+            <span>Breeds</span>
+            <span className="text-right hide-sm">Carries</span>
+          </GridRow>
+
+          {herd.map((a) => {
+            const mine = sharesFor(a.id);
+            const carried = gestationFor(a, inputs);
+            return (
+              <div key={a.id}>
+                {/* Marked so this table is distinguishable from the breed
+                    one above it — both are grid rows on the same page, and a
+                    breed name legitimately appears in both. */}
+                <GridRow
+                  cols={WHO_COLS}
+                  mobileCols={WHO_COLS_SM}
+                  as="body"
+                  className="who-row"
+                  highlight={mine.length === 0}
+                >
+                  <span style={{ minWidth: 0 }}>
+                    <span className="serif" style={{ fontSize: 17 }}>
+                      {a.barn_name?.trim() || a.ear_tag}
+                    </span>
+                    <span style={{ fontSize: 13, color: "var(--ink-muted)" }}> · {a.class}</span>
+                    <br />
+                    <button type="button" className="link-button mono" onClick={() => startCompose(a)}>
+                      {mine.length === 0 ? "set breeds" : "change"}
+                    </button>
+                  </span>
+                  <span style={{ minWidth: 0, fontSize: 14 }}>
+                    {mine.length === 0 ? (
+                      <span style={{ color: "var(--ink-faint)" }}>none on file</span>
+                    ) : (
+                      mine
+                        .map((c) => (Number(c.percent) === 100 ? breedName(c.breed_id) : `${Number(c.percent)}% ${breedName(c.breed_id)}`))
+                        .join(", ")
+                    )}
+                  </span>
+                  <span className="mono text-right hide-sm" style={{ color: "var(--ink-muted)" }}>
+                    {carried && carried.fromBreed ? `${carried.days}d` : "—"}
+                  </span>
+                </GridRow>
+
+                {composingId === a.id && (
+                  <div className="breeding-void">
+                    {shares.map((share, i) => (
+                      <div className="breeding-check__row" key={i} style={{ marginBottom: 8 }}>
+                        <label style={{ fontSize: 13 }}>
+                          <div className="eyebrow">Breed</div>
+                          <select
+                            className="order-select"
+                            value={share.breedId}
+                            aria-label={`Breed ${i + 1} for ${a.barn_name?.trim() || a.ear_tag}`}
+                            onChange={(e) =>
+                              setShares((prev) => prev.map((x, j) => (j === i ? { ...x, breedId: e.target.value } : x)))
+                            }
+                          >
+                            <option value="">Pick a breed…</option>
+                            {breeds.map((b) => (
+                              <option key={b.id} value={b.id}>
+                                {b.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label style={{ fontSize: 13 }}>
+                          <div className="eyebrow">Percent</div>
+                          <input
+                            className="order-select"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            inputMode="decimal"
+                            value={share.percent}
+                            aria-label={`Percent ${i + 1} for ${a.barn_name?.trim() || a.ear_tag}`}
+                            onChange={(e) =>
+                              setShares((prev) => prev.map((x, j) => (j === i ? { ...x, percent: e.target.value } : x)))
+                            }
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="link-button mono"
+                          onClick={() => setShares((prev) => prev.filter((_, j) => j !== i))}
+                        >
+                          remove
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="link-button mono"
+                      onClick={() => setShares((prev) => [...prev, { breedId: "", percent: "" }])}
+                    >
+                      + another breed (a cross)
+                    </button>
+                    <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
+                      <Button variant="filled" size="sm" disabled={busy || shareProblem !== null} onClick={() => saveShares(a)}>
+                        {busy ? "Saving…" : "Save"}
+                      </Button>
+                      <Button size="sm" onClick={() => setComposingId(null)}>
+                        Cancel
+                      </Button>
+                      <span style={{ fontSize: 13, color: shareProblem ? "var(--red)" : "var(--ink-muted)" }}>
+                        {shareProblem ?? "The shares have to come to 100."}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </>
       )}
     </OpsShell>

@@ -5,6 +5,7 @@ import {
   dueDate,
   emptyCalf,
   latestCheck,
+  likelyService,
   validateCalving,
   validateCheck,
   type PregnancyCheck,
@@ -128,5 +129,42 @@ describe("validateCalving", () => {
     expect(validateCalving({ ...base, calves: [{ ...live, birthWeight: "heavy" }] })).toMatch(/has to be a number/);
     expect(validateCalving({ ...base, calves: [{ ...live, birthWeight: "0" }] })).toMatch(/above zero/);
     expect(validateCalving({ ...base, calves: [{ ...live, birthWeight: "" }] })).toBeNull();
+  });
+});
+
+describe("likelyService", () => {
+  const svc = (id: string, date: string) => ({ id, date });
+
+  it("picks the service whose due date lands nearest the calving", () => {
+    // The case that matters: served in January, returned to heat, served
+    // again three weeks later. At 280 days the January service is due on the
+    // day she actually calved, so it — not the later one — made the calf.
+    const services = [svc("first", "2026-01-01"), svc("second", "2026-01-22")];
+    expect(likelyService("2026-10-08", services, 280)?.id).toBe("first");
+    // Move the calving three weeks and the answer flips, which is the whole
+    // point of dating it rather than taking the most recent.
+    expect(likelyService("2026-10-29", services, 280)?.id).toBe("second");
+  });
+
+  it("ignores services on or after the calving", () => {
+    const services = [svc("before", "2026-01-01"), svc("after", "2026-10-20")];
+    expect(likelyService("2026-10-08", services, 280)?.id).toBe("before");
+    expect(likelyService("2026-01-01", services, 280)).toBeNull();
+  });
+
+  it("falls back to the most recent when there's no gestation figure", () => {
+    const services = [svc("first", "2026-01-01"), svc("second", "2026-01-22")];
+    expect(likelyService("2026-10-08", services, null)?.id).toBe("second");
+    expect(likelyService("2026-10-08", services, undefined)?.id).toBe("second");
+  });
+
+  it("has nothing to offer when she has no services", () => {
+    expect(likelyService("2026-10-08", [], 280)).toBeNull();
+  });
+
+  it("takes a lone service whether or not the dates fit", () => {
+    // A single service is the answer even when it's months out — the
+    // alternative is a calf with no sire because the arithmetic disagreed.
+    expect(likelyService("2026-10-08", [svc("only", "2026-03-01")], 280)?.id).toBe("only");
   });
 });

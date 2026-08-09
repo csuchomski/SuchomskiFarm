@@ -142,6 +142,37 @@ export async function fetchOverrides(farmId: string): Promise<GestationOverride[
 
 // ─── writes ────────────────────────────────────────────────────────────
 
+/**
+ * Replace an animal's breed composition. Whole-set: the shares have to total
+ * 100, which is the database's rule too — a partial edit is how an animal
+ * ends up 160% bred and every weighted average quietly divides by it.
+ */
+export async function setComposition(animalId: string, shares: { breedId: string; percent: number }[]): Promise<void> {
+  const { error } = await herdSchema().rpc("set_breed_composition", {
+    p_animal_id: animalId,
+    p_shares: shares.map((s) => ({ breed_id: s.breedId, percent: s.percent })),
+  });
+  if (error) throw new Error(error.message);
+}
+
+export function validateComposition(shares: { breedId: string; percent: string }[]): string | null {
+  const named = shares.filter((s) => s.breedId !== "");
+  if (named.length === 0) return null; // clearing it is allowed
+
+  const seen = new Set<string>();
+  let total = 0;
+  for (const s of named) {
+    if (seen.has(s.breedId)) return "The same breed is listed twice.";
+    seen.add(s.breedId);
+    const value = Number(s.percent.trim());
+    if (!Number.isFinite(value)) return "Each share has to be a number.";
+    if (value <= 0 || value > 100) return "Each share is above 0 and at most 100.";
+    total += value;
+  }
+  if (Math.round(total * 100) / 100 !== 100) return `The shares come to ${Math.round(total * 100) / 100}, not 100.`;
+  return null;
+}
+
 export function validateGestation(days: string): string | null {
   const raw = days.trim();
   if (raw === "") return null; // clearing it is how you go back to the default

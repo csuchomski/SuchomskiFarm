@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { daysForBreed, gestationFor, validateGestation, type Breed, type GestationInputs } from "./gestation";
+import {
+  daysForBreed,
+  gestationFor,
+  validateComposition,
+  validateGestation,
+  type Breed,
+  type GestationInputs,
+} from "./gestation";
 
 // Real figures from the seeded herd.breeds rows.
 const jersey: Breed = { id: "je", code: "JE", name: "Jersey", species_type: "dairy", default_gestation_days: 279, active: true };
@@ -144,5 +151,41 @@ describe("validateGestation", () => {
     // Wide enough to allow anything real.
     expect(validateGestation("240")).toBeNull();
     expect(validateGestation("320")).toBeNull();
+  });
+});
+
+describe("validateComposition", () => {
+  const share = (breedId: string, percent: string) => ({ breedId, percent });
+
+  it("wants the shares to come to 100", () => {
+    expect(validateComposition([share("je", "100")])).toBeNull();
+    expect(validateComposition([share("je", "50"), share("ch", "50")])).toBeNull();
+    expect(validateComposition([share("je", "50"), share("ch", "10")])).toMatch(/come to 60, not 100/);
+    expect(validateComposition([share("je", "75"), share("ch", "50")])).toMatch(/come to 125, not 100/);
+  });
+
+  it("allows clearing it", () => {
+    // An animal with nothing on file falls back to the species average,
+    // which is a worse answer than a breed but a legitimate one.
+    expect(validateComposition([])).toBeNull();
+    expect(validateComposition([share("", "50")])).toBeNull();
+  });
+
+  it("won't take the same breed twice", () => {
+    expect(validateComposition([share("je", "50"), share("je", "50")])).toMatch(/listed twice/);
+  });
+
+  it("wants each share to be a number above 0 and at most 100", () => {
+    expect(validateComposition([share("je", "half")])).toMatch(/has to be a number/);
+    expect(validateComposition([share("je", "0"), share("ch", "100")])).toMatch(/above 0/);
+    expect(validateComposition([share("je", "-50"), share("ch", "150")])).toMatch(/above 0/);
+  });
+
+  it("takes thirds, which don't add to exactly 100", () => {
+    // 33.33 × 3 is 99.99 and gets refused, which is right — the database
+    // insists on 100 too, so accepting it here would only move the error.
+    // One share carries the remainder.
+    expect(validateComposition([share("je", "33.34"), share("ch", "33.33"), share("bs", "33.33")])).toBeNull();
+    expect(validateComposition([share("je", "33.33"), share("ch", "33.33"), share("bs", "33.33")])).toMatch(/99.99/);
   });
 });

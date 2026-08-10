@@ -161,6 +161,24 @@ Four items were reviewed and are no longer open.
 
 ## Closed 2026-08-10
 
+- **Beef and dairy kept apart** — Animals filters to one side or the other and
+  says how the herd divides; each row and each animal's identity line carries
+  her purpose. Lactations is dairy-only: a beef cow is no longer counted as a
+  cow missing a lactation, and her record has no lactation section at all.
+
+  This was a real disagreement, not a cosmetic one. `herd.record_calving` has
+  always opened a lactation only for `purpose in ('dairy', 'dual')`, so a beef
+  cow's calving correctly created none — and the app then reported her under
+  "Cows with none" in a red stat tile that could never be cleared, and offered
+  a "record a freshening" button that would have opened by hand the very row
+  the database declined to open. One predicate, `isMilked()` in lib/herd.ts,
+  now matches the database's rule and is the only place the question is asked.
+
+  `purpose` is the switch, not breed. A dairy-breed cow run as a beef cow is a
+  beef cow; composition says what she is, purpose says what she's for.
+
+
+
 - **Her breeding record, drawn** — built from mockup 2a of the Cow Lifecycle
   set. An animal's page now opens with "Her record, row by row": one row per
   calving, every row starting the day she calved so day 84 in one row is day

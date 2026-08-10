@@ -8,6 +8,7 @@ import {
   fetchBreedComposition,
   formatAge,
   herdOnly,
+  isMilked,
   type BreedShare,
   type RealAnimal,
 } from "../lib/herd";
@@ -34,6 +35,10 @@ export default function Animals() {
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
   const [classFilter, setClassFilter] = useState("all");
+  // Beef and dairy are run as two herds even though they share a barn: one is
+  // milked and one raises its calves, and almost nothing that applies to one
+  // applies to the other.
+  const [purposeFilter, setPurposeFilter] = useState<"all" | "dairy" | "beef">("all");
   const [showInactive, setShowInactive] = useState(false);
   const [sort, setSort] = useState<SortKey>("name");
 
@@ -63,15 +68,19 @@ export default function Animals() {
   // filter rather than being invisible.
   const classes = useMemo(() => [...new Set(all.map((a) => a.class))].sort(), [all]);
   const inactiveCount = all.filter((a) => a.status !== "active").length;
+  const dairyCount = all.filter(isMilked).length;
+  const beefCount = all.length - dairyCount;
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = all.filter((a) => {
       if (!showInactive && a.status !== "active") return false;
       if (classFilter !== "all" && a.class !== classFilter) return false;
+      if (purposeFilter === "dairy" && !isMilked(a)) return false;
+      if (purposeFilter === "beef" && isMilked(a)) return false;
       if (!q) return true;
       const breeding = describeBreeding(breeds.get(a.id)) ?? "";
-      return [a.barn_name ?? "", a.ear_tag, a.class, a.sex, a.status, breeding, a.notes ?? ""]
+      return [a.barn_name ?? "", a.ear_tag, a.class, a.sex, a.purpose, a.status, breeding, a.notes ?? ""]
         .join(" ")
         .toLowerCase()
         .includes(q);
@@ -89,12 +98,16 @@ export default function Animals() {
           return nameOf(a).localeCompare(nameOf(b));
       }
     });
-  }, [all, breeds, query, classFilter, showInactive, sort]);
+  }, [all, breeds, query, classFilter, purposeFilter, showInactive, sort]);
 
   return (
     <OpsShell>
       <PageHeader
-        eyebrow={result.state === "ok" ? `${all.length} on file · ${all.length - inactiveCount} active` : "Herd"}
+        eyebrow={
+          result.state === "ok"
+            ? `${all.length} on file · ${dairyCount} dairy · ${beefCount} beef · ${all.length - inactiveCount} active`
+            : "Herd"
+        }
         title="Animals"
         actions={
           <Button variant="filled" onClick={() => setAdding((v) => !v)} disabled={result.state !== "ok"}>
@@ -129,6 +142,16 @@ export default function Animals() {
         />
 
         <div className="animals-filters">
+          <FilterChip active={purposeFilter === "all"} onClick={() => setPurposeFilter("all")}>
+            Whole herd
+          </FilterChip>
+          <FilterChip active={purposeFilter === "dairy"} onClick={() => setPurposeFilter("dairy")}>
+            Dairy · {dairyCount}
+          </FilterChip>
+          <FilterChip active={purposeFilter === "beef"} onClick={() => setPurposeFilter("beef")}>
+            Beef · {beefCount}
+          </FilterChip>
+          <span className="animals-filters__split" aria-hidden="true" />
           <FilterChip active={classFilter === "all"} onClick={() => setClassFilter("all")}>
             All
           </FilterChip>
@@ -188,7 +211,7 @@ export default function Animals() {
                   </span>
                   <br />
                   <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
-                    {[describeBreeding(breeds.get(a.id)), a.sex].filter(Boolean).join(" · ")}
+                    {[describeBreeding(breeds.get(a.id)), a.sex, a.purpose].filter(Boolean).join(" · ")}
                   </span>
                 </span>
                 <span className="hide-sm" style={{ fontSize: 13 }}>{a.class}</span>
@@ -206,7 +229,9 @@ export default function Animals() {
             <p style={{ fontSize: 14, color: "var(--ink-muted)", padding: "16px 8px" }}>
               {all.length === 0
                 ? "No animals recorded yet."
-                : `Nothing matches${query ? ` "${query}"` : ""}${classFilter !== "all" ? ` in ${classFilter}` : ""}.`}
+                : `Nothing matches${query ? ` "${query}"` : ""}${classFilter !== "all" ? ` in ${classFilter}` : ""}${
+                    purposeFilter !== "all" ? ` on the ${purposeFilter} side` : ""
+                  }.`}
             </p>
           )}
 

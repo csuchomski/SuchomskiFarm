@@ -38,6 +38,27 @@ export interface RealAnimal {
 export const herdOnly = (animals: RealAnimal[]): RealAnimal[] =>
   animals.filter((a) => a.record_type !== "reference");
 
+/**
+ * Is this animal milked?
+ *
+ * `purpose` is the switch, not her breeds. A cow can be a dairy breed and be
+ * run as a beef cow — that is exactly what a Jersey nursing her own calf is —
+ * and the farm records that decision on the animal. Breed composition says
+ * what she is; purpose says what she's for.
+ *
+ * 'dual' counts as milked, matching herd.record_calving, which opens a
+ * lactation for `purpose in ('dairy', 'dual')`. Keeping one definition here
+ * and one there is the whole point: a beef cow who calved never got a
+ * lactation from the database, and the app was still counting her as a cow
+ * missing one.
+ */
+export const isMilked = (animal: { purpose: string }): boolean =>
+  animal.purpose === "dairy" || animal.purpose === "dual";
+
+/** Females old enough to have calved, on the dairy side of the herd. */
+export const milkingHerd = (animals: RealAnimal[]): RealAnimal[] =>
+  herdOnly(animals).filter((a) => a.sex === "female" && a.class !== "calf" && isMilked(a));
+
 export interface BreedShare {
   breedId: string;
   name: string;

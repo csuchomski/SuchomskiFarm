@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeBreeding, formatAge, type BreedShare } from "./herd";
+import { describeBreeding, formatAge, isMilked, milkingHerd, type BreedShare, type RealAnimal } from "./herd";
 
 const share = (name: string, percent: number): BreedShare => ({ breedId: name, name, code: name.slice(0, 2), percent });
 
@@ -54,5 +54,61 @@ describe("formatAge", () => {
 
   it("doesn't go negative for a birth date in the future", () => {
     expect(formatAge("2027-01-01", "2026-08-05")).toBe("1 week");
+  });
+});
+
+describe("isMilked", () => {
+  it("goes by purpose, not by breed", () => {
+    // A Jersey run as a beef cow is a beef cow. Composition says what she is;
+    // purpose says what she's for, and only one of them decides whether she
+    // has a lactation.
+    expect(isMilked({ purpose: "dairy" })).toBe(true);
+    expect(isMilked({ purpose: "beef" })).toBe(false);
+  });
+
+  it("counts dual as milked, matching herd.record_calving", () => {
+    // The database opens a lactation for purpose in ('dairy', 'dual'). If
+    // this disagreed, the app would show a cow as missing a lactation the
+    // database was never going to create.
+    expect(isMilked({ purpose: "dual" })).toBe(true);
+  });
+
+  it("won't guess at a purpose it doesn't know", () => {
+    expect(isMilked({ purpose: "" })).toBe(false);
+    expect(isMilked({ purpose: "draft" })).toBe(false);
+  });
+});
+
+describe("milkingHerd", () => {
+  const animal = (over: Partial<RealAnimal> & { id: string }): RealAnimal => ({
+    ear_tag: over.id,
+    barn_name: null,
+    sex: "female",
+    class: "cow",
+    status: "active",
+    birth_date: "2021-01-01",
+    sire_id: null,
+    dam_id: null,
+    notes: null,
+    purpose: "dairy",
+    origin: "purchased",
+    record_type: "herd",
+    ...over,
+  });
+
+  it("is the dairy females old enough to have calved", () => {
+    const herd = [
+      animal({ id: "dairy-cow" }),
+      animal({ id: "beef-cow", purpose: "beef" }),
+      animal({ id: "dairy-heifer", class: "heifer" }),
+      animal({ id: "dairy-calf", class: "calf" }),
+      animal({ id: "bull", sex: "male", class: "bull", purpose: "dairy" }),
+      animal({ id: "ai-bull", sex: "male", class: "bull", record_type: "reference" }),
+    ];
+    expect(milkingHerd(herd).map((a) => a.id)).toEqual(["dairy-cow", "dairy-heifer"]);
+  });
+
+  it("is empty on a herd with no dairy in it", () => {
+    expect(milkingHerd([animal({ id: "a", purpose: "beef" }), animal({ id: "b", purpose: "beef" })])).toEqual([]);
   });
 });

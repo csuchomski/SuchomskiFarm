@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, GridRow, Pill, StatTile } from "../components/ui";
 import { fetchAnimals, type RealAnimal } from "../lib/herd";
@@ -55,25 +55,37 @@ const COLS_SM = "92px 1fr 96px";
 
 export default function Calvings() {
   const { business, farmId } = useWorkspace();
+  // A cow's record links here with the calving already worked out — dam,
+  // date, the service it fits and the calf already on file. Retyping four
+  // fields the other page had just finished naming is how a one-click fix
+  // becomes a chore nobody does.
+  const [params, setParams] = useSearchParams();
 
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
-  const [adding, setAdding] = useState(false);
-  const [damId, setDamId] = useState("");
-  const [date, setDate] = useState(todayIso);
+  // Read once, into the initial state, rather than applied by an effect. An
+  // effect loses: the suggestion effect below runs in the same commit, still
+  // sees servicePicked as false, and overwrites the service that was just
+  // prefilled.
+  const [adding, setAdding] = useState(() => params.get("dam") !== null);
+  const [damId, setDamId] = useState(() => params.get("dam") ?? "");
+  const [date, setDate] = useState(() => params.get("date") ?? todayIso());
   const [ease, setEase] = useState(1);
   const [assistance, setAssistance] = useState<string>("unassisted");
   const [presentation, setPresentation] = useState<string>("anterior");
   const [retained, setRetained] = useState(false);
   const [notes, setNotes] = useState("");
-  const [calves, setCalves] = useState<CalfDraft[]>([emptyCalf()]);
+  const [calves, setCalves] = useState<CalfDraft[]>(() => {
+    const calf = params.get("calf");
+    return [calf ? { ...emptyCalf(), animalId: calf } : emptyCalf()];
+  });
   // Which service made this calf. Left as "" until a dam is chosen, then
   // defaulted to the likeliest one rather than simply the most recent.
-  const [serviceId, setServiceId] = useState("");
-  const [servicePicked, setServicePicked] = useState(false);
+  const [serviceId, setServiceId] = useState(() => params.get("service") ?? "");
+  const [servicePicked, setServicePicked] = useState(() => params.get("service") !== null);
 
   const refresh = useCallback(async () => {
     if (!farmId) {
@@ -111,6 +123,13 @@ export default function Calvings() {
     };
   }, [refresh]);
 
+  // Cleared once they've been read into state, so a reload or a back-button
+  // doesn't reopen a form the farmer has already dealt with.
+  const hasPrefill = params.get("dam") !== null;
+  useEffect(() => {
+    if (hasPrefill) setParams({}, { replace: true });
+  }, [hasPrefill, setParams]);
+
   const calvings = load.state === "ok" ? load.calvings : EMPTY_CALVINGS;
   const outcomes = load.state === "ok" ? load.outcomes : EMPTY_OUTCOMES;
   const animals = load.state === "ok" ? load.animals : EMPTY_ANIMALS;
@@ -130,6 +149,19 @@ export default function Calvings() {
 
   const outcomesFor = (calvingId: string) => outcomes.filter((o) => o.calving_id === calvingId);
 
+  /**
+   * A calf row as it really stands. When it names an animal already on file,
+   * her own record is the authority on sex, tag and name — the database
+   * refuses any value that contradicts it. Derived rather than copied into
+   * state on change, because the prefill from a cow's record sets animalId
+   * without ever firing that change handler.
+   */
+  const asRecorded = (c: CalfDraft): CalfDraft => {
+    const a = c.animalId === "" ? undefined : byId.get(c.animalId);
+    return a ? { ...c, sex: a.sex, earTag: a.ear_tag, barnName: a.barn_name ?? "" } : c;
+  };
+  const recorded = calves.map(asRecorded);
+
   // Animals already on file who could *be* one of today's calves: born on the
   // calving date, and not already attached to a calving. The date is the
   // filter because a calf's birth date is the calving — the database refuses
@@ -142,7 +174,7 @@ export default function Calvings() {
     () => animals.filter((a) => a.birth_date === date && !claimed.has(a.id) && a.record_type !== "reference"),
     [animals, date, claimed],
   );
-  const problem = adding ? validateCalving({ damId, date, calves }) : null;
+  const problem = adding ? validateCalving({ damId, date, calves: recorded }) : null;
 
   // Her standing services before this date — the ones that could have made
   // the calf. A voided service made nothing.
@@ -361,7 +393,7 @@ export default function Calvings() {
               <div className="eyebrow" style={{ margin: "20px 0 8px" }}>
                 The calves
               </div>
-              {calves.map((calf, i) => (
+              {recorded.map((calf, i) => (
                 <div className="calf-row" key={i}>
                   {/* A calf entered before the calving was — every animal born
                       before this page existed is in that position. Picking her
@@ -375,25 +407,11 @@ export default function Calvings() {
                         value={calf.animalId}
                         aria-label={`Calf ${i + 1} record`}
                         disabled={calf.outcome !== "live"}
-                        onChange={(e) => {
-                          const picked = animals.find((a) => a.id === e.target.value);
+                        onChange={(e) =>
                           setCalves((prev) =>
-                            prev.map((c, j) =>
-                              j === i
-                                ? {
-                                    ...c,
-                                    animalId: e.target.value,
-                                    // Her own record is the authority on all
-                                    // three; typing over them here would only
-                                    // be rejected by the database.
-                                    sex: picked ? picked.sex : c.sex,
-                                    earTag: picked ? picked.ear_tag : c.earTag,
-                                    barnName: picked ? (picked.barn_name ?? "") : c.barnName,
-                                  }
-                                : c,
-                            ),
-                          );
-                        }}
+                            prev.map((c, j) => (j === i ? { ...c, animalId: e.target.value } : c)),
+                          )
+                        }
                       >
                         <option value="">New record</option>
                         {onFile.map((a) => (
@@ -517,7 +535,7 @@ export default function Calvings() {
                     recordCalving({
                       damId,
                       date,
-                      calves,
+                      calves: recorded,
                       calvingEase: ease,
                       assistance,
                       presentation,
@@ -542,7 +560,7 @@ export default function Calvings() {
                 </Button>
                 <span style={{ fontSize: 13, color: problem ? "var(--red)" : "var(--ink-muted)" }}>
                   {problem ??
-                    (calves.some((c) => c.animalId !== "")
+                    (recorded.some((c) => c.animalId !== "")
                       ? "The calf already on file is attached to this calving — her dam and sire are filled in, nothing new is created."
                       : "A live calf gets its own record, with dam and sire filled in.")}
                 </span>

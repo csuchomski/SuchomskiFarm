@@ -296,4 +296,39 @@ describe("Calvings", () => {
     fireEvent.change(screen.getByLabelText("Calf 1 outcome"), { target: { value: "stillborn" } });
     expect((screen.getByLabelText("Calf 1 record") as HTMLSelectElement).disabled).toBe(true);
   });
+
+  it("opens filled in when a cow's record sends you here", async () => {
+    // The link on her page carries the whole answer: which cow, which day,
+    // which service, and which calf already on file. Retyping it is how a
+    // one-click fix becomes a chore nobody does.
+    const { default: Calvings } = await import("./Calvings");
+    render(
+      <MemoryRouter
+        initialEntries={[`/calvings?dam=cow-1&date=${CALVED_ON}&service=b1&calf=calf-2`]}
+      >
+        <Calvings />
+      </MemoryRouter>,
+    );
+    await screen.findByText("Recorded");
+
+    await waitFor(() => expect(screen.queryByLabelText("Dam")).toBeTruthy());
+    expect((screen.getByLabelText("Dam") as HTMLSelectElement).value).toBe("cow-1");
+    expect((screen.getByLabelText("Calving date") as HTMLInputElement).value).toBe(CALVED_ON);
+    expect((screen.getByLabelText("Service") as HTMLSelectElement).value).toBe("b1");
+    expect((screen.getByLabelText("Calf 1 record") as HTMLSelectElement).value).toBe("calf-2");
+    // And her details come from her own record, not from the URL.
+    expect((screen.getByLabelText("Calf 1 sex") as HTMLSelectElement).value).toBe("female");
+    expect((screen.getByLabelText("Calf 1 ear tag") as HTMLInputElement).value).toBe("3");
+
+    // Ready to save without touching anything.
+    expect((screen.getByRole("button", { name: "Record it" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Record it" }));
+    await waitFor(() => expect(recordCalving).toHaveBeenCalledTimes(1));
+    expect(recordCalving.mock.calls[0][0]).toMatchObject({
+      damId: "cow-1",
+      date: CALVED_ON,
+      breedingEventId: "b1",
+    });
+    expect(recordCalving.mock.calls[0][0].calves[0]).toMatchObject({ animalId: "calf-2", sex: "female" });
+  });
 });

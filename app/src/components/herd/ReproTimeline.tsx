@@ -15,14 +15,14 @@ import {
 import {
   atDay,
   axisDays,
+  fitInWords,
   summarise,
   toSeasons,
-  toYears,
+  untiedCalves,
   whatsNext,
   type Season,
   type Service,
   type TimelineInput,
-  type YearRow,
 } from "../../lib/repro-timeline";
 import type { RealAnimal } from "../../lib/herd";
 import "./repro-timeline.css";
@@ -30,10 +30,9 @@ import "./repro-timeline.css";
 /**
  * Her breeding record, drawn.
  *
- * Two readings of the same events — seasons stacked on one clock, or the
- * calendar years they happened in. Every season row starts the day she
- * calved, which is what makes "day 84" mean the same thing in every row and
- * lets the columns be compared by eye.
+ * Seasons stacked on one clock: every row starts the day she calved, which is
+ * what makes "day 84" mean the same thing in every row and lets the columns
+ * be compared by eye.
  *
  * The assembly is in lib/repro-timeline.ts and is pure. This file turns days
  * into percentages and decides what a marker looks like, which is all it
@@ -47,11 +46,8 @@ type Load =
   | { state: "error"; message: string }
   | { state: "ok"; input: TimelineInput };
 
-type View = "seasons" | "years";
-
 export function ReproTimeline({ animal, herd, farmId }: { animal: RealAnimal; herd: RealAnimal[]; farmId: string }) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
-  const [view, setView] = useState<View>("seasons");
   const [showWait, setShowWait] = useState(true);
 
   const names = useMemo(
@@ -126,40 +122,24 @@ export function ReproTimeline({ animal, herd, farmId }: { animal: RealAnimal; he
 
   const { input } = load;
   const seasons = toSeasons(input);
-  const years = toYears(input);
   const axis = axisDays(seasons);
   const stats = summarise(seasons);
   const open = seasons[seasons.length - 1];
   const outstanding = whatsNext(open, { today: input.today, voluntaryWaitDays: input.voluntaryWaitDays });
+  // Calves on file, out of her, that no calving accounts for. The pedigree
+  // link and the calving link are different things and only the second closes
+  // a season — so without this the page reports her overdue with the calf
+  // standing next to her.
+  const untied = untiedCalves(input, herd);
   const nothingYet = seasons.length === 1 && seasons[0].anchor === "birth";
 
   return (
     <section className="rt">
-      <Head>
-        <div className="rt-views" role="group" aria-label="How to lay the rows out">
-          <button
-            type="button"
-            className={`rt-view${view === "seasons" ? " is-on" : ""}`}
-            aria-pressed={view === "seasons"}
-            onClick={() => setView("seasons")}
-          >
-            Seasons
-          </button>
-          <button
-            type="button"
-            className={`rt-view${view === "years" ? " is-on" : ""}`}
-            aria-pressed={view === "years"}
-            onClick={() => setView("years")}
-          >
-            Calendar years
-          </button>
-        </div>
-      </Head>
+      <Head />
 
       <p className="rt-lede">
-        {view === "seasons"
-          ? "Each row runs from one calving to the next, so the columns compare — day 84 in one row is day 84 in the next."
-          : "The same events on the year they happened, with a pregnancy carrying across the break."}
+        Each row runs from one calving to the next, so the columns compare — day 84 in one row is day 84 in the
+        next.
       </p>
 
       {nothingYet ? (
@@ -171,6 +151,27 @@ export function ReproTimeline({ animal, herd, farmId }: { animal: RealAnimal; he
         <>
           {outstanding && <p className="rt-outstanding">{outstanding}</p>}
 
+          {untied.map((calf) => (
+            <p className="rt-untied" key={calf.animalId}>
+              <strong>{calf.name}</strong> is on file as born {calf.bornOn}, out of her, with no calving recorded.
+              {calf.serviceId ? ` That fits the service she was due from — ${fitInWords(calf.daysOff)}.` : ""}{" "}
+              <Link
+                to={{
+                  pathname: "/calvings",
+                  search: new URLSearchParams({
+                    dam: input.animal.id,
+                    date: calf.bornOn,
+                    calf: calf.animalId,
+                    ...(calf.serviceId ? { service: calf.serviceId } : {}),
+                  }).toString(),
+                }}
+              >
+                Record the calving
+              </Link>{" "}
+              to tie them together — it attaches her rather than creating a second record.
+            </p>
+          ))}
+
           <dl className="rt-stats">
             <Stat label="Calvings" value={stats.calvings || "—"} />
             <Stat label="Services" value={stats.services || "—"} />
@@ -179,13 +180,9 @@ export function ReproTimeline({ animal, herd, farmId }: { animal: RealAnimal; he
             <Stat label="Avg interval" value={stats.averageInterval ? `${stats.averageInterval} d` : "—"} />
           </dl>
 
-          {view === "seasons" ? (
-            <SeasonTable seasons={seasons} axis={axis} input={input} showWait={showWait} />
-          ) : (
-            <YearTable years={years} />
-          )}
+          <SeasonTable seasons={seasons} axis={axis} input={input} showWait={showWait} />
 
-          {view === "seasons" && input.voluntaryWaitDays !== null && (
+          {input.voluntaryWaitDays !== null && (
             <label className="rt-toggle">
               <input type="checkbox" checked={showWait} onChange={(e) => setShowWait(e.target.checked)} />
               Shade the voluntary waiting period ({input.voluntaryWaitDays} days after calving)
@@ -409,104 +406,6 @@ function Marker({ service, axis }: { service: Service; axis: number }) {
       style={{ left: `${atDay(service.day, axis)}%` }}
       title={`${service.date} · ${service.sire} — ${service.checkStory}`}
     />
-  );
-}
-
-// ─── calendar years ────────────────────────────────────────────────────
-
-const YEAR_TICKS = [
-  { label: "Apr", day: 90 },
-  { label: "Jul", day: 181 },
-  { label: "Oct", day: 273 },
-];
-
-function YearTable({ years }: { years: YearRow[] }) {
-  const span = 365;
-  return (
-    <div className="rt-grid">
-      <div className="rt-axis-spacer" />
-      <div className="rt-axis">
-        <span className="mono rt-axis__end rt-axis__start">Jan</span>
-        {YEAR_TICKS.map((t) => (
-          <span key={t.label} className="rt-axis__tick" style={{ left: `${atDay(t.day, span)}%` }}>
-            <span className="mono">{t.label}</span>
-          </span>
-        ))}
-        <span className="mono rt-axis__end rt-axis__finish">Dec<span className="rt-axis__long"> 31</span></span>
-      </div>
-      <div className="rt-axis-label">In the year</div>
-
-      {years.map((row) => (
-        <YearBand key={row.year} row={row} span={span} />
-      ))}
-    </div>
-  );
-}
-
-function YearBand({ row, span }: { row: YearRow; span: number }) {
-  const notes = row.services.map((s) => ({
-    key: s.id,
-    day: s.day,
-    text: `${s.date.slice(5)} · ${s.sire} — ${s.checkStory}`,
-    accent: s.conceived || s.outcome === "pregnant",
-  }));
-
-  return (
-    <>
-      <div className="rt-rowhead">
-        <div className="serif rt-rowhead__title">{row.year}</div>
-        {row.lactationLabel && <div className="mono rt-rowhead__meta">{row.lactationLabel}</div>}
-      </div>
-
-      <div className="rt-track">
-        <div className="rt-lane">
-          {row.carrying.map((c, i) => (
-            <div
-              key={i}
-              className="rt-carry"
-              style={{ left: `${atDay(c.fromDay, span)}%`, width: `${atDay(c.toDay - c.fromDay, span)}%` }}
-            />
-          ))}
-          {row.carrying.some((c) => c.fromPriorYear) && (
-            <span className="mono rt-carry__from">← carrying from last year</span>
-          )}
-          {row.services.map((s) => (
-            <Marker key={s.id} service={s} axis={span} />
-          ))}
-          {row.calvings.map((c) => (
-            <div key={c.calvingId} className="rt-calving" style={{ left: `${atDay(c.day, span)}%` }} aria-hidden="true" />
-          ))}
-        </div>
-
-        <div className="rt-notes" style={{ ["--notes-h" as string]: `${(notes.length + row.calvings.length) * 16 + 4}px` }}>
-          {row.calvings.map((c) => (
-            <div key={c.calvingId} className="rt-note rt-note--calving" style={{ left: `${atDay(c.day, span)}%`, top: 0 }}>
-              <span className="serif rt-note__headline">
-                Calved {c.on.slice(5)} · {c.headline.toLowerCase()}
-              </span>
-              {c.detail && <span className="rt-note__detail">{c.detail}</span>}
-            </div>
-          ))}
-          {notes.map((n, i) => (
-            <div
-              key={n.key}
-              className={`rt-note${n.accent ? " is-accent" : ""}`}
-              style={{ left: `${atDay(n.day, span)}%`, top: `${(row.calvings.length + i) * 16}px` }}
-            >
-              {n.text}
-              {row.carrying.some((c) => c.intoNextYear) && n.accent ? " · carrying into next year →" : ""}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="rt-figures">
-        <div className="mono rt-figures__big">
-          {row.calvings.length} · {row.services.length}
-        </div>
-        <div className="mono rt-figures__sub">calvings · services</div>
-      </div>
-    </>
   );
 }
 

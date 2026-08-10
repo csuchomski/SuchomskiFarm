@@ -184,6 +184,32 @@ Four items were reviewed and are no longer open.
 
 ## Closed 2026-08-10
 
+- **Edit a sire** — Herd → Sires has an "edit" beside "change breeds" on each
+  bull: name, tag, registration, birth date, purpose and notes. The form is
+  read fresh from his row rather than filled from the list, because
+  `registration_number` is not among the columns `fetchAnimals` selects — a
+  form built from the list would show it blank and write that blank back over
+  a real number.
+
+  Purpose is editable here and nowhere else for a reference bull:
+  `createReferenceSire` hard-codes `'dairy'` because the column is NOT NULL
+  and this herd buys dairy semen. That is a default, not a fact about him, and
+  it is the gestation fallback for any calf of his with no breeds on file.
+
+  Sex, class and `record_type` are deliberately not editable. Turning a
+  catalogue bull into a resident one would put him in the herd's counts — a
+  different decision from fixing a typo, and not one to make by accident.
+
+- **A breed whose species disagrees with the animal** — the breed editor now
+  says so. Found because both "Sunnybrook" AI bulls, recorded as dairy, are on
+  file as 100% Belted Galloway, a beef breed, and nothing had said a word.
+  Those breeds feed every calf's inherited composition and every due date
+  computed from it.
+
+  It is a note, not a refusal: a Jersey run as a beef cow is real, and so is a
+  terminal beef sire over a dairy herd. Ochre rather than red, and saving is
+  still allowed.
+
 - **Breedings is Animals → season → services** — the page was one flat list of
   every service on the farm, which answers "what did we do lately" and nothing
   about any one cow. It is now a cow per row with where she is in her cycle,

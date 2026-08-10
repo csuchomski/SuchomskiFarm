@@ -11,6 +11,7 @@ import {
   type GeneticCondition,
   type Inheritance,
   type MarkerGenotype,
+  speciesMismatch,
 } from "./genetics";
 
 const cond = (id: string, code: string, inheritance: Inheritance = "recessive"): GeneticCondition => ({
@@ -258,5 +259,55 @@ describe("genotypeLabel", () => {
 
   it("leaves a genotype that already reads well alone", () => {
     expect(genotypeLabel("BETA_CASEIN", "A2A2")).toBe("A2A2");
+  });
+});
+
+describe("speciesMismatch", () => {
+  const breeds = [
+    { id: "je", code: "JE", name: "Jersey", species_type: "dairy" },
+    { id: "bs", code: "BS", name: "Brown Swiss", species_type: "dairy" },
+    { id: "bg", code: "BG", name: "Belted Galloway", species_type: "beef" },
+    { id: "an", code: "AN", name: "Angus", species_type: "beef" },
+  ];
+
+  it("catches the real one: a beef breed on a bull recorded as dairy", () => {
+    // Two AI bulls named "Sunnybrook", both dairy, were saved as 100% Belted
+    // Galloway and nothing said a word.
+    expect(speciesMismatch([{ breedId: "bg", percent: 100 }], breeds, "dairy")).toMatch(
+      /Belted Galloway is a beef breed, and this animal is recorded as dairy/,
+    );
+  });
+
+  it("says nothing when they agree", () => {
+    expect(speciesMismatch([{ breedId: "je", percent: 100 }], breeds, "dairy")).toBeNull();
+    expect(speciesMismatch([{ breedId: "bg", percent: 100 }], breeds, "beef")).toBeNull();
+  });
+
+  it("names every odd breed once, not once per row", () => {
+    const msg = speciesMismatch(
+      [
+        { breedId: "bg", percent: 50 },
+        { breedId: "an", percent: 50 },
+      ],
+      breeds,
+      "dairy",
+    )!;
+    expect(msg).toContain("Belted Galloway and Angus are beef breeds");
+  });
+
+  it("is a second look, not a refusal", () => {
+    // A Jersey run as a beef cow is a real thing, and so is a terminal beef
+    // sire over a dairy herd. The wording has to leave room for both.
+    expect(speciesMismatch([{ breedId: "je", percent: 100 }], breeds, "beef")).toMatch(/That can be right/);
+  });
+
+  it("has nothing to say about a dual-purpose animal", () => {
+    // Dual is exactly the case where either breed is unremarkable.
+    expect(speciesMismatch([{ breedId: "bg", percent: 100 }], breeds, "dual")).toBeNull();
+  });
+
+  it("ignores a breed it doesn't know and an empty row", () => {
+    expect(speciesMismatch([{ breedId: "", percent: 100 }], breeds, "dairy")).toBeNull();
+    expect(speciesMismatch([{ breedId: "nope", percent: 100 }], breeds, "dairy")).toBeNull();
   });
 });

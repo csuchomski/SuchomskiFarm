@@ -227,6 +227,7 @@ export default function AnimalRecord() {
                 animalId={animal.id}
                 farmId={farmId}
                 current={breeds.map((b) => ({ breedId: b.breedId, percent: b.percent }))}
+                purpose={animal.purpose}
                 onCancel={() => setEditingBreeds(false)}
                 onSaved={() => {
                   setEditingBreeds(false);

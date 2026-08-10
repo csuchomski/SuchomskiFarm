@@ -311,6 +311,14 @@ export interface SireDraft {
   registrationNumber: string;
   birthDate: string;
   notes: string;
+  /**
+   * dairy | beef | dual. Only asked for when editing; a new AI bull defaults
+   * to dairy, which is what this herd buys. It matters because it is the
+   * gestation fallback for any calf of his whose breeds aren't on file, and
+   * because a beef bull recorded as dairy reads as a mistake to anyone
+   * scanning the list.
+   */
+  purpose?: string;
 }
 
 export function validateSire(draft: SireDraft, todayIso: string): string | null {
@@ -353,6 +361,71 @@ export async function createReferenceSire(farmId: string, draft: SireDraft): Pro
 
   if (error) throw new Error(error.message);
   return data as RealAnimal;
+}
+
+/**
+ * Correct a bull's details.
+ *
+ * Only the columns a person could get wrong when adding him — never sex,
+ * class or record_type. Turning a reference bull into a resident one is a
+ * different decision with different consequences (he'd start appearing in
+ * herd counts), and it is not this form's job to make it by accident.
+ */
+export const SIRE_PURPOSES = ["dairy", "beef", "dual"] as const;
+
+export async function updateSire(id: string, draft: SireDraft): Promise<RealAnimal> {
+  const { data, error } = await herdSchema()
+    .from("animals")
+    .update({
+      barn_name: draft.barnName.trim(),
+      ear_tag: draft.earTag.trim(),
+      registration_number: draft.registrationNumber.trim(),
+      birth_date: draft.birthDate,
+      notes: draft.notes.trim(),
+      ...(draft.purpose ? { purpose: draft.purpose } : {}),
+    })
+    .eq("id", id)
+    .select(
+      "id, ear_tag, barn_name, sex, class, status, birth_date, sire_id, dam_id, notes, purpose, origin, record_type",
+    )
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as RealAnimal;
+}
+
+/**
+ * His details, in the shape the form edits.
+ *
+ * Read fresh rather than built from the list, because `registration_number`
+ * is not among the columns fetchAnimals selects — a form filled from the list
+ * would show it blank and then write that blank back over a real number.
+ */
+export async function fetchSireDraft(id: string): Promise<SireDraft> {
+  const { data, error } = await herdSchema()
+    .from("animals")
+    .select("barn_name, ear_tag, registration_number, birth_date, notes, purpose")
+    .eq("id", id)
+    .single();
+  if (error) throw new Error(error.message);
+
+  const a = data as {
+    barn_name: string | null;
+    ear_tag: string | null;
+    registration_number: string | null;
+    birth_date: string;
+    notes: string | null;
+    purpose: string;
+  };
+  return {
+    barnName: a.barn_name ?? "",
+    earTag: a.ear_tag ?? "",
+    naabCode: "",
+    registrationNumber: a.registration_number ?? "",
+    birthDate: a.birth_date,
+    notes: a.notes ?? "",
+    purpose: a.purpose,
+  };
 }
 
 /** Every animal that could be a sire: males, whether they live here or are

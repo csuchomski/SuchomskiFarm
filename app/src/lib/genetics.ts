@@ -285,6 +285,38 @@ export interface BreedEntry {
  * The database only checks each row is in (0, 100]; the total is this
  * app's rule, so it's enforced here where it can be explained.
  */
+/**
+ * A breed whose species disagrees with the animal's purpose.
+ *
+ * Not an error — a Jersey run as a beef cow is a real thing, and so is a
+ * beef bull bought for a dairy herd's terminal cross. But two AI bulls named
+ * "Sunnybrook", recorded as dairy, were saved as 100% Belted Galloway and
+ * nothing said a word; the breeds then feed every calf's inherited
+ * composition and every due date computed from it. A sentence at the point
+ * of entry is the cheapest place to catch a slip of the mouse.
+ *
+ * Null when there's nothing to say.
+ */
+export function speciesMismatch(
+  entries: BreedEntry[],
+  breeds: Breed[],
+  purpose: string,
+): string | null {
+  if (purpose !== "dairy" && purpose !== "beef") return null;
+  const byId = new Map(breeds.map((b) => [b.id, b]));
+  const odd = entries
+    .filter((e) => e.breedId !== "")
+    .map((e) => byId.get(e.breedId))
+    .filter((b): b is Breed => b !== undefined && (b.species_type === "dairy" || b.species_type === "beef"))
+    .filter((b) => b.species_type !== purpose);
+
+  if (odd.length === 0) return null;
+  const names = [...new Set(odd.map((b) => b.name))];
+  return `${names.join(" and ")} ${names.length === 1 ? "is a" : "are"} ${odd[0].species_type} breed${
+    names.length === 1 ? "" : "s"
+  }, and this animal is recorded as ${purpose}. That can be right — say so by saving — but it is worth a second look.`;
+}
+
 export function validateComposition(entries: BreedEntry[]): string | null {
   const kept = entries.filter((e) => e.breedId !== "");
   if (kept.length === 0) return null; // clearing composition entirely is allowed

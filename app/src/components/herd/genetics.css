@@ -118,3 +118,15 @@
     display: none;
   }
 }
+
+/* A breed whose species disagrees with the animal's purpose. Ochre, not red:
+   it is a second look, not a refusal — a Jersey run as a beef cow is real,
+   and so is a terminal beef sire over a dairy herd. */
+.gene-mismatch {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ochre);
+  border-left: 2px solid var(--ochre);
+  padding: 6px 10px;
+  margin-top: 8px;
+}

@@ -77,6 +77,7 @@ vi.mock("../lib/breedings", async (importOriginal) => ({
 
 type CheckInput = Parameters<typeof import("../lib/repro").recordCheck>[0];
 const recordCheck = vi.fn(async (_i: CheckInput) => "check-1");
+const recordCalving = vi.fn(async (_i: unknown) => "calving-1");
 
 // One standing service already checked in calf, so the row shows a result.
 const checks = [
@@ -88,6 +89,10 @@ const checks = [
 vi.mock("../lib/repro", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/repro")>()),
   fetchPregnancyChecks: vi.fn(async () => checks),
+  fetchCalvings: vi.fn(async () => []),
+  fetchCalfOutcomes: vi.fn(async () => []),
+  fetchVoluntaryWaitDays: vi.fn(async () => 60),
+  recordCalving: (i: unknown) => recordCalving(i),
   // The species fallback, for an animal with no breed on file.
   fetchGestationDays: vi.fn(async () => ({ beef: 283, dairy: 279 })),
   recordCheck: (i: CheckInput) => recordCheck(i),
@@ -110,14 +115,24 @@ vi.mock("../lib/gestation", async (importOriginal) => ({
   fetchOverrides: vi.fn(async () => []),
 }));
 
+vi.mock("../lib/lactations", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/lactations")>()),
+  fetchLactations: vi.fn(async () => []),
+}));
+
 afterEach(() => {
   cleanup();
   recordBreeding.mockClear();
   voidBreeding.mockClear();
   recordCheck.mockClear();
+  recordCalving.mockClear();
 });
 
-const mount = async () => {
+/**
+ * The list is now Animals -> seasons -> services, so a cow has to be opened
+ * before her services are on the page at all. `open` is the barn name.
+ */
+const mount = async (open?: string) => {
   const { default: Breedings } = await import("./Breedings");
   render(
     <MemoryRouter>
@@ -125,6 +140,10 @@ const mount = async () => {
     </MemoryRouter>,
   );
   await screen.findByText("Recorded");
+  if (open) {
+    const head = (await screen.findByText(open)).closest("button")!;
+    fireEvent.click(head);
+  }
 };
 
 const options = (label: string) =>
@@ -132,16 +151,22 @@ const options = (label: string) =>
 
 describe("Breedings", () => {
   it("shows what each breeding used and what it cost", async () => {
-    await mount();
-    const rows = [...document.querySelectorAll(".grid-row--body")];
-
+    // The cow's name is the heading now, so a service row carries the sire
+    // and not her — and only the open cow's services are on the page.
+    await mount("Martha");
+    const ai = [...document.querySelectorAll(".grid-row--body")].find((r) =>
+      r.textContent?.includes("2026-08-01"),
+    )!;
     // The live lot carries no NAAB code, so the bull's name stands in.
-    const ai = rows.find((r) => r.textContent?.includes("Martha"))!;
     expect(ai.textContent).toContain("AI · Dutton");
     expect(ai.textContent).toContain("Chris");
     expect(ai.textContent).toContain("$20.00");
 
-    const natural = rows.find((r) => r.textContent?.includes("Abigail"))!;
+    cleanup();
+    await mount("Abigail");
+    const natural = [...document.querySelectorAll(".grid-row--body")].find((r) =>
+      r.textContent?.includes("2026-07-20"),
+    )!;
     expect(natural.textContent).toContain("Bull · Dutton");
     // No straw and no cost on a natural service.
     expect(natural.textContent).not.toContain("$");
@@ -219,7 +244,7 @@ describe("Breedings", () => {
   });
 
   it("says the straw is coming back before voiding one", async () => {
-    await mount();
+    await mount("Martha");
     const rows = [...document.querySelectorAll(".grid-row--body")];
     const ai = rows.find((r) => r.textContent?.includes("Martha"))!;
     fireEvent.click([...ai.querySelectorAll("button")].find((b) => b.textContent === "void")!);
@@ -233,7 +258,7 @@ describe("Breedings", () => {
   });
 
   it("doesn't promise a straw back on a natural service", async () => {
-    await mount();
+    await mount("Abigail");
     const rows = [...document.querySelectorAll(".grid-row--body")];
     const natural = rows.find((r) => r.textContent?.includes("Abigail"))!;
     fireEvent.click([...natural.querySelectorAll("button")].find((b) => b.textContent === "void")!);
@@ -245,20 +270,20 @@ describe("Breedings", () => {
 
 describe("Pregnancy checks on a breeding", () => {
   it("shows the latest result and how many days bred she was", async () => {
-    await mount();
+    await mount("Martha");
     const row = [...document.querySelectorAll(".grid-row--body")].find((r) => r.textContent?.includes("Martha"))!;
     expect(row.textContent).toContain("pregnant");
     expect(row.textContent).toContain("4d · palpation");
   });
 
   it("says so when a breeding hasn't been checked", async () => {
-    await mount();
+    await mount("Abigail");
     const row = [...document.querySelectorAll(".grid-row--body")].find((r) => r.textContent?.includes("Abigail"))!;
     expect(row.textContent).toContain("not yet");
   });
 
   it("counts the due date from her breed's gestation, and says which breed", async () => {
-    await mount();
+    await mount("Martha");
     // Martha is a Belted Galloway, bred 2026-08-01: 283 days.
     const row = [...document.querySelectorAll(".grid-row--body")].find((r) => r.textContent?.includes("Martha"))!;
     expect(row.textContent).toContain("2027-05-11");
@@ -266,7 +291,7 @@ describe("Pregnancy checks on a breeding", () => {
   });
 
   it("records a check against the breeding it was opened from", async () => {
-    await mount();
+    await mount("Martha");
     const row = [...document.querySelectorAll(".grid-row--body")].find((r) => r.textContent?.includes("Martha"))!;
     fireEvent.click([...row.querySelectorAll("button")].find((b) => b.textContent === "check")!);
 
@@ -286,7 +311,7 @@ describe("Pregnancy checks on a breeding", () => {
   });
 
   it("won't accept a check dated before she was bred", async () => {
-    await mount();
+    await mount("Martha");
     const row = [...document.querySelectorAll(".grid-row--body")].find((r) => r.textContent?.includes("Martha"))!;
     fireEvent.click([...row.querySelectorAll("button")].find((b) => b.textContent === "check")!);
 
@@ -295,11 +320,80 @@ describe("Pregnancy checks on a breeding", () => {
     expect((screen.getByRole("button", { name: "Record it" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("opens the cow's own record from her name", async () => {
+  it("lists animals, and opens one to its seasons and services", async () => {
     await mount();
-    // The list is the whole herd's services; her record draws hers as a
-    // timeline. Nothing joined the two before.
-    const link = screen.getAllByRole("link", { name: "Martha" })[0] as HTMLAnchorElement;
-    expect(link.getAttribute("href")).toBe("/animals/1");
+    // Collapsed: a cow per row, with where she is in her cycle. No services
+    // on the page at all until one is opened.
+    expect(screen.getByText("Martha")).toBeTruthy();
+    expect(screen.getByText("Abigail")).toBeTruthy();
+    expect(screen.queryByText("2026-08-01")).toBeNull();
+
+    fireEvent.click(screen.getByText("Martha").closest("button")!);
+    // Her season, then the service inside it. Scoped to the season headings —
+    // the drawn timeline names her seasons too, which is the point of it.
+    expect(document.querySelector(".brd-season__head")!.textContent).toContain("First season");
+    expect(screen.getByText("2026-08-01")).toBeTruthy();
+    // And the drawn record, which used to live on her animal page.
+    expect(screen.getByText("Her record, row by row")).toBeTruthy();
+
+    // Abigail's service stays hidden — one cow at a time.
+    expect(screen.queryByText("2026-07-20")).toBeNull();
+  });
+
+  it("says where each cow is in her cycle without opening her", async () => {
+    await mount();
+    // Martha was checked pregnant on b1, so she is carrying.
+    const martha = screen.getByText("Martha").closest("button")!;
+    expect(martha.textContent).toContain("carrying");
+    expect(martha.textContent).toContain("1 service");
+  });
+
+  it("only offers to record a calving when the check says pregnant", async () => {
+    await mount("Martha");
+    fireEvent.click(screen.getAllByRole("button", { name: "check" })[0]);
+    // Pregnant is the default result.
+    expect(screen.getByLabelText("She has since calved from this service")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Check result"), { target: { value: "open" } });
+    // The other three results say she isn't in calf, so there is no calf.
+    expect(screen.queryByLabelText("She has since calved from this service")).toBeNull();
+  });
+
+  it("records the check and the calving together, tied to that service", async () => {
+    await mount("Martha");
+    fireEvent.click(screen.getAllByRole("button", { name: "check" })[0]);
+    fireEvent.change(screen.getByLabelText("Check date"), { target: { value: "2026-09-05" } });
+    fireEvent.click(screen.getByLabelText("She has since calved from this service"));
+
+    // The due date is offered as the calving date — 2026-08-01 + 283.
+    expect((screen.getByLabelText("Calving date") as HTMLInputElement).value).toBe("2027-05-11");
+    fireEvent.change(screen.getByLabelText("Calf sex"), { target: { value: "female" } });
+    fireEvent.change(screen.getByLabelText("Calf ear tag"), { target: { value: "77" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Record it" }));
+    await waitFor(() => expect(recordCalving).toHaveBeenCalledTimes(1));
+
+    expect(recordCheck).toHaveBeenCalledTimes(1);
+    expect(recordCheck.mock.calls[0][0]).toMatchObject({ result: "pregnant", breedingEventId: "b1" });
+    // The calving names the same service, so the calf gets that sire — and
+    // through the sire, the breeds it inherits.
+    expect(recordCalving.mock.calls[0][0]).toMatchObject({
+      damId: "cow-1",
+      date: "2027-05-11",
+      breedingEventId: "b1",
+    });
+    expect((recordCalving.mock.calls[0][0] as { calves: { sex: string; earTag: string }[] }).calves[0]).toMatchObject({
+      sex: "female",
+      earTag: "77",
+    });
+  });
+
+  it("won't save a calving it knows the database will refuse", async () => {
+    await mount("Martha");
+    fireEvent.click(screen.getAllByRole("button", { name: "check" })[0]);
+    fireEvent.click(screen.getByLabelText("She has since calved from this service"));
+    // A live calf has no record without a sex, and the sex starts unset.
+    expect(screen.getByText(/needs a sex/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Record it" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

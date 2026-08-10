@@ -8,7 +8,6 @@ import { Pedigree } from "../components/herd/Pedigree";
 import { OffspringEditor } from "../components/herd/OffspringEditor";
 import { GeneticsSection } from "../components/herd/GeneticsSection";
 import { BreedEditor } from "../components/herd/BreedEditor";
-import { ReproTimeline } from "../components/herd/ReproTimeline";
 import {
   describeBreeding,
   fetchAnimalByTag,
@@ -209,16 +208,6 @@ export default function AnimalRecord() {
         </div>
       )}
 
-      {/* Full width, above the two columns. A timeline needs the whole page
-          — dropped into the left column it would be a 400-day axis in 600px,
-          which is the one width at which it says nothing. Females only: a
-          bull's services are on the cows he served, not on him. */}
-      {animal.sex === "female" && farmId && (
-        <div className="record-repro">
-          <ReproTimeline animal={animal} herd={herd} farmId={farmId} />
-        </div>
-      )}
-
       <div className="record-body">
         <div>
           <div className="section__head" style={{ marginBottom: 12 }}>
@@ -246,6 +235,14 @@ export default function AnimalRecord() {
               />
             </div>
           )}
+
+          {/* The drawn record moved to Breedings, where it sits under her
+              name among the services it's drawn from. A link rather than
+              nothing, because it used to be here and this is where you'd
+              look. */}
+          <p style={{ fontSize: 13, color: "var(--ink-muted)", marginBottom: 16 }}>
+            Her services, seasons and due dates are on <Link to="/breedings">Breedings</Link>.
+          </p>
 
           {breeds.length > 0 ? (
             <div style={{ marginBottom: 24 }}>

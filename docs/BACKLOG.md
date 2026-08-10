@@ -184,6 +184,26 @@ Four items were reviewed and are no longer open.
 
 ## Closed 2026-08-10
 
+- **Breedings is Animals → season → services** — the page was one flat list of
+  every service on the farm, which answers "what did we do lately" and nothing
+  about any one cow. It is now a cow per row with where she is in her cycle,
+  opening to her drawn record and then her seasons, each holding the services
+  that were trying for the same calf.
+
+  The drawn timeline moved here from the animal record, where it was a click
+  away from all of this. `ReproTimeline` is presentational now — it used to
+  fetch its own ten tables, which was right alone on an animal's page and
+  wrong the moment this page wanted one per cow.
+
+- **A pregnant check can record the calving with it** — tick "she has since
+  calved from this service" and name the calf, either new or already on file.
+  Only on a pregnant result, because the other three say she isn't in calf.
+
+  It is deliberately two writes rather than one function. A check is a fact
+  and a calving is a fact, and either is worth keeping without the other —
+  unlike the halves of an AI service, which are meaningless apart. If the
+  calving fails the message says the check landed, so the retry is obvious.
+
 - **Recording a calving that predates a lactation already on file** — the
   error was `lactations_dry_after_fresh`, reported while tying Vera's 2024
   birth to Patience, whose only lactation freshened in 2026. Migration 032.

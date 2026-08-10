@@ -17,7 +17,10 @@
 
 .sire-row {
   display: grid;
-  grid-template-columns: 60px 1fr 120px 100px;
+  /* Breeds got a track of their own between the name and the straw count.
+     minmax(0, …) on both flexible tracks, or a long cross ("50% Belted
+     Galloway, 50% Charolais") refuses to shrink and pushes the row wide. */
+  grid-template-columns: 60px minmax(0, 1fr) minmax(0, 1fr) 120px 100px;
   gap: 12px;
   align-items: center;
   padding: 12px 8px;
@@ -27,6 +30,12 @@
 
 .sire-row:hover {
   background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+
+/* A bull with no breeds stops every calf he sires inheriting any. Tinted
+   rather than coloured — it's something to fill in, not something wrong. */
+.sire-row--needs-breeds {
+  background: var(--paper-tint);
 }
 
 .sire-row__straws {
@@ -49,8 +58,28 @@
 }
 
 @media (max-width: 640px) {
+  /* Three columns and four visible cells, so the breeds are placed
+     explicitly on a second line rather than left to wrap into an 84px
+     column — "50% Belted Galloway, 50% Charolais" needs the width, and
+     without this the row grew to 198px of wrapped text at 320px. */
   .sire-row {
-    grid-template-columns: 44px 1fr 84px;
+    grid-template-columns: 44px minmax(0, 1fr) 84px;
+    row-gap: 4px;
+  }
+
+  .sire-row__name {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .sire-row__straws {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .sire-row__breeds {
+    grid-column: 2 / -1;
+    grid-row: 2;
   }
 
   .sire-form__fields {

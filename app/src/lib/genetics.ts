@@ -313,23 +313,29 @@ export function validateComposition(entries: BreedEntry[]): string | null {
  * same row" means when a breed's share changes, and getting that wrong
  * leaves a stale row that silently inflates the total.
  */
-export async function saveComposition(farmId: string, animalId: string, entries: BreedEntry[]): Promise<void> {
+/**
+ * Replace an animal's breed composition.
+ *
+ * This used to soft-delete the old rows and then insert the new ones as two
+ * separate requests, which is one failed insert away from an animal with no
+ * breeds at all — and the second request is the one that can fail, because
+ * it's the one carrying the new data. herd.set_breed_composition does both
+ * in a single transaction and applies the total-100 rule on its own side
+ * too. See docs/migrations/030.
+ *
+ * farmId is no longer needed — the function takes the farm from the animal —
+ * but it stays in the signature so callers don't all have to change, and
+ * because passing it is a useful assertion that the caller knows which farm
+ * it is editing.
+ */
+export async function saveComposition(_farmId: string, animalId: string, entries: BreedEntry[]): Promise<void> {
   const problem = validateComposition(entries);
   if (problem) throw new Error(problem);
 
-  const clear = await herdSchema()
-    .from("breed_composition")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("animal_id", animalId)
-    .is("deleted_at", null);
-  if (clear.error) throw new Error(clear.error.message);
-
-  const kept = entries.filter((e) => e.breedId !== "");
-  if (kept.length === 0) return;
-
-  const { error } = await herdSchema()
-    .from("breed_composition")
-    .insert(kept.map((e) => ({ farm_id: farmId, animal_id: animalId, breed_id: e.breedId, percent: e.percent })));
+  const { error } = await herdSchema().rpc("set_breed_composition", {
+    p_animal_id: animalId,
+    p_shares: entries.filter((e) => e.breedId !== "").map((e) => ({ breed_id: e.breedId, percent: e.percent })),
+  });
   if (error) throw new Error(error.message);
 }
 

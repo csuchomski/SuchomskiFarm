@@ -28,23 +28,25 @@ vi.mock("../lib/auth", () => ({
   signOut: vi.fn(),
 }));
 
+// Patience served twice, three weeks apart. At 280 days the first service is
+// due exactly on CALVED_ON and the second is three weeks past it, so the
+// first is the one that made the calf even though it isn't the latest.
+const CALVED_ON = "2026-10-08";
+
 const animals = [
   { id: "cow-1", ear_tag: "0", barn_name: "Patience", sex: "female", class: "cow", status: "active", record_type: "herd", purpose: "dairy" },
   { id: "cow-2", ear_tag: "1", barn_name: "Martha", sex: "female", class: "cow", status: "active", record_type: "herd", purpose: "beef" },
   { id: "calf-1", ear_tag: "99", barn_name: "Bess", sex: "female", class: "calf", status: "active", record_type: "herd", purpose: "dairy" },
   { id: "bull-1", ear_tag: "", barn_name: "Dutton", sex: "male", class: "bull", status: "active", record_type: "reference", purpose: "dairy" },
   { id: "bull-2", ear_tag: "", barn_name: "Rip", sex: "male", class: "bull", status: "active", record_type: "reference", purpose: "beef" },
+  // Entered as an animal before the calving was — Abigail's real position.
+  { id: "calf-2", ear_tag: "3", barn_name: "Abigail", sex: "female", class: "heifer", status: "active", record_type: "herd", purpose: "beef", birth_date: CALVED_ON },
 ];
 
 vi.mock("../lib/herd", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/herd")>()),
   fetchAnimals: vi.fn(async () => animals),
 }));
-
-// Patience served twice, three weeks apart. At 280 days the first service is
-// due exactly on CALVED_ON and the second is three weeks past it, so the
-// first is the one that made the calf even though it isn't the latest.
-const CALVED_ON = "2026-10-08";
 
 const breedings = [
   { id: "b1", animal_id: "cow-1", date: "2026-01-01", service_number: 1, method: "natural", technician: "",
@@ -235,5 +237,63 @@ describe("Calvings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Record it" }));
     await waitFor(() => expect(recordCalving).toHaveBeenCalledTimes(1));
     expect(recordCalving.mock.calls[0][0].breedingEventId).toBeNull();
+  });
+
+  it("offers a calf already on file, once the date matches hers", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Record a calving" }));
+    fireEvent.change(screen.getByLabelText("Dam"), { target: { value: "cow-1" } });
+
+    // Nothing on file was born today, so there is nothing to attach.
+    expect(screen.queryByLabelText("Calf 1 record")).toBeNull();
+
+    // Abigail is on file as born on the calving date — the only pairing the
+    // database will accept, so the only one offered.
+    fireEvent.change(screen.getByLabelText("Calving date"), { target: { value: CALVED_ON } });
+    const picker = screen.getByLabelText("Calf 1 record") as HTMLSelectElement;
+    expect(picker.value).toBe("");
+    expect(picker.textContent).toContain("Abigail — already on file");
+    // Bess was born on another date and is already in a calving; neither
+    // belongs in this list.
+    expect(picker.textContent).not.toContain("Bess");
+  });
+
+  it("takes her details from her own record rather than asking again", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Record a calving" }));
+    fireEvent.change(screen.getByLabelText("Dam"), { target: { value: "cow-1" } });
+    fireEvent.change(screen.getByLabelText("Calving date"), { target: { value: CALVED_ON } });
+    fireEvent.change(screen.getByLabelText("Calf 1 record"), { target: { value: "calf-2" } });
+
+    // Filled in from her record, and locked — the database refuses any value
+    // that contradicts it, so typing one here could only produce an error.
+    expect((screen.getByLabelText("Calf 1 sex") as HTMLSelectElement).value).toBe("female");
+    expect((screen.getByLabelText("Calf 1 ear tag") as HTMLInputElement).value).toBe("3");
+    expect((screen.getByLabelText("Calf 1 sex") as HTMLSelectElement).disabled).toBe(true);
+    expect((screen.getByLabelText("Calf 1 ear tag") as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByText(/nothing new is created/)).toBeTruthy();
+  });
+
+  it("sends the animal to attach instead of a new one", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Record a calving" }));
+    fireEvent.change(screen.getByLabelText("Dam"), { target: { value: "cow-1" } });
+    fireEvent.change(screen.getByLabelText("Calving date"), { target: { value: CALVED_ON } });
+    fireEvent.change(screen.getByLabelText("Calf 1 record"), { target: { value: "calf-2" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Record it" }));
+    await waitFor(() => expect(recordCalving).toHaveBeenCalledTimes(1));
+    expect(recordCalving.mock.calls[0][0].calves[0]).toMatchObject({ animalId: "calf-2", sex: "female" });
+  });
+
+  it("won't let a stillborn calf be an animal already on file", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Record a calving" }));
+    fireEvent.change(screen.getByLabelText("Dam"), { target: { value: "cow-1" } });
+    fireEvent.change(screen.getByLabelText("Calving date"), { target: { value: CALVED_ON } });
+    fireEvent.change(screen.getByLabelText("Calf 1 record"), { target: { value: "calf-2" } });
+    // Only a live calf has an animal record at all.
+    fireEvent.change(screen.getByLabelText("Calf 1 outcome"), { target: { value: "stillborn" } });
+    expect((screen.getByLabelText("Calf 1 record") as HTMLSelectElement).disabled).toBe(true);
   });
 });

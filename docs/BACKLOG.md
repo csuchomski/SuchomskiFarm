@@ -161,6 +161,37 @@ Four items were reviewed and are no longer open.
 
 ## Closed 2026-08-10
 
+- **A calving can adopt a calf already on file** — the calf row on Herd →
+  Calvings offers any animal recorded as born on the calving date and not
+  already attached to one. Picking her attaches her instead of creating a
+  second record of the same animal, and her sex, tag and name come from her
+  own record rather than being asked for again.
+
+  Found by asking why Abigail wasn't tied to Martha's breeding cycle. She was
+  — by `animals.dam_id`, the pedigree link. What she had never had is a
+  *calving*, and `herd.calvings` was empty farm-wide, because she was entered
+  on 2026-08-04 and Calvings didn't exist until migration 028 on the 8th. The
+  timeline reads calving → `breeding_event_id` → service, so Martha's first
+  season never closed and her page still said she was overdue with the calf
+  standing next to her. Migration 031.
+
+  Every animal entered before 2026-08-08 is in the same position. The form
+  now fixes them one calving at a time.
+
+- **A sire's breeds, on the Sires page** — each bull shows his composition
+  and can have it set there. He had nowhere else: reference bulls are kept
+  out of the Animals list on purpose, so they have no record page to open,
+  and one of them has no ear tag to route to even if they did. A bull with no
+  composition leaves every calf he sires with none, since inheritance needs
+  both parents — so this is the field that decides whether the herd's
+  genetics carry forward at all. Rows for bulls with nothing on file are
+  tinted.
+
+  `saveComposition` now calls `herd.set_breed_composition` instead of
+  soft-deleting the old rows and inserting the new ones as two separate
+  requests — the second is the one carrying the data and the one that can
+  fail, which left an animal with no breeds at all.
+
 - **Beef and dairy kept apart** — Animals filters to one side or the other and
   says how the herd divides; each row and each animal's identity line carries
   her purpose. Lactations is dairy-only: a beef cow is no longer counted as a

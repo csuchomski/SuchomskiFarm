@@ -125,6 +125,16 @@ describe("validateCalving", () => {
     expect(validateCalving({ ...base, calves: [] })).toMatch(/even a stillborn one/);
   });
 
+  it("won't let a stillborn calf name an animal already on file", () => {
+    // Only a live calf gets an animal record, so only a live calf can be one.
+    // The database refuses the same pairing; this is so it's a sentence
+    // rather than a plpgsql exception.
+    expect(validateCalving({ ...base, calves: [{ ...live, animalId: "a1" }] })).toBeNull();
+    expect(
+      validateCalving({ ...base, calves: [{ ...emptyCalf(), outcome: "stillborn", sex: "male", animalId: "a1" }] }),
+    ).toMatch(/Only a live calf can be an animal already on file/);
+  });
+
   it("refuses a birth weight that isn't a positive number", () => {
     expect(validateCalving({ ...base, calves: [{ ...live, birthWeight: "heavy" }] })).toMatch(/has to be a number/);
     expect(validateCalving({ ...base, calves: [{ ...live, birthWeight: "0" }] })).toMatch(/above zero/);

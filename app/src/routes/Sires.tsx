@@ -14,7 +14,10 @@ import {
   inventoryValueCents,
   lotStatus,
   setLotActive,
+  fetchSireDraft,
   sireName,
+  SIRE_PURPOSES,
+  updateSire,
   siresIn,
   stockBySire,
   tankLocation,
@@ -102,6 +105,10 @@ export default function Sires() {
   // he sires with none, because inheritance needs both parents — so this is
   // the field that decides whether the herd's genetics carry forward at all.
   const [composing, setComposing] = useState<string | null>(null);
+  // Editing a bull's own details. Held separately from the "new sire" draft
+  // so opening one doesn't wipe a half-typed new bull.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<SireDraft | null>(null);
 
   const refresh = useCallback(async () => {
     if (!farmId) {
@@ -444,6 +451,30 @@ export default function Sires() {
                         >
                           {composing === a.id ? "cancel" : mine.length === 0 ? "set breeds" : "change"}
                         </button>
+                        {" · "}
+                        <button
+                          type="button"
+                          className="link-button mono"
+                          onClick={() => {
+                            if (editingId === a.id) {
+                              setEditingId(null);
+                              setEditDraft(null);
+                              return;
+                            }
+                            setComposing(null);
+                            setEditingId(a.id);
+                            setEditDraft(null);
+                            setError(null);
+                            // Read fresh: the list doesn't carry his
+                            // registration number, and a blank field here
+                            // would write a blank over it.
+                            void fetchSireDraft(a.id)
+                              .then(setEditDraft)
+                              .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+                          }}
+                        >
+                          {editingId === a.id ? "cancel" : "edit"}
+                        </button>
                       </span>
                       <span className="mono sire-row__straws">
                         {s ? `${s.straws} straw${s.straws === 1 ? "" : "s"}` : "no semen"}
@@ -453,12 +484,121 @@ export default function Sires() {
                       </span>
                     </div>
 
+                    {editingId === a.id && (
+                      <div className="sire-form" style={{ margin: "12px 0" }}>
+                        <div className="eyebrow" style={{ marginBottom: 8 }}>
+                          Editing {sireName(a)}
+                        </div>
+                        {editDraft === null ? (
+                          <p style={{ fontSize: 13, color: "var(--ink-muted)" }}>Reading his record…</p>
+                        ) : (
+                          <>
+                            <div className="sire-form__fields">
+                              <Field
+                                label="Name"
+                                value={editDraft.barnName}
+                                onChange={(v) => setEditDraft({ ...editDraft, barnName: v })}
+                              />
+                              <Field
+                                label="Tag or code"
+                                value={editDraft.earTag}
+                                onChange={(v) => setEditDraft({ ...editDraft, earTag: v })}
+                              />
+                              <Field
+                                label="Registration"
+                                value={editDraft.registrationNumber}
+                                onChange={(v) => setEditDraft({ ...editDraft, registrationNumber: v })}
+                              />
+                              <label style={{ fontSize: 13 }}>
+                                <div className="eyebrow">Birth date</div>
+                                <input
+                                  className="gene-select"
+                                  type="date"
+                                  value={editDraft.birthDate}
+                                  aria-label="Birth date"
+                                  onChange={(e) => setEditDraft({ ...editDraft, birthDate: e.target.value })}
+                                />
+                              </label>
+                              {/* Editable here and nowhere else for a reference
+                                  bull: he is created as 'dairy' because the
+                                  column is NOT NULL and this herd buys dairy
+                                  semen. That is a default, not a fact about
+                                  him — and it is the gestation fallback for
+                                  any calf of his with no breeds on file. */}
+                              <label style={{ fontSize: 13 }}>
+                                <div className="eyebrow">Purpose</div>
+                                <select
+                                  className="gene-select"
+                                  value={editDraft.purpose ?? "dairy"}
+                                  aria-label="Purpose"
+                                  onChange={(e) => setEditDraft({ ...editDraft, purpose: e.target.value })}
+                                >
+                                  {SIRE_PURPOSES.map((p) => (
+                                    <option key={p} value={p}>
+                                      {p}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <Field
+                                label="Notes"
+                                value={editDraft.notes}
+                                onChange={(v) => setEditDraft({ ...editDraft, notes: v })}
+                              />
+                            </div>
+                            <div
+                              style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}
+                            >
+                              <Button
+                                variant="filled"
+                                size="sm"
+                                disabled={busy || validateSire(editDraft, todayIso()) !== null}
+                                onClick={() => {
+                                  setBusy(true);
+                                  setError(null);
+                                  updateSire(a.id, editDraft)
+                                    .then(() => {
+                                      setEditingId(null);
+                                      setEditDraft(null);
+                                      setNote(`${editDraft.barnName.trim() || "That bull"} updated.`);
+                                      return refresh();
+                                    })
+                                    .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+                                    .finally(() => setBusy(false));
+                                }}
+                              >
+                                {busy ? "Saving…" : "Save"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setEditingId(null);
+                                  setEditDraft(null);
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                              <span style={{ fontSize: 13, color: "var(--red)" }}>
+                                {validateSire(editDraft, todayIso())}
+                              </span>
+                            </div>
+                            <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 8 }}>
+                              His sex, class and whether he lives here aren't editable. Turning a catalogue bull into
+                              a resident one would put him in the herd's counts — a different decision from fixing a
+                              typo.
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    )}
+
                     {composing === a.id && (
                       <div style={{ padding: "12px 8px" }}>
                         <BreedEditor
                           animalId={a.id}
                           farmId={farmId}
                           current={mine.map((c) => ({ breedId: c.breed_id, percent: Number(c.percent) }))}
+                          purpose={a.purpose}
                           onCancel={() => setComposing(null)}
                           onSaved={() => {
                             setComposing(null);

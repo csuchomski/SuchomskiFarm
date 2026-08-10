@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
@@ -134,10 +134,23 @@ const lots = [
   },
 ];
 
+type SireDraft = import("../lib/sires").SireDraft;
+const updateSire = vi.fn(async (_id: string, _d: SireDraft) => ({}) as never);
+
 vi.mock("../lib/sires", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/sires")>()),
   fetchSemenLots: vi.fn(async () => lots),
   fetchSemenTransactions: vi.fn(async () => []),
+  fetchSireDraft: vi.fn(async () => ({
+    barnName: "Chief",
+    earTag: "RT1",
+    naabCode: "",
+    registrationNumber: "REG-9",
+    birthDate: "2019-04-01",
+    notes: "",
+    purpose: "dairy",
+  })),
+  updateSire: (id: string, d: SireDraft) => updateSire(id, d),
 }));
 
 // Sires now shows each bull's breed composition — a bull with none leaves his
@@ -240,7 +253,11 @@ describe("Sires · breeds on the bull", () => {
     await mountSires();
     // Chief has Jersey on file from the mock; Dutton has nothing, which is
     // Sunnybrook Patriot's real position.
-    expect(screen.getByText("Jersey")).toBeTruthy();
+    // "Jersey" also appears in the breed <select> the edit-and-breeds forms
+    // build, so scope it to the row's own breeds cell.
+    const breedCells = [...document.querySelectorAll(".sire-row__breeds")].map((c) => c.textContent);
+    // The cell carries the breeds and the button that edits them.
+    expect(breedCells.some((t) => t?.includes("Jersey"))).toBe(true);
     expect(screen.getByText("no breeds on file")).toBeTruthy();
     expect(document.querySelectorAll(".sire-row--needs-breeds").length).toBe(1);
   });
@@ -258,5 +275,37 @@ describe("Sires · breeds on the bull", () => {
     expect(screen.getByRole("button", { name: /Save/ })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "cancel" }));
     expect(screen.queryByRole("button", { name: /Save/ })).toBeNull();
+  });
+});
+
+describe("Sires · editing a bull", () => {
+  it("fills the form from his record rather than from the list", async () => {
+    await mountSires();
+    fireEvent.click(screen.getAllByRole("button", { name: "edit" })[0]);
+    // Read fresh, because the list doesn't carry a registration number — a
+    // form filled from it would show blank and write that back.
+    expect((await screen.findByDisplayValue("REG-9")).getAttribute("value")).toBe("REG-9");
+    expect(screen.getByDisplayValue("Chief")).toBeTruthy();
+  });
+
+  it("saves the corrected details", async () => {
+    await mountSires();
+    fireEvent.click(screen.getAllByRole("button", { name: "edit" })[0]);
+    await screen.findByDisplayValue("Chief");
+
+    fireEvent.change(screen.getByLabelText("Purpose"), { target: { value: "beef" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(updateSire).toHaveBeenCalledTimes(1));
+    expect(updateSire.mock.calls[0][1]).toMatchObject({ purpose: "beef", registrationNumber: "REG-9" });
+  });
+
+  it("won't take a birth date in the future", async () => {
+    await mountSires();
+    fireEvent.click(screen.getAllByRole("button", { name: "edit" })[0]);
+    await screen.findByDisplayValue("Chief");
+
+    fireEvent.change(screen.getByLabelText("Birth date"), { target: { value: "2099-01-01" } });
+    expect(screen.getByText(/birth date is in the future/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

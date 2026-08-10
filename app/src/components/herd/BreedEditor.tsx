@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { Button } from "../ui";
-import { fetchBreeds, saveComposition, validateComposition, type Breed, type BreedEntry } from "../../lib/genetics";
+import {
+  fetchBreeds,
+  saveComposition,
+  speciesMismatch,
+  validateComposition,
+  type Breed,
+  type BreedEntry,
+} from "../../lib/genetics";
 import "./genetics.css";
 
 /**
@@ -14,12 +21,16 @@ export function BreedEditor({
   animalId,
   farmId,
   current,
+  purpose,
   onCancel,
   onSaved,
 }: {
   animalId: string;
   farmId: string | null;
   current: { breedId: string; percent: number }[];
+  /** dairy | beef | dual, for the species-mismatch note. Optional so callers
+   *  that don't have it keep working; the note is simply not shown. */
+  purpose?: string;
   onCancel: () => void;
   onSaved: () => void;
 }) {
@@ -48,6 +59,8 @@ export function BreedEditor({
 
   const total = Math.round(entries.reduce((s, e) => s + (Number.isFinite(e.percent) ? e.percent : 0), 0) * 100) / 100;
   const problem = validateComposition(entries);
+  // A warning, not a refusal — see speciesMismatch. Saving is still allowed.
+  const mismatch = purpose ? speciesMismatch(entries, breeds, purpose) : null;
 
   const setRow = (i: number, patch: Partial<{ breedId: string; percent: string }>) =>
     setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
@@ -152,6 +165,9 @@ export function BreedEditor({
       </div>
 
       {problem && <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 8 }}>{problem}</p>}
+      {!problem && mismatch && (
+        <p className="gene-mismatch">{mismatch}</p>
+      )}
       {error && <p style={{ fontSize: 13, color: "var(--red)", marginTop: 8 }}>{error}</p>}
     </div>
   );

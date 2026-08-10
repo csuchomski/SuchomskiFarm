@@ -9,6 +9,7 @@ import Sires from "./routes/Sires";
 import StoreProducts from "./routes/StoreProducts";
 import StoreOrders from "./routes/StoreOrders";
 import Breedings from "./routes/Breedings";
+import AlertsPage from "./routes/Alerts";
 import BreedsPage from "./routes/Breeds";
 import CalvingsPage from "./routes/Calvings";
 import StoreCustomers from "./routes/StoreCustomers";
@@ -46,6 +47,7 @@ export default function App() {
                   without the module bounces back to "/" rather than leaving
                   you on another business's screen. */}
               <Route element={<RequireModule />}>
+                <Route path="/alerts" element={<AlertsPage />} />
                 <Route path="/animals" element={<Animals />} />
                 <Route path="/animals/:tag" element={<AnimalRecord />} />
                 <Route path="/lactations" element={<Lactations />} />

@@ -257,6 +257,18 @@ export function LactationSection({
                     style={{ fontSize: 13, color: l.dry_off_date ? undefined : "var(--ink-faint)" }}
                   >
                     {l.dry_off_date ?? "—"}
+                    {/* Where the date was worked out rather than recorded —
+                        a lactation closed because a later freshening bounds
+                        it — say so. Otherwise a derived date is
+                        indistinguishable from one somebody wrote down. */}
+                    {l.termination_reason.trim() !== "" && l.termination_reason !== "calved" && (
+                      <>
+                        <br />
+                        <span style={{ fontSize: 11, color: "var(--ink-muted)", whiteSpace: "normal" }}>
+                          {l.termination_reason}
+                        </span>
+                      </>
+                    )}
                   </span>
                   <span className="mono text-right">{dim ?? "—"}</span>
                   <span>

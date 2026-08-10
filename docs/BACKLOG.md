@@ -57,6 +57,29 @@ have written a `herd.meat_sales` split against the animals that supplied it.
 Editing the payment fields alone is safe and probably enough; editing the
 quantity is not, and should either be refused or unwind the rest.
 
+## Raised 2026-08-10 by the alerts page
+
+### Actually sending an alert
+
+Herd → Alerts is a page you have to open. The obvious next step is for it to
+reach you — email each morning, or a push when something enters "Now".
+
+Worth knowing before building:
+
+- It needs a scheduler. Nothing in this app runs without a browser open;
+  Supabase has `pg_cron` and Edge Functions, and picking between them is the
+  first decision.
+- Sending needs a provider and a from-address the farm controls. That is a
+  domain and DNS records, not code.
+- It needs to not repeat itself. A cow eleven days past due is the same alert
+  tomorrow, and a mail every morning saying so trains you to ignore all of
+  them. That means recording what has been sent, and probably a "seen" or
+  "snoozed until" per alert — which is the first piece of state this feature
+  would own rather than derive.
+- Deriving alerts fresh on every read is what makes the page trustworthy.
+  Storing them is what makes sending possible. Those pull in opposite
+  directions and the design has to pick.
+
 ## Carried over from earlier sessions
 
 - **Health** — the whole module. Deliberately last; may never be built.
@@ -160,6 +183,51 @@ Four items were reviewed and are no longer open.
   is gone; it had been wrong for a fortnight.
 
 ## Closed 2026-08-10
+
+- **Recording a calving that predates a lactation already on file** — the
+  error was `lactations_dry_after_fresh`, reported while tying Vera's 2024
+  birth to Patience, whose only lactation freshened in 2026. Migration 032.
+
+  Worth keeping: this was three bugs behind one assumption — that the calving
+  being recorded is the most recent thing that happened to her. Fixing only
+  the reported error would have hit "two open lactations" next, and then a
+  2024 lactation numbered after a 2026 one. The untied-calf prompt shipped
+  hours earlier is what made historical calvings a normal thing to do, so
+  every animal entered before Calvings existed would have hit this.
+
+  A lactation closed because a later freshening bounds it now says so in
+  `termination_reason`, and the animal record shows that text. A derived
+  dry-off date that looks like a recorded one is the kind of quiet wrong
+  answer that is worse than a blank.
+
+- **Alerts** — Herd → Alerts lists everything outstanding, with the day it
+  became so, banded Now / Soon / Coming up. Six breeding rules: past due with
+  no calving, a service old enough to check and unchecked, a check that came
+  back "recheck", a calf on file that no calving accounts for, a cow past her
+  waiting period, and a calving inside three weeks. The urgent ones also lead
+  the "Needs you" panel on Today, so the list is seen without going to look
+  for it.
+
+  Every rule reads the same season assembly the timeline draws, through
+  `nextBreeding`, so a cow cannot be "ready to breed" on one screen and
+  "carrying" on another. The thresholds are named constants in `RULES` and the
+  page says what they are — they're judgement calls, not arithmetic, and they
+  belong somewhere a person can find and argue with.
+
+  **This is not notification.** There is no email, no push and no cron; it is
+  a page that is right whenever you look at it. Sending mail is a different
+  problem with a different failure mode, and a list you can trust is the thing
+  that has to exist before anything is worth sending. See the note below.
+
+- **Next breeding, on the Animals list** — her calving plus the farm's
+  voluntary waiting period (60 days), dated, with what she's doing instead
+  where that doesn't apply: carrying with a due date, bred and awaiting a
+  check, open, or blank. Blank for a heifer who has never calved — breeding a
+  maiden is a decision about her age and her weight, and a date invented from
+  her birthday would be a recommendation the farm never made.
+
+  Status moved into the name cell as a pill to make room. It read "active" on
+  almost every row, which was the least useful column-width on the page.
 
 - **A calf on file with no calving is called out** — a cow's record now names
   any daughter recorded as hers that no calving accounts for, says which

@@ -13,20 +13,24 @@ import {
   type RealAnimal,
 } from "../lib/herd";
 import { AnimalForm } from "../components/herd/AnimalForm";
+import { breedingCell, fetchAlertInputs, statusOf, type AlertInputs } from "../lib/alerts";
 import { useWorkspace } from "../lib/workspace";
 import "./animals.css";
 
 type Fetch =
   | { state: "loading" }
   | { state: "error"; message: string }
-  | { state: "ok"; rows: RealAnimal[]; breeds: Map<string, BreedShare[]> };
+  | { state: "ok"; rows: RealAnimal[]; breeds: Map<string, BreedShare[]>; repro: AlertInputs | null };
 
 type SortKey = "name" | "tag" | "age" | "class";
 
-const COLS = "60px 1fr 110px 110px 96px";
-/** Class and age go on a phone: class is already repeated under the name,
- *  and age is reference rather than something you scan a list for. */
-const COLS_SM = "44px 1fr 84px";
+/** Status moved into the name cell as a pill, which freed its column for the
+ *  one figure this page was missing — when each cow should next be bred. */
+const COLS = "60px minmax(0, 1fr) 96px 150px 84px";
+/** Class and age go on a phone: class is already repeated under the name, and
+ *  age is reference rather than something you scan a list for. The breeding
+ *  date stays — it is the reason to open this page in the morning. */
+const COLS_SM = "44px minmax(0, 1fr) 96px";
 
 export default function Animals() {
   const navigate = useNavigate();
@@ -47,14 +51,17 @@ export default function Animals() {
     (async () => {
       const rows = await fetchAnimals();
       const breeds = await fetchBreedComposition(rows.map((r) => r.id));
-      if (!cancelled) setResult({ state: "ok", rows, breeds });
+      // The breeding column needs her whole repro record. Null when there is
+      // no farm — the column then reads "—" rather than the page failing.
+      const repro = farmId ? await fetchAlertInputs(farmId, new Date().toISOString().slice(0, 10)) : null;
+      if (!cancelled) setResult({ state: "ok", rows, breeds, repro });
     })().catch(
       (err) => !cancelled && setResult({ state: "error", message: err instanceof Error ? err.message : String(err) }),
     );
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [farmId]);
 
   // `rows` is everything fetched, including reference bulls — the add/edit
   // form needs them so a calf can be given an AI sire. The list itself shows
@@ -63,6 +70,7 @@ export default function Animals() {
   const rows = result.state === "ok" ? result.rows : EMPTY_ANIMALS;
   const all = useMemo(() => herdOnly(rows), [rows]);
   const breeds = result.state === "ok" ? result.breeds : EMPTY_BREEDS;
+  const repro = result.state === "ok" ? result.repro : null;
 
   // Classes come from the data, so a class nobody anticipated still gets a
   // filter rather than being invisible.
@@ -197,7 +205,7 @@ export default function Animals() {
             <span>Tag</span>
             <span>Animal</span>
             <span className="hide-sm">Class</span>
-            <span>Status</span>
+            <span>Next breeding</span>
             <span className="text-right hide-sm">Age</span>
           </GridRow>
 
@@ -205,19 +213,26 @@ export default function Animals() {
             <Link key={a.id} to={`/animals/${a.ear_tag}`} style={{ color: "inherit", display: "contents" }}>
               <GridRow cols={COLS} mobileCols={COLS_SM} as="body" highlight={a.status !== "active"}>
                 <EarTag tag={a.ear_tag} accent="herd" />
-                <span>
+                <span style={{ minWidth: 0 }}>
                   <span className="serif" style={{ fontSize: 17 }}>
                     {nameOf(a)}
                   </span>
+                  {/* The status moved here from a column of its own. It is
+                      "active" for almost every row, so a whole column spent
+                      saying so was the least useful width on the page. */}
+                  {a.status !== "active" && (
+                    <>
+                      {" "}
+                      <Pill variant="outline">{a.status}</Pill>
+                    </>
+                  )}
                   <br />
                   <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
                     {[describeBreeding(breeds.get(a.id)), a.sex, a.purpose].filter(Boolean).join(" · ")}
                   </span>
                 </span>
                 <span className="hide-sm" style={{ fontSize: 13 }}>{a.class}</span>
-                <span>
-                  <Pill variant={a.status === "active" ? "outline-green" : "outline"}>{a.status}</Pill>
-                </span>
+                <NextBreeding animal={a} repro={repro} />
                 <span className="mono text-right hide-sm" style={{ fontSize: 15 }}>
                   {formatAge(a.birth_date)}
                 </span>
@@ -243,6 +258,33 @@ export default function Animals() {
         </>
       )}
     </OpsShell>
+  );
+}
+
+/**
+ * When she should next be bred — her calving plus the farm's voluntary
+ * waiting period, or what she's doing instead. Blank for anyone the question
+ * doesn't apply to: bulls, calves, and heifers who have never calved, where a
+ * date would be a recommendation nobody made.
+ */
+function NextBreeding({ animal, repro }: { animal: RealAnimal; repro: AlertInputs | null }) {
+  const applies = animal.sex === "female" && animal.class !== "calf" && animal.status === "active";
+  if (!repro || !applies) {
+    return <span className="mono" style={{ fontSize: 13, color: "var(--ink-faint)" }}>—</span>;
+  }
+  const cell = breedingCell(statusOf(animal, repro).breeding);
+  return (
+    <span style={{ minWidth: 0 }}>
+      <span className="mono" style={{ fontSize: 13, color: cell.accent ? "var(--herd-green)" : "var(--ink)" }}>
+        {cell.value}
+      </span>
+      {cell.note && (
+        <>
+          <br />
+          <span style={{ fontSize: 11.5, color: "var(--ink-muted)" }}>{cell.note}</span>
+        </>
+      )}
+    </span>
   );
 }
 

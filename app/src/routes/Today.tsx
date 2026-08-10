@@ -5,6 +5,7 @@ import { Button, Callout, EarTag, GridRow, StatTile } from "../components/ui";
 import { fetchDashboardData, type DashboardData } from "../lib/dashboard-data";
 import { useWorkspace } from "../lib/workspace";
 import { formatAge } from "../lib/herd";
+import { buildAlerts, fetchAlertInputs, whenInWords, type Alert } from "../lib/alerts";
 import "./today.css";
 
 type Fetch = { state: "loading" } | { state: "error"; message: string } | { state: "ok"; data: DashboardData };
@@ -31,6 +32,10 @@ export default function Today() {
   const { business, farmId } = useWorkspace();
   const businessId = business?.id ?? null;
   const [result, setResult] = useState<Fetch>({ state: "loading" });
+  // The herd's outstanding jobs, worked out from the breeding record. Kept in
+  // its own state so a slow read of the whole repro history doesn't hold up
+  // the figures at the top of the page.
+  const [alerts, setAlerts] = useState<Alert[]>([]);
 
   useEffect(() => {
     if (businessId === null) return;
@@ -48,6 +53,19 @@ export default function Today() {
     // Both ids matter: the ledger follows the business, the herd follows the
     // farm, and a switch changes them together.
   }, [businessId, farmId]);
+
+  useEffect(() => {
+    if (!farmId) return;
+    let cancelled = false;
+    fetchAlertInputs(farmId, todayIso())
+      .then((input) => !cancelled && setAlerts(buildAlerts(input)))
+      // A failure here leaves the list empty rather than breaking Today. It
+      // is a summary of another page, and that page will say what went wrong.
+      .catch(() => !cancelled && setAlerts([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [farmId]);
 
   const data = result.state === "ok" ? result.data : null;
 
@@ -207,10 +225,17 @@ export default function Today() {
             </div>
 
             <div>
-              <div className="serif" style={{ fontSize: 21, marginBottom: 12 }}>
-                Needs you
+              <div className="section__head" style={{ marginBottom: 12 }}>
+                <div className="serif" style={{ fontSize: 21 }}>
+                  Needs you
+                </div>
+                {alerts.length > 0 && (
+                  <Link to="/alerts" className="mono" style={{ fontSize: 13 }}>
+                    all {alerts.length} →
+                  </Link>
+                )}
               </div>
-              <NeedsList data={data} />
+              <NeedsList data={data} alerts={alerts} />
             </div>
           </div>
         </>
@@ -245,8 +270,20 @@ function ChainCell({
 
 /** Alerts derived from what's actually in the database, rather than a fixed
  * list. An empty list here is a real answer — nothing needs attention. */
-function NeedsList({ data }: { data: DashboardData }) {
+function NeedsList({ data, alerts }: { data: DashboardData; alerts: Alert[] }) {
   const items: { tone: "ochre" | "red" | "herd"; title: string; detail: string; to?: string }[] = [];
+
+  // The herd's own jobs first — a cow past her due date outranks an order
+  // nobody has collected. Only the urgent ones; the rest are on /alerts, and
+  // a panel that lists everything is a panel nobody reads.
+  for (const alert of alerts.filter((a) => a.urgency === "now").slice(0, 4)) {
+    items.push({
+      tone: "red",
+      title: alert.title,
+      detail: `${alert.detail.split(". ")[0]} · ${whenInWords(alert.daysLate)}`,
+      to: alert.href,
+    });
+  }
 
   if (data.openOrders > 0) {
     items.push({

@@ -22,6 +22,9 @@ export const allGroups: NavGroup[] = [
     module: "herd",
     heading: "Herd",
     items: [
+      // First in the group on purpose: it is the only page that says what
+      // needs doing rather than what happened.
+      { label: "Alerts", to: "/alerts" },
       { label: "Animals", to: "/animals" },
       { label: "Lactations", to: "/lactations" },
       { label: "Milkings", to: "/milkings" },

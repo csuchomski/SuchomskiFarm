@@ -420,6 +420,54 @@ export function summarise(seasons: Season[]): ReproSummary {
 }
 
 /**
+ * Where she is in her cycle, and when she should next be bred.
+ *
+ * One function, because two callers need the same answer and must not drift:
+ * the "Next breeding" column on Animals, and the alerts. The recommended date
+ * is her calving plus the farm's voluntary waiting period —
+ * settings.voluntary_waiting_period_days, 60 here — which is the whole of the
+ * rule and is deliberately not hard-coded.
+ *
+ * A cow who has never calved has no such date. Breeding a heifer is a
+ * decision about her age and her weight, and neither is a thing this function
+ * knows; inventing a date from her birthday would be a recommendation the
+ * farm never made.
+ */
+export type BreedingStatus =
+  | { state: "carrying"; dueOn: string | null }
+  | { state: "wait"; readyOn: string }
+  | { state: "ready"; readyOn: string }
+  | { state: "bred"; on: string; daysSince: number }
+  | { state: "recheck"; since: string }
+  | { state: "open"; since: string }
+  | { state: "none" };
+
+export function nextBreeding(
+  season: Season,
+  opts: { today: string; voluntaryWaitDays: number | null },
+): BreedingStatus {
+  // A closed season is history; the open one is the only one with a "next".
+  if (season.ending !== null) return { state: "none" };
+
+  if (season.conception) return { state: "carrying", dueOn: season.dueOn };
+
+  const last = season.services[season.services.length - 1] ?? null;
+  if (last) {
+    if (last.outcome === "recheck") return { state: "recheck", since: last.lastCheckOn ?? last.date };
+    if (last.outcome === "open" || last.outcome === "aborted") {
+      return { state: "open", since: last.lastCheckOn ?? last.date };
+    }
+    return { state: "bred", on: last.date, daysSince: daysBetween(last.date, opts.today) };
+  }
+
+  if (season.anchor === "calving" && opts.voluntaryWaitDays !== null) {
+    const readyOn = addDays(season.startsOn, opts.voluntaryWaitDays);
+    return readyOn > opts.today ? { state: "wait", readyOn } : { state: "ready", readyOn };
+  }
+  return { state: "none" };
+}
+
+/**
  * What's outstanding on the open season, in one sentence, or null when
  * nothing is. This is the line that earns the page a place on the record:
  * everything else is history.

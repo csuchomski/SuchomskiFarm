@@ -80,6 +80,84 @@ Worth knowing before building:
   Storing them is what makes sending possible. Those pull in opposite
   directions and the design has to pick.
 
+## Requested 2026-08-10
+
+Six asks, recorded as given. The owner said more detail is coming, so the
+notes below are what's true about the code today rather than a design.
+
+### Costs and revenue on an animal's page
+
+What she has cost and what she has brought in, on her own record. The figures
+exist: "Attributed to" writes `herd.cost_entries` and `herd.revenue_entries`
+per animal, and Today's "Profit per head" already tallies both. Her page
+doesn't show either.
+
+Worth knowing before building: partial attribution is allowed, so a total on
+her page is a share of some bills and all of others, and it should say so
+rather than read like an invoice. Meat sales written by `complete_pickup`
+land in the same table as hand-entered revenue, which is right for a total
+and wrong for a list that doesn't distinguish them.
+
+### A way back to Animals from an animal record
+
+There isn't one on a loaded record. `AnimalRecord` has "← back to Animals"
+only in its loading and not-found states; the record itself offers the
+wordmark in the top bar, which routes to `/animals` but doesn't look like a
+back link, and the eyebrow "Herd · Animals · Martha" is plain text.
+
+The smallest honest fix is making that eyebrow a trail with the first two
+parts as links. Worth checking on a phone, where the top bar is tightest.
+
+### Divide the Animals page by breed type
+
+Today it's a filter, not a division: chips for All / Dairy / Beef, one side at
+a time, with the counts in the header line.
+
+Needs settling first: "breed type" could mean beef-vs-dairy — the `purpose`
+split that's already there, asked to be shown as sections rather than a
+filter — or the actual breed, Jersey against Angus, which is a different cut
+and reads `breed_composition` rather than `purpose`. A cross belongs to two
+breeds at once, so grouping by breed has to decide what to do with her.
+
+### Remove sires from "Profit per head" on Today
+
+Confirmed, and it's a query rather than a display bug: `fetchDashboardData`
+selects animals without `record_type` and filters on nothing but `farm_id`
+and `deleted_at`, so catalogue AI bulls sit in the list. They can never have
+revenue attributed to them, so they occupy the bottom of a ranking that's
+supposed to be about which animals earn.
+
+`residentHerd()` in `lib/herd.ts` is the predicate that already means this
+elsewhere. Worth deciding whether a *resident* bull belongs in the list —
+he's a real animal with real costs, so "no sires" and "no reference animals"
+are not the same rule.
+
+### Depreciation per cow, and what each animal is worth
+
+This reopens a decision recorded below as closed. It was closed for the farm
+as a whole — a fixed-asset register whose numbers go on a filed return — and
+per-cow is a narrower ask that may not need any of that.
+
+Worth separating before building: a **value** per animal is a number the farm
+states and can revise, useful for insurance, culling and knowing what the
+herd is worth, and owes nothing to the IRS. **Depreciation** is a tax
+computation on raised or purchased breeding stock with a basis, a
+placed-in-service date, a recovery period and a convention, and being subtly
+wrong there is worse than not doing it. The first is a field; the second is
+the subsystem the decision below declines. Recommendation: build the value,
+and take depreciation from whoever files.
+
+### Pasture moves
+
+A record of which group was on which pasture, and when. Nothing in the schema
+covers it — no pasture, paddock or grazing table exists — so this is new
+tables rather than a page over something already modelled.
+
+Detail promised. Worth asking for when it comes: whether a move is recorded
+against a group or each animal, whether rest days between grazings need to be
+computed, and whether it should tie to the withdrawal tracking that already
+exists for treated animals.
+
 ## Carried over from earlier sessions
 
 - **Health** — the whole module. Deliberately last; may never be built.
@@ -462,6 +540,11 @@ goes on a filed return. Recommendation: leave it as a category and take the
 figure from whoever files for you. Revisit only if you want the app to be the
 system of record for fixed assets, which is a different decision from wanting
 Schedule F to add up.
+
+*Reopened 2026-08-10, narrower:* depreciation **per cow**, and a value per
+animal if that's what it takes — see the request above. The recommendation
+stands for the tax computation. It never covered a value per animal, which is
+a figure the farm states for its own purposes and owes nothing to a return.
 
 ## A standing note on verification
 

@@ -306,3 +306,15 @@
     gap: 8px;
   }
 }
+
+/* Her breeding record. Full width above the two columns — see the note in
+   AnimalRecord.tsx about why it isn't in the left one. */
+.record-repro {
+  padding: 0 32px;
+}
+
+@media (max-width: 640px) {
+  .record-repro {
+    padding: 0 16px;
+  }
+}

@@ -294,4 +294,12 @@ describe("Pregnancy checks on a breeding", () => {
     expect(screen.getByText(/bred on 2026-08-01, after this check/)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Record it" }) as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it("opens the cow's own record from her name", async () => {
+    await mount();
+    // The list is the whole herd's services; her record draws hers as a
+    // timeline. Nothing joined the two before.
+    const link = screen.getAllByRole("link", { name: "Martha" })[0] as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toBe("/animals/1");
+  });
 });

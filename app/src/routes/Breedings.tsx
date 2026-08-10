@@ -412,9 +412,20 @@ export default function Breedings() {
                         {b.date}
                       </span>
                       <span style={{ minWidth: 0 }}>
-                        <span className="serif" style={{ fontSize: 17 }}>
-                          {name(b.animal_id) ?? "Unknown"}
-                        </span>
+                        {/* Her name opens her record, where the same services
+                            are drawn as a timeline. This list answers "what
+                            did we do lately"; that page answers "how is she
+                            doing", and there was no way to get from one to
+                            the other. */}
+                        {dam ? (
+                          <Link to={`/animals/${dam.ear_tag}`} className="serif" style={{ fontSize: 17 }}>
+                            {name(b.animal_id) ?? "Unknown"}
+                          </Link>
+                        ) : (
+                          <span className="serif" style={{ fontSize: 17 }}>
+                            {name(b.animal_id) ?? "Unknown"}
+                          </span>
+                        )}
                         <br />
                         <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
                           {sireLabel(b, name(b.sire_id))}

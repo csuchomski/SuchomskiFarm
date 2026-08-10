@@ -1,0 +1,547 @@
+/**
+ * Her breeding record, drawn — mockup 2a, ported into the Herd system.
+ *
+ * The mockup arrived in its own design system: warm grey paper, a gold
+ * accent ramp, Cormorant Garamond over Lora, shadows and 2–7px radii. This
+ * app already has a design system, and running a second one on one screen
+ * would make the page look borrowed. So the *layout* is the mockup's — a
+ * 150px / 1fr / 168px grid, one shared axis, hollow-versus-filled markers,
+ * hatched voluntary wait, a today line — and everything visual is Herd's:
+ * oatmeal paper, hairlines, green where the mockup used gold, Newsreader
+ * over IBM Plex, no shadows and no corner radius.
+ *
+ * The one radius kept is 50% on the service markers. That's a mark, not a
+ * box — the system's "no rounded corners" rule is about panels and buttons,
+ * and a square dot would read as a different kind of event.
+ *
+ * Hazard yellow appears nowhere here. It is reserved for withdrawal, and a
+ * cow who is late calving is not a milk-safety hazard.
+ */
+
+.rt {
+  margin: 32px 0 0;
+}
+
+.rt-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.rt-title {
+  font-size: 21px;
+}
+
+.rt-lede {
+  font-size: 13px;
+  color: var(--ink-muted);
+  max-width: 62ch;
+  margin-bottom: 16px;
+}
+
+.rt-quiet {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+/* The two readings. Same shape as the shop's tabs so it reads as the app's
+   own control rather than a second idea about switching views. */
+
+.rt-views {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--hairline);
+}
+
+.rt-view {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-right: 1px solid var(--hairline);
+  padding: 6px 12px;
+  font: 500 11px/1 var(--font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.rt-view:last-child {
+  border-right: 0;
+}
+
+.rt-view.is-on {
+  background: var(--herd-green);
+  color: var(--paper);
+}
+
+/* What is outstanding right now — the only line on the page about the
+   future, so it gets the weight. */
+
+.rt-outstanding {
+  font-family: var(--font-serif);
+  font-size: 17px;
+  line-height: 1.35;
+  padding: 10px 0 14px;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+  margin-bottom: 16px;
+}
+
+.rt-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr));
+  gap: 12px;
+  margin: 0 0 20px;
+}
+
+.rt-stat {
+  border-left: 1px solid var(--hairline);
+  padding-left: 10px;
+  min-width: 0;
+}
+
+.rt-stat__value {
+  font-size: 21px;
+  margin: 2px 0 0;
+}
+
+/* ── the table ──────────────────────────────────────────────────────── */
+
+.rt-grid {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) 150px;
+  gap: 0 16px;
+  align-items: start;
+}
+
+.rt-axis-spacer {
+  height: 20px;
+}
+
+.rt-axis {
+  position: relative;
+  height: 20px;
+  border-bottom: 1px solid var(--ink);
+  min-width: 0;
+}
+
+.rt-axis__end,
+.rt-axis__tick > span {
+  position: absolute;
+  bottom: 4px;
+  font-size: 10.5px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.rt-axis__start {
+  left: 0;
+}
+
+.rt-axis__finish {
+  right: 0;
+}
+
+.rt-axis__tick {
+  position: absolute;
+  bottom: 0;
+  height: 6px;
+  width: 1px;
+  background: var(--hairline);
+}
+
+.rt-axis__tick > span {
+  transform: translateX(-50%);
+}
+
+.rt-axis-label {
+  font: 500 10px/1 var(--font-sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  align-self: end;
+  padding-bottom: 5px;
+  text-align: right;
+}
+
+/* The wordy half of an axis end label. There is no room for "· calving" on a
+   phone, and the number alone still says what the axis is. */
+@media (max-width: 900px) {
+  .rt-axis__long {
+    display: none;
+  }
+}
+
+/* ── a row ──────────────────────────────────────────────────────────── */
+
+.rt-rowhead {
+  padding: 18px 0 12px;
+  border-top: 1px solid var(--hairline);
+  min-width: 0;
+}
+
+.rt-rowhead__title {
+  font-size: 19px;
+}
+
+.rt-rowhead__meta {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+.rt-rowhead__meta.is-accent {
+  color: var(--herd-green);
+}
+
+.rt-track {
+  padding: 18px 0 12px;
+  border-top: 1px solid var(--hairline);
+  min-width: 0;
+}
+
+.rt-lane {
+  position: relative;
+  height: 44px;
+}
+
+.rt-figures {
+  padding: 18px 0 12px;
+  border-top: 1px solid var(--hairline);
+  text-align: right;
+  min-width: 0;
+}
+
+.rt-figures__big {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.rt-figures__qual {
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+.rt-figures__sub {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+/* ── marks in the lane ──────────────────────────────────────────────── */
+
+.rt-wait {
+  position: absolute;
+  left: 0;
+  top: 14px;
+  height: 16px;
+  border-right: 1px solid var(--ink-faint);
+  background: repeating-linear-gradient(
+    135deg,
+    transparent,
+    transparent 5px,
+    rgba(25, 26, 22, 0.1) 5px,
+    rgba(25, 26, 22, 0.1) 6px
+  );
+}
+
+.rt-wait__label {
+  position: absolute;
+  left: 4px;
+  top: -12px;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+/* The pregnancy. Two rules with a wash between them — it's a span of time,
+   not an event, and a solid bar would compete with the calving mark. */
+
+.rt-carry {
+  position: absolute;
+  top: 19px;
+  height: 6px;
+  border-top: 1px solid var(--herd-green);
+  border-bottom: 1px solid var(--herd-green);
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 6px,
+    rgba(92, 98, 72, 0.22) 6px,
+    rgba(92, 98, 72, 0.22) 7px
+  );
+}
+
+/* Still carrying: the end of this bar is arithmetic, not an event, so it is
+   drawn as a guess. */
+.rt-carry.is-projected {
+  border-top-style: dotted;
+  border-bottom-style: dotted;
+  background: none;
+}
+
+.rt-carry__from {
+  position: absolute;
+  left: 4px;
+  top: 0;
+  font-size: 10px;
+  color: var(--herd-green);
+  white-space: nowrap;
+}
+
+.rt-mark {
+  position: absolute;
+  top: 14px;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--paper);
+  box-sizing: border-box;
+}
+
+.rt-mark.is-open {
+  border: 1px dashed var(--ink-muted);
+}
+
+.rt-mark.is-unchecked {
+  border: 1.5px dotted var(--herd-green);
+}
+
+.rt-mark.is-took {
+  top: 12px;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--herd-green);
+  background: var(--paper-tint);
+}
+
+.rt-calving {
+  position: absolute;
+  top: 6px;
+  width: 2px;
+  height: 32px;
+  background: var(--ink);
+}
+
+.rt-today {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--herd-green);
+  opacity: 0.55;
+}
+
+.rt-today__label {
+  position: absolute;
+  left: 4px;
+  top: -2px;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--herd-green);
+  white-space: nowrap;
+}
+
+/* Late in the row the label reads back towards the timeline. At 320px a
+   "today" line at 94% put its own label 6px past the edge of the screen. */
+.rt-today.is-late .rt-today__label {
+  left: auto;
+  right: 4px;
+  text-align: right;
+}
+
+/* ── the notes ──────────────────────────────────────────────────────── */
+
+/*
+ * Below the lane as an ordinary list. The inline `left`/`top` the component
+ * writes are inert on a static element, and only the wide media query at the
+ * bottom of this file turns them on — which is how one DOM serves both a
+ * phone and a 1440px screen without a JS breakpoint.
+ */
+
+.rt-notes {
+  position: relative;
+  margin-top: 6px;
+  min-width: 0;
+}
+
+.rt-note {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--ink-muted);
+  padding: 1px 0;
+}
+
+.rt-note.is-accent {
+  color: var(--herd-green);
+}
+
+.rt-note--calving {
+  display: flex;
+  flex-direction: column;
+}
+
+.rt-note__headline {
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.rt-note__detail {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+/* ── legend and options ─────────────────────────────────────────────── */
+
+.rt-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-top: 16px;
+}
+
+.rt-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+
+.rt-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* The legend reuses the marker classes, so a change to a mark can't drift
+   away from its own key. Position is the only thing overridden. */
+.rt-legend__mark.rt-mark {
+  position: static;
+  transform: none;
+  top: auto;
+  flex: none;
+}
+
+.rt-legend__bar {
+  width: 26px;
+  height: 6px;
+  border-top: 1px solid var(--herd-green);
+  border-bottom: 1px solid var(--herd-green);
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 6px,
+    rgba(92, 98, 72, 0.22) 6px,
+    rgba(92, 98, 72, 0.22) 7px
+  );
+}
+
+.rt-legend__calving {
+  width: 2px;
+  height: 16px;
+  background: var(--ink);
+}
+
+/* ── narrow ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .rt-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  /* The axis label belongs to a column that no longer exists. */
+  .rt-axis-spacer,
+  .rt-axis-label {
+    display: none;
+  }
+
+  .rt-axis {
+    margin-bottom: 4px;
+  }
+
+  .rt-rowhead {
+    padding-bottom: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+  }
+
+  .rt-track {
+    border-top: 0;
+    padding-top: 10px;
+  }
+
+  .rt-figures {
+    border-top: 0;
+    padding-top: 0;
+    text-align: left;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .rt-figures__big {
+    font-size: 19px;
+  }
+
+  /* Three services three weeks apart are 30px apart on a 288px lane. Smaller
+     marks keep them as three marks rather than one blob; the note list under
+     the lane is what carries the detail at this width anyway. */
+  .rt-mark {
+    width: 12px;
+    height: 12px;
+    top: 16px;
+  }
+
+  .rt-mark.is-took {
+    width: 15px;
+    height: 15px;
+    top: 14px;
+  }
+}
+
+/* ── wide: the mockup's own layout ──────────────────────────────────── */
+
+/*
+ * Only here do the notes leave the flow and sit under their own marker. Below
+ * this width they'd collide — six nowrap labels across 600px is unreadable,
+ * and the mockup was drawn at 1440.
+ */
+
+@media (min-width: 1100px) {
+  .rt-notes {
+    height: var(--notes-h);
+  }
+
+  .rt-note {
+    position: absolute;
+    white-space: nowrap;
+    padding: 0;
+  }
+
+  /* The calving's own note is at the right-hand end of the row, so it reads
+     back towards the timeline rather than off the edge of the card. */
+  .rt-note--calving {
+    transform: translateX(-100%);
+    text-align: right;
+    padding-right: 8px;
+    align-items: flex-end;
+  }
+}

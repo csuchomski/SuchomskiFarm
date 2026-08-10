@@ -8,6 +8,7 @@ import { Pedigree } from "../components/herd/Pedigree";
 import { OffspringEditor } from "../components/herd/OffspringEditor";
 import { GeneticsSection } from "../components/herd/GeneticsSection";
 import { MoneySection } from "../components/herd/MoneySection";
+import { isSire } from "../lib/sires";
 import { BreedEditor } from "../components/herd/BreedEditor";
 import {
   describeBreeding,
@@ -134,7 +135,7 @@ export default function AnimalRecord() {
     : [];
 
   return (
-    <Frame title={name}>
+    <Frame title={name} animal={animal}>
       <div className="record-head">
         <div className="record-head__top">
           <div className="record-photo">
@@ -390,22 +391,43 @@ function RelativeRow({ animal, note }: { animal: RealAnimal; note: string }) {
   );
 }
 
-function Frame({ title, children }: { title: string; children: React.ReactNode }) {
+/**
+ * Where "back" goes.
+ *
+ * A bull is reached from Sires, and a catalogue bull isn't on the Animals
+ * list at all — sending him there is a link to a page he doesn't appear on.
+ * `isSire` is the same predicate that builds the Sires list, so the way back
+ * always lands on the page that lists him.
+ */
+function backTo(animal: RealAnimal | null): { to: string; label: string } {
+  return animal && isSire(animal) ? { to: "/sires", label: "Sires" } : { to: "/animals", label: "Animals" };
+}
+
+function Frame({
+  title,
+  animal = null,
+  children,
+}: {
+  title: string;
+  animal?: RealAnimal | null;
+  children: React.ReactNode;
+}) {
+  const back = backTo(animal);
   return (
     <div style={{ background: "var(--paper)", minHeight: "100vh" }}>
       <div className="record-topbar">
         <div className="record-topbar__left">
-          <Link to="/animals" className="serif" style={{ fontSize: 22, letterSpacing: "-.02em", color: "var(--ink)" }}>
+          <Link to={back.to} className="serif" style={{ fontSize: 22, letterSpacing: "-.02em", color: "var(--ink)" }}>
             Suchomski<span style={{ color: "var(--herd-green)" }}>.</span>
           </Link>
           {/* An animal's record sits outside OpsShell, so it has no nav rail
               and the wordmark was the only way back — a link that doesn't
               look like one. This is the way back. */}
-          <Link to="/animals" className="record-back mono">
-            ← Animals
+          <Link to={back.to} className="record-back mono">
+            ← {back.label}
           </Link>
         </div>
-        <div className="eyebrow">Herd · Animals · {title}</div>
+        <div className="eyebrow">Herd · {back.label} · {title}</div>
       </div>
       {children}
     </div>

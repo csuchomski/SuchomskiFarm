@@ -87,18 +87,66 @@ These two are the ones still open, and the owner said more detail is coming.
 
 ### Depreciation per cow, and what each animal is worth
 
-This reopens a decision recorded below as closed. It was closed for the farm
-as a whole — a fixed-asset register whose numbers go on a filed return — and
-per-cow is a narrower ask that may not need any of that.
+**Spec given by the owner on 2026-08-10. Build to it.** Two separate
+computations that share a table and nothing else — the management one is the
+one that matters, and it is not the one the tax code describes.
 
-Worth separating before building: a **value** per animal is a number the farm
-states and can revise, useful for insurance, culling and knowing what the
-herd is worth, and owes nothing to the IRS. **Depreciation** is a tax
-computation on raised or purchased breeding stock with a basis, a
-placed-in-service date, a recovery period and a convention, and being subtly
-wrong there is worse than not doing it. The first is a field; the second is
-the subsystem the decision below declines. Recommendation: build the value,
-and take depreciation from whoever files.
+#### Management: economic herd depreciation
+
+Herd depreciation is a real cash-equivalent cost whether or not the IRS lets
+you deduct it, and on most dairies it is the largest unrecognised cost of
+production:
+
+```
+(replacement cost of a springing heifer − cull value) ÷ productive lifetime
+```
+
+At $2,200 in and $900 out over 3.5 lactations that is **$371/cow/year** —
+about **$1.86/cwt** on a Jersey at 20,000 lb. Leave it out of cost-per-cwt and
+the margin looks better than it is, which drives bad calls on culling
+aggressiveness, on raising versus buying replacements, and on whether a third
+lactation is worth chasing.
+
+Worth building in as a sensitivity rather than a constant: the per-cwt figure
+moves with yield, not just with the spread. The same $371 is $1.86/cwt at
+20,000 lb and $2.32/cwt at 16,000 lb, so the page should divide by *her*
+production rather than a herd assumption wherever the record supports it.
+
+Practically, and separately from the 4562: run economic herd depreciation in
+the accrual-adjusted statements, usually via a **raised-breeding-stock
+inventory value that is marked and rolled each year**. Lenders want this one
+too.
+
+What that needs from the schema: a per-animal value with a date and a reason
+(marked, purchased, appraised), so a year's roll is a new row rather than an
+overwrite — the history is the point. `herd.cost_entries.is_basis` already
+carries what a purchased animal cost.
+
+#### Tax: purchased animals only, on the 4562
+
+Depreciation only exists where there is basis. A heifer raised on a cash-basis
+Schedule F had her feed, vet, breeding and labour deducted as incurred, so
+**her basis is zero and there is nothing to depreciate**.
+
+- Purchased cows only: **5-year MACRS**, 7-year ADS.
+- Placed in service **when she enters the milking string**, not when she was
+  bought as a bred heifer.
+- Section 179 and 100% bonus are both available.
+- **§1245 recapture** when she is culled.
+- A raised cow held 24+ months sells as **§1231 gain with zero basis**, which
+  is usually the better outcome anyway.
+
+The raised-versus-purchased basis question gets fiddly if the farm ever buys
+bred heifers and resells them; confirm the specifics with the CPA before that
+path is coded.
+
+#### What this changes about the decision below
+
+"Depreciation stays a category" was decided against building a tax fixed-asset
+register, and that part stands: line 14 still takes a figure from whoever
+files. The management computation was never what that decision was about. It
+is the one to build first, and it does not need a single one of MACRS,
+convention or recapture to be right.
 
 ### Pasture moves
 
@@ -554,10 +602,18 @@ figure from whoever files for you. Revisit only if you want the app to be the
 system of record for fixed assets, which is a different decision from wanting
 Schedule F to add up.
 
-*Reopened 2026-08-10, narrower:* depreciation **per cow**, and a value per
-animal if that's what it takes — see the request above. The recommendation
-stands for the tax computation. It never covered a value per animal, which is
-a figure the farm states for its own purposes and owes nothing to a return.
+*Superseded in part, 2026-08-10.* The owner's spec above splits this in two,
+and the split is the correction: what was recorded here as one subject is a
+tax computation **and** a management one, and only the first was ever in
+scope. The recommendation stands for the tax side — line 14 takes a figure
+from whoever files, and MACRS, conventions and §1245 recapture stay out of
+this app until a CPA has been asked.
+
+Economic herd depreciation is a different animal and the one to build:
+`(replacement cost − cull value) ÷ productive lifetime`, which needs none of
+the above and is, on a dairy, the largest cost of production nobody books.
+Leaving it out is not conservative — it makes the margin read better than it
+is. See "Depreciation per cow" above.
 
 ## A standing note on verification
 

@@ -42,6 +42,18 @@ const martha: RealAnimal = {
   record_type: "herd",
 };
 
+/** An AI bull: reached from Sires, and not on the Animals list at all. */
+const dutton: RealAnimal = {
+  ...martha,
+  id: "ai-1",
+  ear_tag: "250JE2379",
+  barn_name: "Dutton",
+  sex: "male",
+  class: "bull",
+  purpose: "dairy",
+  record_type: "reference",
+};
+
 const entry = (over: Partial<MoneyEntry> & { kind: MoneyEntry["kind"]; amountCents: number }): MoneyEntry => ({
   id: Math.random().toString(36).slice(2),
   date: "2026-08-04",
@@ -63,8 +75,8 @@ vi.mock("../lib/animal-money", async (importOriginal) => ({
 
 vi.mock("../lib/herd", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/herd")>()),
-  fetchAnimals: vi.fn(async () => [martha]),
-  fetchAnimalByTag: vi.fn(async () => martha),
+  fetchAnimals: vi.fn(async () => [martha, dutton]),
+  fetchAnimalByTag: vi.fn(async (tag: string) => [martha, dutton].find((a) => a.ear_tag === tag) ?? null),
   fetchBreedComposition: vi.fn(async () => new Map()),
 }));
 
@@ -82,10 +94,10 @@ afterEach(() => {
   money.length = 0;
 });
 
-const mount = async () => {
+const mount = async (tag = "1") => {
   const { default: AnimalRecord } = await import("./AnimalRecord");
   render(
-    <MemoryRouter initialEntries={["/animals/1"]}>
+    <MemoryRouter initialEntries={[`/animals/${tag}`]}>
       <Routes>
         <Route path="/animals/:tag" element={<AnimalRecord />} />
       </Routes>
@@ -94,11 +106,22 @@ const mount = async () => {
   await screen.findByText("Pedigree");
 };
 
-describe("A way back to Animals", () => {
-  it("is a link that says where it goes", async () => {
+describe("A way back", () => {
+  it("goes to Animals from a cow's record", async () => {
     await mount();
-    const back = screen.getByRole("link", { name: /Animals/ });
+    const back = screen.getByRole("link", { name: /← Animals/ });
     expect(back.getAttribute("href")).toBe("/animals");
+    expect(document.querySelector(".record-topbar .eyebrow")?.textContent).toBe("Herd · Animals · Martha");
+  });
+
+  it("goes to Sires from a bull's record, which is where he was opened from", async () => {
+    await mount("250JE2379");
+    const back = screen.getByRole("link", { name: /← Sires/ });
+    expect(back.getAttribute("href")).toBe("/sires");
+    // Animals would be a link to a page he isn't on: reference bulls are kept
+    // off that list on purpose.
+    expect(screen.queryByRole("link", { name: /← Animals/ })).toBeNull();
+    expect(document.querySelector(".record-topbar .eyebrow")?.textContent).toBe("Herd · Sires · Dutton");
   });
 });
 

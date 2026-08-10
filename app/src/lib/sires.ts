@@ -427,9 +427,14 @@ export async function fetchSireDraft(id: string): Promise<SireDraft> {
   };
 }
 
+/** The predicate behind `siresIn`, exported so his own record can send you
+ * back to the page that lists him rather than to Animals — which for a
+ * catalogue bull doesn't list him at all. */
+export const isSire = (a: { sex: string }): boolean => a.sex === "male";
+
 /** Every animal that could be a sire: males, whether they live here or are
  * only a name on a straw. */
 export const siresIn = (herd: RealAnimal[]): RealAnimal[] =>
-  herd.filter((a) => a.sex === "male").sort((a, b) => sireName(a).localeCompare(sireName(b)));
+  herd.filter(isSire).sort((a, b) => sireName(a).localeCompare(sireName(b)));
 
 export const sireName = (a: RealAnimal): string => a.barn_name || (a.ear_tag ? `Tag ${a.ear_tag}` : "Unnamed bull");

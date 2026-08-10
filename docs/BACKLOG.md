@@ -80,6 +80,37 @@ Worth knowing before building:
   Storing them is what makes sending possible. Those pull in opposite
   directions and the design has to pick.
 
+## Requested 2026-08-10
+
+Six asks, recorded as given. Four are built — see "Closed 2026-08-10" below.
+These two are the ones still open, and the owner said more detail is coming.
+
+### Depreciation per cow, and what each animal is worth
+
+This reopens a decision recorded below as closed. It was closed for the farm
+as a whole — a fixed-asset register whose numbers go on a filed return — and
+per-cow is a narrower ask that may not need any of that.
+
+Worth separating before building: a **value** per animal is a number the farm
+states and can revise, useful for insurance, culling and knowing what the
+herd is worth, and owes nothing to the IRS. **Depreciation** is a tax
+computation on raised or purchased breeding stock with a basis, a
+placed-in-service date, a recovery period and a convention, and being subtly
+wrong there is worse than not doing it. The first is a field; the second is
+the subsystem the decision below declines. Recommendation: build the value,
+and take depreciation from whoever files.
+
+### Pasture moves
+
+A record of which group was on which pasture, and when. Nothing in the schema
+covers it — no pasture, paddock or grazing table exists — so this is new
+tables rather than a page over something already modelled.
+
+Detail promised. Worth asking for when it comes: whether a move is recorded
+against a group or each animal, whether rest days between grazings need to be
+computed, and whether it should tie to the withdrawal tracking that already
+exists for treated animals.
+
 ## Carried over from earlier sessions
 
 - **Health** — the whole module. Deliberately last; may never be built.
@@ -183,6 +214,66 @@ Four items were reviewed and are no longer open.
   is gone; it had been wrong for a fortnight.
 
 ## Closed 2026-08-10
+
+- **Costs and revenue on an animal's page** — her record now carries four
+  figures and the rows behind them: revenue, what it costs to run her, the net
+  of those two, and — kept apart — what she cost to buy.
+
+  Basis is the one real decision. `cost_entries.is_basis` marks an acquisition
+  price, whose category is `basis_type = 'basis'` and goes on no Schedule F
+  expense line at all; everything else is money spent on her this year.
+  Netting Martha's $700 purchase against her season would say she had a
+  terrible year in the year she was bought and a fine one every year after,
+  which is an artifact of the arithmetic rather than a fact about the cow. So
+  the net is revenue minus operating cost, and what she cost to buy sits
+  beside it behind a rule.
+
+  Internal transfers are excluded from every total. Nothing writes one yet —
+  `source = 'dam_carryforward'` is what the flag is for — but a total that
+  silently double-counts the day something does is worse than one built for it.
+
+  The page says the totals are what was *attributed*, not the whole of every
+  bill she appears on, because attribution is deliberately partial: a feed
+  bill can be four fifths herd.
+
+- **A way back to Animals from a record** — there genuinely wasn't one. The
+  "← back to Animals" link existed only in the loading and not-found states;
+  a loaded record offered the wordmark, which routes there but doesn't look
+  like a link. An animal's page sits outside `OpsShell`, so it has no nav rail
+  to fall back on.
+
+  On a phone the eyebrow beside it now hides rather than truncates. Ellipsis
+  kept "Herd · Animals ·" and dropped the name — the only part worth reading —
+  and with a back link next to it the trail was duplication twice over.
+
+- **Animals, divided by breed type** — beef and dairy are sections with their
+  own headings and counts rather than a filter that shows one side at a time.
+  The chips still work; picking one drops the headings, since a single heading
+  over a single list labels what the chip just said.
+
+  Read as beef-vs-dairy, not Jersey-vs-Angus: `breeds.species_type` is
+  literally the breed's type and `purpose` is the farm's decision about how
+  she is run. The grouping predicate is `isMilked`, the same one the chips,
+  the counts and the lactation pages use, so a dual-purpose cow appears under
+  Dairy on every screen — and her row still reads "dual". Grouping by actual
+  breed is a different cut and still open; a cross belongs to two breeds at
+  once, which needs an answer first.
+
+- **Catalogue bulls are out of "Profit per head"** — and out of "Head". It was
+  a query, not a display: `fetchDashboardData` selected animals without
+  `record_type` and filtered on nothing but `farm_id`, so the four AI bulls
+  the farm buys straws from were counted as livestock and sat in a ranking of
+  which animals earn, where they structurally cannot — a straw is a cost
+  against the cow it was used on.
+
+  `herdOnly()` is now generic over the row rather than tied to `RealAnimal`,
+  because Today reads a narrower set of columns and still needs that exact
+  predicate. One definition, so a catalogue bull can't be livestock on one
+  screen and not on another.
+
+  A *resident* bull would still appear, and should: he is an animal the farm
+  owns, with real costs. "No sires" and "no reference animals" are different
+  rules, and this farm has no resident bulls.
 
 - **A sire's purpose follows his breeds** — asked for directly: *"I don't want
   to maintain a breeds purpose in two places."* Right, and the duplication was
@@ -462,6 +553,11 @@ goes on a filed return. Recommendation: leave it as a category and take the
 figure from whoever files for you. Revisit only if you want the app to be the
 system of record for fixed assets, which is a different decision from wanting
 Schedule F to add up.
+
+*Reopened 2026-08-10, narrower:* depreciation **per cow**, and a value per
+animal if that's what it takes — see the request above. The recommendation
+stands for the tax computation. It never covered a value per animal, which is
+a figure the farm states for its own purposes and owes nothing to a return.
 
 ## A standing note on verification
 

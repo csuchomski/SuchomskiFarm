@@ -96,6 +96,11 @@ vi.mock("../lib/gestation", async (importOriginal) => ({
   fetchOverrides: vi.fn(async () => []),
 }));
 
+vi.mock("../lib/animal-money", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/animal-money")>()),
+  fetchAnimalMoney: vi.fn(async () => []),
+}));
+
 vi.mock("../lib/genetics", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/genetics")>()),
   fetchMarkers: vi.fn(async () => []),
@@ -144,6 +149,33 @@ describe("Animals, split by purpose", () => {
     await mount();
     expect(screen.getByText(/female · beef/)).toBeTruthy();
     expect(screen.getAllByText(/female · dairy/).length).toBe(2);
+  });
+
+  it("divides the list into the two sides, each named and counted", async () => {
+    await mount();
+    const groups = [...document.querySelectorAll(".animals-group")];
+    expect(groups.map((g) => g.querySelector(".animals-group__name")?.textContent)).toEqual(["Dairy", "Beef"]);
+    expect(groups.map((g) => g.querySelector(".animals-group__count")?.textContent)).toEqual(["2", "1"]);
+    expect(groups[0].textContent).toContain("milked");
+    expect(groups[1].textContent).toContain("raising their calves");
+  });
+
+  it("puts each animal under her own side, in order", async () => {
+    await mount();
+    // The rows follow their heading, so reading the page top to bottom gives
+    // the dairy cows and then the beef cow.
+    const order = [...document.querySelectorAll(".animals-group__name, .grid-row--body .serif")].map(
+      (n) => n.textContent,
+    );
+    expect(order).toEqual(["Dairy", "Patience", "Vera", "Beef", "Martha"]);
+  });
+
+  it("drops the headings when a side is already picked", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: /^Dairy/ }));
+    // One heading over one list would be labelling what the chip just said.
+    expect(document.querySelectorAll(".animals-group").length).toBe(0);
+    expect(screen.getByText("Patience")).toBeTruthy();
   });
 
   it("names the side in the empty message rather than saying nothing matches", async () => {

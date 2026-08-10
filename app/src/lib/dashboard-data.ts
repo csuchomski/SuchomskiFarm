@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 import { summarise, typeMap, FALLBACK_TYPES, type RealTransaction, type TransactionType } from "./books-data";
-import type { RealAnimal } from "./herd";
+import { herdOnly, type RealAnimal } from "./herd";
 
 /**
  * Everything the Today screen needs, in one round trip's worth of parallel
@@ -106,7 +106,10 @@ export async function fetchDashboardData(todayIso: string, scope: DashboardScope
         ? supabase
             .schema("herd")
             .from("animals")
-            .select("id, ear_tag, barn_name, sex, class, status, birth_date")
+            // record_type is here to be filtered on, not shown: without it
+            // the catalogue AI bulls count as head and sit in the profit
+            // ranking below, where they can never earn anything.
+            .select("id, ear_tag, barn_name, sex, class, status, birth_date, record_type")
             .eq("farm_id", farmId)
             .is("deleted_at", null)
             .order("barn_name")
@@ -166,7 +169,11 @@ export async function fetchDashboardData(todayIso: string, scope: DashboardScope
     if (res.error) throw new Error(`${label}: ${res.error.message}`);
   }
 
-  const animals = (animalsRes.data ?? []) as RealAnimal[];
+  // Livestock only. A straw bought from an AI stud is a cost against the cow
+  // it was used on, never revenue against the bull, so a catalogue bull can
+  // only ever sit at the bottom of "profit per head" at zero — and "Head"
+  // counted him as an animal the farm owns.
+  const animals = herdOnly((animalsRes.data ?? []) as RealAnimal[]);
   const production = (productionRes.data ?? []) as { product_id: number; quantity: number; unit: string }[];
   const batches = (batchesRes.data ?? []) as { product_id: number; produced_date: string; quantity: number; reserved: number }[];
   const products = productsRes;

@@ -88,6 +88,46 @@
   }
 }
 
+/* The band that names each side of the herd. Hairline above rather than a
+   filled bar: it separates two runs of rows without competing with them. */
+.animals-group {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 20px 8px 6px;
+  border-bottom: 1px solid var(--ink);
+  margin-bottom: -1px;
+}
+
+.animals-group:first-of-type {
+  padding-top: 12px;
+}
+
+.animals-group__name {
+  font-size: 19px;
+}
+
+.animals-group__count {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.animals-group__note {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin-left: auto;
+  text-align: right;
+}
+
+/* Rows lose their outer padding on a phone; the heading has to move with
+   them or the rule starts 4px right of the tags beneath it. */
+@media (max-width: 640px) {
+  .animals-group {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+}
+
 /* Between the purpose chips and the class chips. They filter on different
    things and reading them as one run of six invites picking one of each and
    wondering where the herd went. */

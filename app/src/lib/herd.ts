@@ -34,8 +34,12 @@ export interface RealAnimal {
 
 /** The animals this farm actually keeps. Reference rows are ancestors and
  * catalogue bulls, not livestock, and counting them would overstate the
- * herd on every screen that shows a total. */
-export const herdOnly = (animals: RealAnimal[]): RealAnimal[] =>
+ * herd on every screen that shows a total.
+ *
+ * Generic over the row rather than tied to RealAnimal: Today reads a narrower
+ * set of columns and still needs this exact predicate. One definition, so a
+ * catalogue bull can't be livestock on one screen and not on another. */
+export const herdOnly = <T extends { record_type: string }>(animals: T[]): T[] =>
   animals.filter((a) => a.record_type !== "reference");
 
 /**

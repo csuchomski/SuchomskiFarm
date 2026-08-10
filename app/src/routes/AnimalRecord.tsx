@@ -8,6 +8,7 @@ import { Pedigree } from "../components/herd/Pedigree";
 import { OffspringEditor } from "../components/herd/OffspringEditor";
 import { GeneticsSection } from "../components/herd/GeneticsSection";
 import { BreedEditor } from "../components/herd/BreedEditor";
+import { ReproTimeline } from "../components/herd/ReproTimeline";
 import {
   describeBreeding,
   fetchAnimalByTag,
@@ -201,6 +202,16 @@ export default function AnimalRecord() {
               });
             }}
           />
+        </div>
+      )}
+
+      {/* Full width, above the two columns. A timeline needs the whole page
+          — dropped into the left column it would be a 400-day axis in 600px,
+          which is the one width at which it says nothing. Females only: a
+          bull's services are on the cows he served, not on him. */}
+      {animal.sex === "female" && farmId && (
+        <div className="record-repro">
+          <ReproTimeline animal={animal} herd={herd} farmId={farmId} />
         </div>
       )}
 

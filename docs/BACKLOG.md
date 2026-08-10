@@ -159,6 +159,30 @@ Four items were reviewed and are no longer open.
   DELETE policy. The on-screen callout claiming the migration hadn't been run
   is gone; it had been wrong for a fortnight.
 
+## Closed 2026-08-10
+
+- **Her breeding record, drawn** — built from mockup 2a of the Cow Lifecycle
+  set. An animal's page now opens with "Her record, row by row": one row per
+  calving, every row starting the day she calved so day 84 in one row is day
+  84 in the next and the columns compare by eye. A second reading lays the
+  same events on calendar years, with a pregnancy carrying across the break.
+  Each service is a mark whose shape carries its result — hollow dashed for
+  one that didn't take, dotted for one nobody has checked, filled for the one
+  that did — and the line above everything says what is outstanding right
+  now, which is the only sentence on the page about the future.
+
+  No migration. Every figure was already in the schema and nothing read it,
+  including `settings.voluntary_waiting_period_days`, seeded at 60 and never
+  used until it became the shaded block at the start of a season row.
+
+  Two decisions worth keeping: **days open is null, not zero**, for a cow with
+  no calving to measure from — a zero would sort a maiden heifer to the top of
+  every "best cows" ordering — and the mockup's own design system was *not*
+  imported. It arrived with a gold accent ramp, Cormorant Garamond over Lora,
+  shadows and radii; the layout is the mockup's and everything visual is
+  Herd's, because a second design system on one screen makes that screen look
+  borrowed.
+
 ## Closed 2026-08-09
 
 - **A calf tied to the breeding that made it** — the calving form asks which

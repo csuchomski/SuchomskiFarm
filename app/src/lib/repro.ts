@@ -126,6 +126,26 @@ export async function fetchCalfOutcomes(farmId: string): Promise<CalfOutcome[]> 
 }
 
 /**
+ * How long after calving the farm waits before breeding her back.
+ *
+ * herd.settings.voluntary_waiting_period_days, seeded at 60 and never read
+ * until the timeline drew it. Null rather than a default when the row is
+ * missing: the shaded block on a season row is a statement about this farm's
+ * policy, and drawing someone else's 60 days would be a lie in the shape of
+ * a rule.
+ */
+export async function fetchVoluntaryWaitDays(): Promise<number | null> {
+  const { data, error } = await herdSchema()
+    .from("settings")
+    .select("value")
+    .eq("key", "voluntary_waiting_period_days")
+    .maybeSingle();
+  if (error) throw new Error(`herd.settings: ${error.message}`);
+  const days = Number((data as { value: unknown } | null)?.value);
+  return Number.isFinite(days) ? days : null;
+}
+
+/**
  * Gestation length per purpose, from the farm's own settings rather than a
  * constant here — they're editable, and a due date computed from a number
  * the farm doesn't hold would drift the moment somebody changed it.

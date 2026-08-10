@@ -3,9 +3,10 @@ import {
   atDay,
   axisDays,
   checkStory,
+  fitInWords,
   summarise,
   toSeasons,
-  toYears,
+  untiedCalves,
   whatsNext,
   type TimelineInput,
 } from "./repro-timeline";
@@ -314,43 +315,6 @@ describe("atDay", () => {
   });
 });
 
-describe("toYears", () => {
-  it("puts each event on the year it happened", () => {
-    const rows = toYears(martha);
-    expect(rows.map((r) => r.year)).toEqual([2024, 2025, 2026]);
-    expect(rows[0].services.map((s) => s.id)).toEqual(["s1", "s2", "s3"]);
-    expect(rows[1].services.map((s) => s.id)).toEqual(["s4"]);
-    expect(rows[1].calvings.map((c) => c.on)).toEqual(["2025-04-25"]);
-  });
-
-  it("positions events by day of year, not by season day", () => {
-    const rows = toYears(martha);
-    // 2 June 2024 is day 153 of a leap year.
-    expect(rows[0].services[0].day).toBe(153);
-  });
-
-  it("draws a pregnancy in both years and says which way it runs", () => {
-    const rows = toYears(martha);
-    const from2024 = rows[0].carrying[0];
-    expect(from2024.intoNextYear).toBe(true);
-    expect(from2024.fromPriorYear).toBe(false);
-
-    const into2025 = rows[1].carrying[0];
-    expect(into2025.fromPriorYear).toBe(true);
-    expect(into2025.fromDay).toBe(0);
-    expect(into2025.intoNextYear).toBe(false);
-  });
-
-  it("runs to this year even when the last event is older", () => {
-    const rows = toYears({ ...martha, today: "2028-02-02" });
-    expect(rows[rows.length - 1].year).toBe(2028);
-  });
-
-  it("has nothing to draw when nothing has happened", () => {
-    expect(toYears(base)).toEqual([]);
-  });
-});
-
 describe("summarise", () => {
   it("counts services per conception, and won't divide by no conceptions", () => {
     const s = summarise(toSeasons(martha));
@@ -432,5 +396,68 @@ describe("whatsNext", () => {
 
     const overdue = next({ ...base, calvings: [calving({ id: "c1", date: "2026-01-20" })] });
     expect(overdue).toMatch(/The waiting period was up 2026-03-21/);
+  });
+});
+
+describe("untiedCalves", () => {
+  // Abigail's real shape: on file as Martha's daughter, born six days before
+  // the confirmed pregnancy was due, with no calving anywhere.
+  const abigail = { id: "calf-9", dam_id: "cow-1", birth_date: "2026-07-24" };
+
+  const marthaNow: TimelineInput = {
+    ...base,
+    names: new Map([...names, ["calf-9", "Abigail"]]),
+    breedings: [service({ id: "s1", date: "2025-08-30" }), service({ id: "s2", date: "2025-10-20" })],
+    checks: [
+      check({ id: "p1", date: "2025-10-01", result: "open", breeding_event_id: "s1" }),
+      check({ id: "p2", date: "2025-11-19", result: "pregnant", breeding_event_id: "s2" }),
+    ],
+  };
+
+  it("finds a calf on file that no calving accounts for, and the service it fits", () => {
+    const found = untiedCalves(marthaNow, [abigail]);
+    expect(found.length).toBe(1);
+    expect(found[0]).toMatchObject({ animalId: "calf-9", name: "Abigail", bornOn: "2026-07-24" });
+    // 20 Oct + 283 = 30 Jul, so she came six days early. The 30 Aug service
+    // would be 45 days out, which is not a gestation.
+    expect(found[0].serviceId).toBe("s2");
+    expect(found[0].daysOff).toBe(-6);
+  });
+
+  it("says nothing once the calving ties her", () => {
+    const tied: TimelineInput = {
+      ...marthaNow,
+      outcomes: [outcome({ id: "o1", calving_id: "c9", calf_animal_id: "calf-9" })],
+    };
+    expect(untiedCalves(tied, [abigail])).toEqual([]);
+  });
+
+  it("ignores another cow's calf", () => {
+    expect(untiedCalves(marthaNow, [{ ...abigail, dam_id: "cow-2" }])).toEqual([]);
+    expect(untiedCalves(marthaNow, [{ ...abigail, dam_id: null }])).toEqual([]);
+  });
+
+  it("still names a calf with no service to fit her to", () => {
+    // Vera's position: on file as Patience's daughter, with no breeding
+    // logged for Patience at all. The tie is still missing and still worth
+    // saying so.
+    const found = untiedCalves({ ...base, names: new Map([["calf-9", "Abigail"]]) }, [abigail]);
+    expect(found.length).toBe(1);
+    expect(found[0].serviceId).toBeNull();
+    expect(found[0].daysOff).toBeNull();
+  });
+
+  it("puts the most recent calf first", () => {
+    const older = { id: "calf-8", dam_id: "cow-1", birth_date: "2024-03-10" };
+    expect(untiedCalves(marthaNow, [older, abigail]).map((c) => c.animalId)).toEqual(["calf-9", "calf-8"]);
+  });
+});
+
+describe("fitInWords", () => {
+  it("says how a birth sat against the arithmetic, in words", () => {
+    expect(fitInWords(-6)).toBe("6 days early");
+    expect(fitInWords(1)).toBe("1 day late");
+    expect(fitInWords(0)).toBe("on the day it was due");
+    expect(fitInWords(null)).toBe("no due date to compare it against");
   });
 });

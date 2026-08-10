@@ -1,4 +1,12 @@
-import { addDays, daysBetween, dueDate, type Calving, type CalfOutcome, type PregnancyCheck } from "./repro";
+import {
+  addDays,
+  daysBetween,
+  dueDate,
+  likelyService,
+  type Calving,
+  type CalfOutcome,
+  type PregnancyCheck,
+} from "./repro";
 import { sireLabel, isActive as breedingStands, type Breeding } from "./breedings";
 import type { RealLactation } from "./lactations";
 
@@ -11,15 +19,14 @@ import type { RealLactation } from "./lactations";
  * calf, is this season going better or worse than the last one, and what is
  * outstanding right now.
  *
- * Two readings of the same events, from the mockup:
+ * Rows are seasons: every row starts the day she calved, so day 84 in one row
+ * and day 84 in the next are the same point in her cycle and the columns line
+ * up. That is what makes days-open comparable between them.
  *
- *   Seasons — every row starts the day she calved, so day 84 in one row and
- *   day 84 in the next are the same point in her cycle and the columns line
- *   up. This is the reading that makes days-open comparable.
- *
- *   Calendar years — the same events on the year they happened, with a
- *   pregnancy carrying across the year break. This is the reading that
- *   matches a calendar and a tax year.
+ * A calendar-year reading was built alongside it, from the same mockup, and
+ * removed on 2026-08-10. It laid the same events on Jan–Dec with pregnancies
+ * clipped at the year break — correct, and not a question anyone asks about a
+ * cow. What you want to know is how this season compares to the last one.
  *
  * Everything here is pure. Positions are days, not percentages; turning a
  * day into a percentage is the component's job, because it depends on the
@@ -34,7 +41,7 @@ export type ServiceOutcome = "pregnant" | "open" | "recheck" | "aborted" | "unch
 export interface Service {
   id: string;
   date: string;
-  /** Days from the row's day 0. Negative is possible in the year view. */
+  /** Days from the row's day 0. */
   day: number;
   /** "AI · Dutton", "Bull · Rook" — from lib/breedings so it matches the list. */
   sire: string;
@@ -87,16 +94,6 @@ export interface Season {
   dueOn: string | null;
   /** The whole row's width in days — its own length, not the shared axis. */
   lengthDays: number;
-}
-
-export interface YearRow {
-  year: number;
-  /** Day-of-year positions, 0-based, so the axis is 0…365. */
-  services: Service[];
-  calvings: (Ending & { lactationNumber: number | null })[];
-  /** Pregnancy bars clipped to this year. */
-  carrying: { fromDay: number; toDay: number; fromPriorYear: boolean; intoNextYear: boolean }[];
-  lactationLabel: string;
 }
 
 export interface TimelineInput {
@@ -329,75 +326,65 @@ export function axisDays(seasons: Season[]): number {
 /** Where a day sits on the axis, as a percentage, clamped into the box. */
 export const atDay = (day: number, axis: number): number => Math.max(0, Math.min(100, (day / axis) * 100));
 
-// ─── calendar years ────────────────────────────────────────────────────
+// ─── a calf on file that no calving accounts for ───────────────────────
 
-const yearOf = (iso: string) => Number(iso.slice(0, 4));
-const dayOfYear = (iso: string) => daysBetween(`${iso.slice(0, 4)}-01-01`, iso);
-const daysInYear = (year: number) => daysBetween(`${year}-01-01`, `${year + 1}-01-01`);
+export interface UntiedCalf {
+  animalId: string;
+  name: string;
+  bornOn: string;
+  /** The service whose due date lands nearest her birth, when one does. */
+  serviceId: string | null;
+  /** Days between that service's due date and the birth. Null without one. */
+  daysOff: number | null;
+}
 
 /**
- * The same record on a calendar. A pregnancy that spans New Year is drawn in
- * both years, clipped, with an arrow saying where it came from or went — the
- * alternative is a bar that stops at 31 December for no reason a farmer would
- * recognise.
+ * Calves on file, out of her, that no calving accounts for.
+ *
+ * This exists because the pedigree link and the calving link are different
+ * things and only the second one closes a season. Abigail was recorded as
+ * Martha's daughter in August 2026 and there was no calving anywhere in the
+ * database, so Martha's page went on reporting her overdue with the calf
+ * standing next to her. Everything needed to notice that was already on file
+ * — a daughter, a birth date, a confirmed pregnancy due six days later — and
+ * nothing looked.
+ *
+ * It doesn't *infer* the tie. Recording a calving is a statement about what
+ * happened, with an ease and an assistance only the farmer knows. This finds
+ * the candidate and says so; the form does the rest.
  */
-export function toYears(input: TimelineInput): YearRow[] {
-  const seasons = toSeasons(input);
-  const services = seasons.flatMap((s) => s.services);
-  const calvings = seasons.flatMap((s) => (s.ending ? [{ ...s.ending, lactationNumber: s.lactationNumber }] : []));
+export function untiedCalves(
+  input: TimelineInput,
+  offspring: { id: string; dam_id: string | null; birth_date: string }[],
+): UntiedCalf[] {
+  const tied = new Set(
+    input.outcomes.map((o) => o.calf_animal_id).filter((id): id is string => id !== null),
+  );
+  const services = input.breedings.filter((b) => b.animal_id === input.animal.id && breedingStands(b));
 
-  // Every pregnancy on file: conception → calving, or conception → due date
-  // while she's still carrying.
-  const pregnancies = seasons
-    .filter((s) => s.conception !== null)
-    .map((s) => ({ from: s.conception!.date, to: s.ending ? s.ending.on : s.dueOn }))
-    .filter((p): p is { from: string; to: string } => p.to !== null);
-
-  const dates = [
-    ...services.map((s) => s.date),
-    ...calvings.map((c) => c.on),
-    ...pregnancies.flatMap((p) => [p.from, p.to]),
-  ];
-  if (dates.length === 0) return [];
-
-  const first = yearOf(dates.reduce((a, b) => (a < b ? a : b)));
-  const last = Math.max(yearOf(dates.reduce((a, b) => (a > b ? a : b))), yearOf(input.today));
-
-  const rows: YearRow[] = [];
-  for (let year = first; year <= last; year++) {
-    const start = `${year}-01-01`;
-    const end = `${year + 1}-01-01`;
-    const span = daysInYear(year);
-
-    const inYear = services.filter((s) => s.date >= start && s.date < end);
-    const calvedHere = calvings.filter((c) => c.on >= start && c.on < end);
-
-    const carrying = pregnancies
-      .filter((p) => p.from < end && p.to >= start)
-      .map((p) => ({
-        fromDay: p.from < start ? 0 : dayOfYear(p.from),
-        toDay: p.to >= end ? span : dayOfYear(p.to),
-        fromPriorYear: p.from < start,
-        intoNextYear: p.to >= end,
-      }));
-
-    const numbers = calvedHere.map((c) => c.lactationNumber).filter((n): n is number => n !== null);
-    const label =
-      numbers.length === 0
-        ? ""
-        : numbers.length === 1
-          ? `lactation ${numbers[0]}`
-          : `lactation ${numbers[0]} → ${numbers[numbers.length - 1]}`;
-
-    rows.push({
-      year,
-      services: inYear.map((s) => ({ ...s, day: dayOfYear(s.date) })),
-      calvings: calvedHere.map((c) => ({ ...c, day: dayOfYear(c.on) })),
-      carrying,
-      lactationLabel: label,
+  return offspring
+    .filter((c) => c.dam_id === input.animal.id && !tied.has(c.id))
+    .sort((a, b) => b.birth_date.localeCompare(a.birth_date))
+    .map((c) => {
+      const fit = likelyService(c.birth_date, services, input.gestationDays);
+      const expected = fit ? dueDate(fit.date, input.gestationDays) : null;
+      return {
+        animalId: c.id,
+        name: input.names.get(c.id) ?? "a calf",
+        bornOn: c.birth_date,
+        serviceId: fit?.id ?? null,
+        daysOff: expected ? daysBetween(expected, c.birth_date) : null,
+      };
     });
-  }
-  return rows;
+}
+
+/** "six days early", "on the day", "45 days late" — how a birth sat against
+ *  the service's own arithmetic, in words rather than a signed integer. */
+export function fitInWords(daysOff: number | null): string {
+  if (daysOff === null) return "no due date to compare it against";
+  if (daysOff === 0) return "on the day it was due";
+  const n = Math.abs(daysOff);
+  return `${n} day${n === 1 ? "" : "s"} ${daysOff < 0 ? "early" : "late"}`;
 }
 
 // ─── the summary line ──────────────────────────────────────────────────

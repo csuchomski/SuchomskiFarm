@@ -5,9 +5,10 @@ import { MemoryRouter } from "react-router-dom";
 import type { RealAnimal } from "../../lib/herd";
 
 /**
- * The drawn record. What's worth pressing: that the two views really swap,
- * that the marker a service gets carries its result, and that a row with
- * nothing in it says so rather than drawing an empty axis.
+ * The drawn record. What's worth pressing: that the marker a service gets
+ * carries its result, that a row with nothing in it says so rather than
+ * drawing an empty axis, and that a calf on file with no calving is called
+ * out rather than silently leaving the season open.
  */
 
 const animal = (over: Partial<RealAnimal> & { id: string; ear_tag: string }): RealAnimal => ({
@@ -29,7 +30,9 @@ const martha = animal({ id: "cow-1", ear_tag: "1", barn_name: "Martha" });
 const herd = [
   martha,
   animal({ id: "bull-1", ear_tag: "", barn_name: "Dutton", sex: "male", class: "bull", record_type: "reference" }),
-  animal({ id: "calf-1", ear_tag: "99", barn_name: "Bess", class: "calf" }),
+  // Out of Martha, which is what makes her a candidate for a calving that
+  // hasn't been recorded — Abigail's real position.
+  animal({ id: "calf-1", ear_tag: "99", barn_name: "Bess", class: "calf", dam_id: "cow-1", birth_date: "2025-04-25" }),
 ];
 
 const calvings = [
@@ -68,6 +71,7 @@ const checks = [
 
 const state = {
   calvings: calvings as typeof calvings,
+  outcomes: outcomes as typeof outcomes,
   breedings: breedings as typeof breedings,
   checks: checks as typeof checks,
 };
@@ -75,7 +79,7 @@ const state = {
 vi.mock("../../lib/repro", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../lib/repro")>()),
   fetchCalvings: vi.fn(async () => state.calvings),
-  fetchCalfOutcomes: vi.fn(async () => outcomes),
+  fetchCalfOutcomes: vi.fn(async () => state.outcomes),
   fetchPregnancyChecks: vi.fn(async () => state.checks),
   fetchGestationDays: vi.fn(async () => ({ beef: 283, dairy: 279 })),
   fetchVoluntaryWaitDays: vi.fn(async () => 60),
@@ -105,6 +109,7 @@ vi.mock("../../lib/lactations", async (importOriginal) => ({
 afterEach(() => {
   cleanup();
   state.calvings = calvings;
+  state.outcomes = outcomes;
   state.breedings = breedings;
   state.checks = checks;
 });
@@ -174,21 +179,6 @@ describe("ReproTimeline", () => {
     expect(figures[1].textContent).toContain("so far");
   });
 
-  it("swaps to calendar years and back", async () => {
-    await mount();
-    expect(screen.getByText("Season 1")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Calendar years" }));
-    expect(screen.queryByText("Season 1")).toBeNull();
-    expect(screen.getByText("2024")).toBeTruthy();
-    expect(screen.getByText("2025")).toBeTruthy();
-    // A service is dated within its year, not within a season.
-    expect(screen.getByText(/06-02 · AI · Dutton — open/)).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Seasons" }));
-    expect(screen.getByText("Season 1")).toBeTruthy();
-  });
-
   it("can turn the voluntary wait shading off", async () => {
     await mount();
     expect(document.querySelectorAll(".rt-wait").length).toBe(2);
@@ -229,5 +219,35 @@ describe("ReproTimeline", () => {
     state.checks = [];
     await mount({ drawn: false });
     expect(document.querySelector(".rt-grid")).toBeNull();
+  });
+
+  it("has no calendar-year view — a cow's record isn't kept by tax year", async () => {
+    await mount();
+    expect(screen.queryByRole("button", { name: "Calendar years" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Seasons" })).toBeNull();
+    // And the season rows are still there, which is the reading that stayed.
+    expect(screen.getByText("Season 1")).toBeTruthy();
+  });
+
+  it("calls out a calf on file that no calving accounts for", async () => {
+    // With the calvings gone, so are their outcome rows — nothing accounts
+    // for Bess any more, which is exactly Abigail's live situation.
+    state.calvings = [];
+    state.outcomes = [];
+    await mount();
+    const prompt = document.querySelector(".rt-untied")!;
+    expect(prompt).toBeTruthy();
+    expect(prompt.textContent).toContain("Bess");
+    expect(prompt.textContent).toContain("with no calving recorded");
+    // And it links to the calving form with the work already done.
+    const link = prompt.querySelector("a")!;
+    expect(link.getAttribute("href")).toContain("/calvings?");
+    expect(link.getAttribute("href")).toContain("dam=cow-1");
+    expect(link.getAttribute("href")).toContain("calf=calf-1");
+  });
+
+  it("says nothing once a calving accounts for her", async () => {
+    await mount();
+    expect(document.querySelector(".rt-untied")).toBeNull();
   });
 });

@@ -161,6 +161,27 @@ Four items were reviewed and are no longer open.
 
 ## Closed 2026-08-10
 
+- **A calf on file with no calving is called out** — a cow's record now names
+  any daughter recorded as hers that no calving accounts for, says which
+  service the birth date fits and by how much, and links to the calving form
+  with the dam, the date, the service and the calf already filled in.
+
+  This is the second half of the Abigail problem. Migration 031 made the fix
+  *possible*; nothing made it *visible*. Everything needed to spot it was on
+  file — a daughter, a birth date, a confirmed pregnancy due six days later —
+  and nothing looked, so her page went on reporting Martha overdue with the
+  calf standing next to her.
+
+  It doesn't infer the tie. A calving is a statement about what happened, with
+  an ease and an assistance only the farmer knows. This finds the candidate
+  and says so; the form does the rest.
+
+- **The calendar-year view is gone** — removed at the owner's request. It laid
+  the same events on Jan–Dec with pregnancies clipped at the year break, which
+  was correct and answered a question nobody asks about a cow. What you want
+  to know is how this season compares to the last, and that is what the season
+  rows are for.
+
 - **A calving can adopt a calf already on file** — the calf row on Herd →
   Calvings offers any animal recorded as born on the calving date and not
   already attached to one. Picking her attaches her instead of creating a

@@ -7,6 +7,29 @@
   border-bottom: 1px solid var(--hairline);
 }
 
+.record-topbar__left {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* The record has no nav rail, so this is the only way back that looks like
+   one. Never allowed to shrink — the eyebrow beside it is what truncates. */
+.record-back {
+  flex: none;
+  font-size: 13px;
+  color: var(--ink-muted);
+  text-decoration: none;
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 1px;
+}
+
+.record-back:hover {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
 .record-photo {
   width: 84px;
   height: 84px;
@@ -295,10 +318,11 @@
     gap: 12px;
   }
 
+  /* Truncation here kept "Herd · Animals ·" and dropped the name — the only
+     part worth reading. With a back link beside it the trail is duplication
+     twice over: the link says Animals, the head below says who she is. */
   .record-topbar .eyebrow {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    display: none;
   }
 
   .breed-row {

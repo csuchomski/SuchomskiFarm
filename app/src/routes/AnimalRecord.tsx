@@ -7,6 +7,7 @@ import { AnimalForm } from "../components/herd/AnimalForm";
 import { Pedigree } from "../components/herd/Pedigree";
 import { OffspringEditor } from "../components/herd/OffspringEditor";
 import { GeneticsSection } from "../components/herd/GeneticsSection";
+import { MoneySection } from "../components/herd/MoneySection";
 import { BreedEditor } from "../components/herd/BreedEditor";
 import {
   describeBreeding,
@@ -300,10 +301,11 @@ export default function AnimalRecord() {
 
           <GeneticsSection animalId={animal.id} farmId={farmId} />
 
+          <MoneySection animalId={animal.id} name={name} />
+
           <div style={{ marginTop: 24 }}>
             <Callout>
-              Health and cost history aren't shown — the treatment and per-animal cost tables have no rows yet.
-              They'll appear here once they do.
+              Health history isn't shown — the treatment table has no rows yet. It'll appear here once it does.
             </Callout>
           </div>
         </div>
@@ -392,9 +394,17 @@ function Frame({ title, children }: { title: string; children: React.ReactNode }
   return (
     <div style={{ background: "var(--paper)", minHeight: "100vh" }}>
       <div className="record-topbar">
-        <Link to="/animals" className="serif" style={{ fontSize: 22, letterSpacing: "-.02em", color: "var(--ink)" }}>
-          Suchomski<span style={{ color: "var(--herd-green)" }}>.</span>
-        </Link>
+        <div className="record-topbar__left">
+          <Link to="/animals" className="serif" style={{ fontSize: 22, letterSpacing: "-.02em", color: "var(--ink)" }}>
+            Suchomski<span style={{ color: "var(--herd-green)" }}>.</span>
+          </Link>
+          {/* An animal's record sits outside OpsShell, so it has no nav rail
+              and the wordmark was the only way back — a link that doesn't
+              look like one. This is the way back. */}
+          <Link to="/animals" className="record-back mono">
+            ← Animals
+          </Link>
+        </div>
         <div className="eyebrow">Herd · Animals · {title}</div>
       </div>
       {children}

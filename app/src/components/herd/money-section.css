@@ -1,0 +1,96 @@
+/* Costs and revenue on an animal's record. Same flat-paper vocabulary as the
+   rest of Herd: hairlines, no shadows, no radii. */
+
+.money-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  padding: 4px 0 16px;
+}
+
+.money-total__value {
+  font-size: 21px;
+  white-space: nowrap;
+}
+
+.money-total__label {
+  margin-top: 4px;
+}
+
+/* What she cost to buy sits apart from the three that make up the net, so it
+   is never read as part of the arithmetic. */
+.money-total--muted {
+  padding-left: 28px;
+  border-left: 1px solid var(--hairline);
+}
+
+.money-list {
+  border-top: 1px solid var(--hairline);
+}
+
+.money-row {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr) 96px;
+  gap: 12px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.money-row__date {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.money-row__what {
+  min-width: 0;
+}
+
+.money-row__amount {
+  font-size: 15px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.money-row__amount--in {
+  color: var(--herd-green);
+}
+
+.money-note {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin-top: 10px;
+  max-width: 62ch;
+}
+
+@media (max-width: 520px) {
+  .money-totals {
+    gap: 20px;
+  }
+
+  .money-total--muted {
+    padding-left: 20px;
+  }
+
+  /* The date moves under the description rather than holding a fixed column
+     that squeezes it to two words. */
+  .money-row {
+    grid-template-columns: minmax(0, 1fr) 88px;
+    row-gap: 2px;
+  }
+
+  .money-row__date {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .money-row__what {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .money-row__amount {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}

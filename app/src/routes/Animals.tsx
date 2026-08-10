@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, EarTag, GridRow, Pill } from "../components/ui";
@@ -108,6 +108,19 @@ export default function Animals() {
     });
   }, [all, breeds, query, classFilter, purposeFilter, showInactive, sort]);
 
+  // The two sides of the herd, as sections rather than as a filter that hides
+  // one of them. `isMilked` is the same predicate the chips, the counts and
+  // the lactation pages use, so a dual-purpose cow lands under Dairy on every
+  // screen — and her row still says "dual".
+  const groups = useMemo(() => {
+    const dairy = visible.filter(isMilked);
+    const beef = visible.filter((a) => !isMilked(a));
+    return [
+      { key: "dairy", label: "Dairy", rows: dairy, note: dairy.some((a) => a.purpose === "dual") ? "milked, including dual-purpose" : "milked" },
+      { key: "beef", label: "Beef", rows: beef, note: "raising their calves" },
+    ].filter((g) => g.rows.length > 0);
+  }, [visible]);
+
   return (
     <OpsShell>
       <PageHeader
@@ -209,35 +222,49 @@ export default function Animals() {
             <span className="text-right hide-sm">Age</span>
           </GridRow>
 
-          {visible.map((a) => (
-            <Link key={a.id} to={`/animals/${a.ear_tag}`} style={{ color: "inherit", display: "contents" }}>
-              <GridRow cols={COLS} mobileCols={COLS_SM} as="body" highlight={a.status !== "active"}>
-                <EarTag tag={a.ear_tag} accent="herd" />
-                <span style={{ minWidth: 0 }}>
-                  <span className="serif" style={{ fontSize: 17 }}>
-                    {nameOf(a)}
-                  </span>
-                  {/* The status moved here from a column of its own. It is
-                      "active" for almost every row, so a whole column spent
-                      saying so was the least useful width on the page. */}
-                  {a.status !== "active" && (
-                    <>
-                      {" "}
-                      <Pill variant="outline">{a.status}</Pill>
-                    </>
-                  )}
-                  <br />
-                  <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
-                    {[describeBreeding(breeds.get(a.id)), a.sex, a.purpose].filter(Boolean).join(" · ")}
-                  </span>
-                </span>
-                <span className="hide-sm" style={{ fontSize: 13 }}>{a.class}</span>
-                <NextBreeding animal={a} repro={repro} />
-                <span className="mono text-right hide-sm" style={{ fontSize: 15 }}>
-                  {formatAge(a.birth_date)}
-                </span>
-              </GridRow>
-            </Link>
+          {groups.map((group) => (
+            <Fragment key={group.key}>
+              {/* Only when both sides are on screen. One heading over the
+                  whole list would be labelling something the chips above
+                  already said. */}
+              {groups.length > 1 && (
+                <div className="animals-group">
+                  <span className="serif animals-group__name">{group.label}</span>
+                  <span className="mono animals-group__count">{group.rows.length}</span>
+                  <span className="animals-group__note">{group.note}</span>
+                </div>
+              )}
+              {group.rows.map((a) => (
+                <Link key={a.id} to={`/animals/${a.ear_tag}`} style={{ color: "inherit", display: "contents" }}>
+                  <GridRow cols={COLS} mobileCols={COLS_SM} as="body" highlight={a.status !== "active"}>
+                    <EarTag tag={a.ear_tag} accent="herd" />
+                    <span style={{ minWidth: 0 }}>
+                      <span className="serif" style={{ fontSize: 17 }}>
+                        {nameOf(a)}
+                      </span>
+                      {/* The status moved here from a column of its own. It is
+                          "active" for almost every row, so a whole column spent
+                          saying so was the least useful width on the page. */}
+                      {a.status !== "active" && (
+                        <>
+                          {" "}
+                          <Pill variant="outline">{a.status}</Pill>
+                        </>
+                      )}
+                      <br />
+                      <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+                        {[describeBreeding(breeds.get(a.id)), a.sex, a.purpose].filter(Boolean).join(" · ")}
+                      </span>
+                    </span>
+                    <span className="hide-sm" style={{ fontSize: 13 }}>{a.class}</span>
+                    <NextBreeding animal={a} repro={repro} />
+                    <span className="mono text-right hide-sm" style={{ fontSize: 15 }}>
+                      {formatAge(a.birth_date)}
+                    </span>
+                  </GridRow>
+                </Link>
+              ))}
+            </Fragment>
           ))}
 
           {visible.length === 0 && (

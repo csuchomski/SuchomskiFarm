@@ -82,55 +82,8 @@ Worth knowing before building:
 
 ## Requested 2026-08-10
 
-Six asks, recorded as given. The owner said more detail is coming, so the
-notes below are what's true about the code today rather than a design.
-
-### Costs and revenue on an animal's page
-
-What she has cost and what she has brought in, on her own record. The figures
-exist: "Attributed to" writes `herd.cost_entries` and `herd.revenue_entries`
-per animal, and Today's "Profit per head" already tallies both. Her page
-doesn't show either.
-
-Worth knowing before building: partial attribution is allowed, so a total on
-her page is a share of some bills and all of others, and it should say so
-rather than read like an invoice. Meat sales written by `complete_pickup`
-land in the same table as hand-entered revenue, which is right for a total
-and wrong for a list that doesn't distinguish them.
-
-### A way back to Animals from an animal record
-
-There isn't one on a loaded record. `AnimalRecord` has "← back to Animals"
-only in its loading and not-found states; the record itself offers the
-wordmark in the top bar, which routes to `/animals` but doesn't look like a
-back link, and the eyebrow "Herd · Animals · Martha" is plain text.
-
-The smallest honest fix is making that eyebrow a trail with the first two
-parts as links. Worth checking on a phone, where the top bar is tightest.
-
-### Divide the Animals page by breed type
-
-Today it's a filter, not a division: chips for All / Dairy / Beef, one side at
-a time, with the counts in the header line.
-
-Needs settling first: "breed type" could mean beef-vs-dairy — the `purpose`
-split that's already there, asked to be shown as sections rather than a
-filter — or the actual breed, Jersey against Angus, which is a different cut
-and reads `breed_composition` rather than `purpose`. A cross belongs to two
-breeds at once, so grouping by breed has to decide what to do with her.
-
-### Remove sires from "Profit per head" on Today
-
-Confirmed, and it's a query rather than a display bug: `fetchDashboardData`
-selects animals without `record_type` and filters on nothing but `farm_id`
-and `deleted_at`, so catalogue AI bulls sit in the list. They can never have
-revenue attributed to them, so they occupy the bottom of a ranking that's
-supposed to be about which animals earn.
-
-`residentHerd()` in `lib/herd.ts` is the predicate that already means this
-elsewhere. Worth deciding whether a *resident* bull belongs in the list —
-he's a real animal with real costs, so "no sires" and "no reference animals"
-are not the same rule.
+Six asks, recorded as given. Four are built — see "Closed 2026-08-10" below.
+These two are the ones still open, and the owner said more detail is coming.
 
 ### Depreciation per cow, and what each animal is worth
 
@@ -261,6 +214,66 @@ Four items were reviewed and are no longer open.
   is gone; it had been wrong for a fortnight.
 
 ## Closed 2026-08-10
+
+- **Costs and revenue on an animal's page** — her record now carries four
+  figures and the rows behind them: revenue, what it costs to run her, the net
+  of those two, and — kept apart — what she cost to buy.
+
+  Basis is the one real decision. `cost_entries.is_basis` marks an acquisition
+  price, whose category is `basis_type = 'basis'` and goes on no Schedule F
+  expense line at all; everything else is money spent on her this year.
+  Netting Martha's $700 purchase against her season would say she had a
+  terrible year in the year she was bought and a fine one every year after,
+  which is an artifact of the arithmetic rather than a fact about the cow. So
+  the net is revenue minus operating cost, and what she cost to buy sits
+  beside it behind a rule.
+
+  Internal transfers are excluded from every total. Nothing writes one yet —
+  `source = 'dam_carryforward'` is what the flag is for — but a total that
+  silently double-counts the day something does is worse than one built for it.
+
+  The page says the totals are what was *attributed*, not the whole of every
+  bill she appears on, because attribution is deliberately partial: a feed
+  bill can be four fifths herd.
+
+- **A way back to Animals from a record** — there genuinely wasn't one. The
+  "← back to Animals" link existed only in the loading and not-found states;
+  a loaded record offered the wordmark, which routes there but doesn't look
+  like a link. An animal's page sits outside `OpsShell`, so it has no nav rail
+  to fall back on.
+
+  On a phone the eyebrow beside it now hides rather than truncates. Ellipsis
+  kept "Herd · Animals ·" and dropped the name — the only part worth reading —
+  and with a back link next to it the trail was duplication twice over.
+
+- **Animals, divided by breed type** — beef and dairy are sections with their
+  own headings and counts rather than a filter that shows one side at a time.
+  The chips still work; picking one drops the headings, since a single heading
+  over a single list labels what the chip just said.
+
+  Read as beef-vs-dairy, not Jersey-vs-Angus: `breeds.species_type` is
+  literally the breed's type and `purpose` is the farm's decision about how
+  she is run. The grouping predicate is `isMilked`, the same one the chips,
+  the counts and the lactation pages use, so a dual-purpose cow appears under
+  Dairy on every screen — and her row still reads "dual". Grouping by actual
+  breed is a different cut and still open; a cross belongs to two breeds at
+  once, which needs an answer first.
+
+- **Catalogue bulls are out of "Profit per head"** — and out of "Head". It was
+  a query, not a display: `fetchDashboardData` selected animals without
+  `record_type` and filtered on nothing but `farm_id`, so the four AI bulls
+  the farm buys straws from were counted as livestock and sat in a ranking of
+  which animals earn, where they structurally cannot — a straw is a cost
+  against the cow it was used on.
+
+  `herdOnly()` is now generic over the row rather than tied to `RealAnimal`,
+  because Today reads a narrower set of columns and still needs that exact
+  predicate. One definition, so a catalogue bull can't be livestock on one
+  screen and not on another.
+
+  A *resident* bull would still appear, and should: he is an animal the farm
+  owns, with real costs. "No sires" and "no reference animals" are different
+  rules, and this farm has no resident bulls.
 
 - **A sire's purpose follows his breeds** — asked for directly: *"I don't want
   to maintain a breeds purpose in two places."* Right, and the duplication was

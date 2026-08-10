@@ -184,6 +184,22 @@ Four items were reviewed and are no longer open.
 
 ## Closed 2026-08-10
 
+- **Recording a calving that predates a lactation already on file** — the
+  error was `lactations_dry_after_fresh`, reported while tying Vera's 2024
+  birth to Patience, whose only lactation freshened in 2026. Migration 032.
+
+  Worth keeping: this was three bugs behind one assumption — that the calving
+  being recorded is the most recent thing that happened to her. Fixing only
+  the reported error would have hit "two open lactations" next, and then a
+  2024 lactation numbered after a 2026 one. The untied-calf prompt shipped
+  hours earlier is what made historical calvings a normal thing to do, so
+  every animal entered before Calvings existed would have hit this.
+
+  A lactation closed because a later freshening bounds it now says so in
+  `termination_reason`, and the animal record shows that text. A derived
+  dry-off date that looks like a recorded one is the kind of quiet wrong
+  answer that is worse than a blank.
+
 - **Alerts** — Herd → Alerts lists everything outstanding, with the day it
   became so, banded Now / Soon / Coming up. Six breeding rules: past due with
   no calving, a service old enough to check and unchecked, a check that came

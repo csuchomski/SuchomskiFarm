@@ -82,16 +82,18 @@ Worth knowing before building:
 
 ## Requested 2026-08-10
 
-Six asks, recorded as given. Four are built — see "Closed 2026-08-10" below.
-These two are the ones still open, and the owner said more detail is coming.
+Six asks, recorded as given. Five are built — see "Closed 2026-08-10" below.
+What is left open is the tax half of depreciation, and pasture moves.
 
-### Depreciation per cow, and what each animal is worth
+### Depreciation per cow — the tax half
 
-**Spec given by the owner on 2026-08-10. Build to it.** Two separate
-computations that share a table and nothing else — the management one is the
-one that matters, and it is not the one the tax code describes.
+**The management half is built. See "Closed 2026-08-10" below and migration
+035.** What is left here is the 4562 side, which stays open on purpose.
 
-#### Management: economic herd depreciation
+The spec, as given, is kept below in full: the two computations share a table
+and nothing else, and the reasoning for the built half lives here.
+
+#### Management: economic herd depreciation — BUILT
 
 Herd depreciation is a real cash-equivalent cost whether or not the IRS lets
 you deduct it, and on most dairies it is the largest unrecognised cost of
@@ -140,13 +142,21 @@ The raised-versus-purchased basis question gets fiddly if the farm ever buys
 bred heifers and resells them; confirm the specifics with the CPA before that
 path is coded.
 
+**Still open on the tax side**, and deliberately: a register needs a
+placed-in-service date per purchased animal, an election per animal for §179
+and bonus, accumulated depreciation carried year to year, and recapture at
+culling. None of it is hard; all of it is wrong in ways nobody notices until a
+return is filed. The recommendation stands — take line 14 from whoever files —
+and the first question for the CPA is the raised-versus-purchased basis case
+if the farm ever buys bred heifers and resells them.
+
 #### What this changes about the decision below
 
 "Depreciation stays a category" was decided against building a tax fixed-asset
 register, and that part stands: line 14 still takes a figure from whoever
-files. The management computation was never what that decision was about. It
-is the one to build first, and it does not need a single one of MACRS,
-convention or recapture to be right.
+files. The management computation was never what that decision was about — it
+is built, and it needed not a single one of MACRS, convention or recapture to
+be right.
 
 ### Pasture moves
 
@@ -263,6 +273,38 @@ Four items were reviewed and are no longer open.
 
 ## Closed 2026-08-10
 
+- **Economic herd depreciation** — Herd → Depreciation books the largest cost
+  of production nobody books. `(replacement − cull) ÷ productive lifetime`,
+  with the arithmetic on the page rather than only its answer: at the farm's
+  figures, **$371.43 a cow a year and $1.86/cwt at 20,000 lb**.
+
+  Per-cwt divides by *her* milk where there is a year of it and by the farm's
+  expected yield where there isn't, and every row says which it used. The
+  threshold matters more than it looks: a cow with one week of records would
+  give a $/cwt in the hundreds — arithmetically correct and completely
+  misleading — so below 90 days it falls back rather than computing.
+
+  **Carrying value declines with time in production, not lactations counted.**
+  A cow one day fresh has not lost a year's value, and counting the lactation
+  she is standing in would say she had. It floors at cull value, which is what
+  makes it a value rather than a straight line to zero — she is worth her cull
+  cheque on the day she leaves. Her clock starts at the earlier of her first
+  freshening and her first calving, because this herd was entered by hand and
+  has each without the other.
+
+  The roll writes dated rows, never a field it overwrites: the history is the
+  artifact the accrual-adjusted statements and the lender want, and her record
+  shows it with the movement between marks. A hand-entered figure — an
+  appraisal, a sale — outranks the roll and is left alone by it.
+
+  **Beef cows are deliberately absent.** Every assumption is a dairy figure —
+  a springing heifer, a cull cow, a lifetime in lactations — so marking a beef
+  cow with them would invent a number rather than measure one. She can still
+  be valued by hand, and the page says so instead of leaving a silent gap.
+
+  Migration 035. Nothing here knows about MACRS, conventions, §179 or §1245
+  recapture, and the page says outright that it is not the 4562.
+
 - **Costs and revenue on an animal's page** — her record now carries four
   figures and the rows behind them: revenue, what it costs to run her, the net
   of those two, and — kept apart — what she cost to buy.
@@ -283,6 +325,13 @@ Four items were reviewed and are no longer open.
   The page says the totals are what was *attributed*, not the whole of every
   bill she appears on, because attribution is deliberately partial: a feed
   bill can be four fifths herd.
+
+- **A bull's record goes back to Sires** — the back link added the same
+  morning always said Animals, which from a bull is wrong twice: he is opened
+  from Sires, and a catalogue bull is deliberately kept off the Animals list,
+  so it pointed at a page he does not appear on. `isSire` is exported from
+  `lib/sires.ts` — the same predicate that builds that list — so the way back
+  cannot drift from where he is listed. The eyebrow follows it.
 
 - **A way back to Animals from a record** — there genuinely wasn't one. The
   "← back to Animals" link existed only in the loading and not-found states;

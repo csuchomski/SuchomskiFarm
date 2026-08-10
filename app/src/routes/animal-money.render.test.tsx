@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { RealAnimal } from "../lib/herd";
 import type { MoneyEntry } from "../lib/animal-money";
+import type { Valuation } from "../lib/depreciation";
 
 /**
  * An animal's record, showing what she has cost and what she has returned —
@@ -68,6 +69,13 @@ const entry = (over: Partial<MoneyEntry> & { kind: MoneyEntry["kind"]; amountCen
 
 const money: MoneyEntry[] = [];
 
+const valuations: Valuation[] = [];
+
+vi.mock("../lib/depreciation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/depreciation")>()),
+  fetchValuations: vi.fn(async () => valuations),
+}));
+
 vi.mock("../lib/animal-money", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/animal-money")>()),
   fetchAnimalMoney: vi.fn(async () => money),
@@ -92,6 +100,7 @@ vi.mock("../lib/genetics", async (importOriginal) => ({
 afterEach(() => {
   cleanup();
   money.length = 0;
+  valuations.length = 0;
 });
 
 const mount = async (tag = "1") => {
@@ -122,6 +131,38 @@ describe("A way back", () => {
     // off that list on purpose.
     expect(screen.queryByRole("link", { name: /← Animals/ })).toBeNull();
     expect(document.querySelector(".record-topbar .eyebrow")?.textContent).toBe("Herd · Sires · Dutton");
+  });
+});
+
+describe("What she is carried at", () => {
+  it("says she isn't marked yet, and why the roll doesn't speak for her", async () => {
+    // Martha is a beef cow — the herd roll covers the dairy string.
+    await mount();
+    await waitFor(() =>
+      expect(screen.getByText(/The herd roll covers the dairy string; anyone else is valued by hand/)).toBeTruthy(),
+    );
+  });
+
+  it("lists the roll as dated rows, newest first, with the movement between them", async () => {
+    valuations.push(
+      { id: "v2", animalId: "cow-2", asOf: "2026-08-10", valueCents: 142458, basis: "marked", note: "" },
+      { id: "v1", animalId: "cow-2", asOf: "2025-08-10", valueCents: 179601, basis: "marked", note: "" },
+    );
+    await mount();
+
+    await waitFor(() => expect(screen.getAllByText("marked in the herd roll").length).toBe(2));
+    const amounts = [...document.querySelectorAll(".money-row__amount")].map((n) => n.textContent);
+    // A year of depreciation, shown as the change rather than left to be
+    // worked out — the reason the history is kept at all.
+    expect(amounts[0]).toContain("$1,424.58");
+    expect(amounts[0]).toContain("−$371.43");
+    expect(amounts[1]).toContain("$1,796.01");
+  });
+
+  it("keeps another animal's valuations off her page", async () => {
+    valuations.push({ id: "v9", animalId: "someone-else", asOf: "2026-08-10", valueCents: 500000, basis: "marked", note: "" });
+    await mount();
+    await waitFor(() => expect(screen.getByText(/No value on file/)).toBeTruthy());
   });
 });
 

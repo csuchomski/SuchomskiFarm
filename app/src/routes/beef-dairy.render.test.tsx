@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { RealAnimal } from "../lib/herd";
+import type { Valuation } from "../lib/depreciation";
 
 /**
  * Beef and dairy kept apart.
@@ -94,6 +95,13 @@ vi.mock("../lib/gestation", async (importOriginal) => ({
   fetchBreeds: vi.fn(async () => []),
   fetchComposition: vi.fn(async () => []),
   fetchOverrides: vi.fn(async () => []),
+}));
+
+const valuations: Valuation[] = [];
+
+vi.mock("../lib/depreciation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/depreciation")>()),
+  fetchValuations: vi.fn(async () => valuations),
 }));
 
 vi.mock("../lib/animal-money", async (importOriginal) => ({

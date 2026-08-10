@@ -16,7 +16,6 @@ import {
   setLotActive,
   fetchSireDraft,
   sireName,
-  SIRE_PURPOSES,
   updateSire,
   siresIn,
   stockBySire,
@@ -435,13 +434,16 @@ export default function Sires() {
                         {mine.length === 0 ? (
                           <span style={{ color: "var(--ink-faint)" }}>no breeds on file</span>
                         ) : (
-                          mine
-                            .map((c) =>
-                              Number(c.percent) === 100
-                                ? breedName(c.breed_id)
-                                : `${Number(c.percent)}% ${breedName(c.breed_id)}`,
-                            )
-                            .join(", ")
+                          <>
+                            {mine
+                              .map((c) =>
+                                Number(c.percent) === 100
+                                  ? breedName(c.breed_id)
+                                  : `${Number(c.percent)}% ${breedName(c.breed_id)}`,
+                              )
+                              .join(", ")}
+                            <span style={{ color: "var(--ink-muted)" }}> · {a.purpose}</span>
+                          </>
                         )}
                         <br />
                         <button
@@ -519,27 +521,6 @@ export default function Sires() {
                                   onChange={(e) => setEditDraft({ ...editDraft, birthDate: e.target.value })}
                                 />
                               </label>
-                              {/* Editable here and nowhere else for a reference
-                                  bull: he is created as 'dairy' because the
-                                  column is NOT NULL and this herd buys dairy
-                                  semen. That is a default, not a fact about
-                                  him — and it is the gestation fallback for
-                                  any calf of his with no breeds on file. */}
-                              <label style={{ fontSize: 13 }}>
-                                <div className="eyebrow">Purpose</div>
-                                <select
-                                  className="gene-select"
-                                  value={editDraft.purpose ?? "dairy"}
-                                  aria-label="Purpose"
-                                  onChange={(e) => setEditDraft({ ...editDraft, purpose: e.target.value })}
-                                >
-                                  {SIRE_PURPOSES.map((p) => (
-                                    <option key={p} value={p}>
-                                      {p}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
                               <Field
                                 label="Notes"
                                 value={editDraft.notes}
@@ -583,9 +564,10 @@ export default function Sires() {
                               </span>
                             </div>
                             <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 8 }}>
-                              His sex, class and whether he lives here aren't editable. Turning a catalogue bull into
-                              a resident one would put him in the herd's counts — a different decision from fixing a
-                              typo.
+                              He's <strong>{a.purpose}</strong>, which follows from his breeds rather than being a
+                              field — set them above and this follows. His sex, class and whether he lives here
+                              aren't editable either: turning a catalogue bull into a resident one would put him in
+                              the herd's counts, a different decision from fixing a typo.
                             </p>
                           </>
                         )}
@@ -598,7 +580,6 @@ export default function Sires() {
                           animalId={a.id}
                           farmId={farmId}
                           current={mine.map((c) => ({ breedId: c.breed_id, percent: Number(c.percent) }))}
-                          purpose={a.purpose}
                           onCancel={() => setComposing(null)}
                           onSaved={() => {
                             setComposing(null);

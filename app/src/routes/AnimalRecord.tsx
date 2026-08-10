@@ -223,11 +223,14 @@ export default function AnimalRecord() {
 
           {editingBreeds && (
             <div style={{ marginBottom: 24 }}>
+              {/* purpose is passed for a female only: a bull's follows his
+                  breeds (migration 033), so the two can no longer disagree
+                  and the mismatch note would be about nothing. */}
               <BreedEditor
                 animalId={animal.id}
                 farmId={farmId}
                 current={breeds.map((b) => ({ breedId: b.breedId, percent: b.percent }))}
-                purpose={animal.purpose}
+                purpose={animal.sex === "female" ? animal.purpose : undefined}
                 onCancel={() => setEditingBreeds(false)}
                 onSaved={() => {
                   setEditingBreeds(false);

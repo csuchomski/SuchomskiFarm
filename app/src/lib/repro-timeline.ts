@@ -387,6 +387,55 @@ export function fitInWords(daysOff: number | null): string {
   return `${n} day${n === 1 ? "" : "s"} ${daysOff < 0 ? "early" : "late"}`;
 }
 
+// ─── a calving with no service behind it ───────────────────────────────
+
+export interface UnattributedCalving {
+  calvingId: string;
+  on: string;
+  /** The service whose due date lands nearest the calving. */
+  serviceId: string;
+  serviceDate: string;
+  sire: string;
+  daysOff: number | null;
+}
+
+/**
+ * Calvings of hers that name no service, where one of her services could
+ * plausibly be it.
+ *
+ * A calving recorded before the service was logged keeps a null link, and
+ * nothing reaches back for it — so the calf has no sire even though the
+ * breeding is right there on the page. Patience's calving was entered at
+ * 12:21 and her two Overalls services at 14:19 and 14:26.
+ *
+ * Only calvings with no service at all. Re-pointing one that already names a
+ * service is a correction, not a gap, and a page that nags about it would be
+ * arguing with a decision somebody made.
+ */
+export function unattributedCalvings(input: TimelineInput): UnattributedCalving[] {
+  const services = input.breedings.filter((b) => b.animal_id === input.animal.id && breedingStands(b));
+  const names = input.names;
+
+  return input.calvings
+    .filter((c) => c.dam_id === input.animal.id && c.breeding_event_id === null)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .flatMap((c) => {
+      const fit = likelyService(c.date, services, input.gestationDays);
+      if (!fit) return [];
+      const expected = dueDate(fit.date, input.gestationDays);
+      return [
+        {
+          calvingId: c.id,
+          on: c.date,
+          serviceId: fit.id,
+          serviceDate: fit.date,
+          sire: sireLabel(fit, fit.sire_id ? names.get(fit.sire_id) : undefined),
+          daysOff: expected ? daysBetween(expected, c.date) : null,
+        },
+      ];
+    });
+}
+
 // ─── the summary line ──────────────────────────────────────────────────
 
 export interface ReproSummary {

@@ -184,6 +184,34 @@ Four items were reviewed and are no longer open.
 
 ## Closed 2026-08-10
 
+- **A sire's purpose follows his breeds** — asked for directly: *"I don't want
+  to maintain a breeds purpose in two places."* Right, and the duplication was
+  a day old. `breeds.species_type` and `animals.purpose` already use the same
+  three words, so for a bull it derives: all breeds agreeing gives that word,
+  breeds that disagree give 'dual'. `set_breed_composition` keeps it in step,
+  and the migration backfilled every bull already on file — which moved
+  Sunnybrook Patriot and Valor from 'dairy' to 'beef'.
+
+  Females are deliberately excluded. A cow's purpose is a decision about how
+  she is run, not a summary of what she is; deriving hers would overwrite that
+  decision every time a breed was corrected. Migration 033.
+
+  The species-mismatch warning stays, but only for females — for a bull the
+  two facts are now one and there is nothing left to disagree.
+
+- **Attach a service to a calving after the fact** — *"why does vera not show
+  her sire."* Because her calving was recorded at 12:21 and Patience's two
+  Overalls services were logged at 14:19 and 14:26. `record_calving` takes the
+  service by name or falls back to her most recent one *before* the calving;
+  at 12:21 there wasn't one, so the link stayed null and the calf got no sire.
+  Nothing reached back for the services that arrived later.
+
+  Her record now says so and offers the service the dates fit — 2023-09-26 by
+  Overalls, eight days off a Jersey's 279, where the other Overalls service is
+  95 days off and not a gestation. Attaching sets the sire on the calving's
+  live calves and gives them the breeds they should have inherited.
+  Migration 034.
+
 - **Edit a sire** — Herd → Sires has an "edit" beside "change breeds" on each
   bull: name, tag, registration, birth date, purpose and notes. The form is
   read fresh from his row rather than filled from the list, because

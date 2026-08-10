@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ReproTimeline } from "./ReproTimeline";
 import type { TimelineInput } from "../../lib/repro-timeline";
@@ -226,5 +226,56 @@ describe("ReproTimeline", () => {
   it("says nothing once a calving accounts for her", () => {
     mount();
     expect(document.querySelector(".rt-untied")).toBeNull();
+  });
+
+  it("calls out a calving that names no service, and offers the one that fits", () => {
+    const attach = vi.fn();
+    render(
+      <MemoryRouter>
+        <ReproTimeline
+          input={input({
+            // Her second calving carries no service, which is what happens
+            // when the calving is recorded before the breeding is logged.
+            calvings: [calvings[0], { ...calvings[1], breeding_event_id: null }],
+          })}
+          herd={herd}
+          showWait
+          onShowWait={() => {}}
+          onAttachService={attach}
+        />
+      </MemoryRouter>,
+    );
+
+    const prompt = [...document.querySelectorAll(".rt-untied")].find((p) =>
+      p.textContent?.includes("names no service"),
+    )!;
+    expect(prompt).toBeTruthy();
+    expect(prompt.textContent).toContain("2025-04-25");
+    // s3 lands the calving exactly on its due date; s1 is 44 days out and s2
+    // 22. The suggestion is the arithmetic, not the latest.
+    expect(prompt.textContent).toContain("2024-07-16");
+    expect(prompt.textContent).toContain("on the day it was due");
+
+    fireEvent.click(prompt.querySelector("button")!);
+    expect(attach).toHaveBeenCalledTimes(1);
+    expect(attach.mock.calls[0]).toEqual(["c2", "s3"]);
+  });
+
+  it("explains rather than offering a button when there's nothing to write with", () => {
+    render(
+      <MemoryRouter>
+        <ReproTimeline
+          input={input({ calvings: [calvings[0], { ...calvings[1], breeding_event_id: null }] })}
+          herd={herd}
+          showWait
+          onShowWait={() => {}}
+        />
+      </MemoryRouter>,
+    );
+    const prompt = [...document.querySelectorAll(".rt-untied")].find((p) =>
+      p.textContent?.includes("names no service"),
+    )!;
+    expect(prompt.querySelector("button")).toBeNull();
+    expect(prompt.textContent).toContain("Attach it on");
   });
 });

@@ -20,6 +20,7 @@ import {
 import {
   CHECK_METHODS,
   CHECK_RESULTS,
+  attachServiceToCalving,
   daysBetween,
   dueDate,
   emptyCalf,
@@ -877,7 +878,19 @@ export default function Breedings() {
                         {/* The drawn record, under her name, among the
                             services it is drawn from. It used to be on her
                             animal page, a click away from any of this. */}
-                        <ReproTimeline input={input} herd={animals} showWait={showWait} onShowWait={setShowWait} />
+                        <ReproTimeline
+                          input={input}
+                          herd={animals}
+                          showWait={showWait}
+                          onShowWait={setShowWait}
+                          busy={busy}
+                          onAttachService={(calvingId, serviceId) =>
+                            void act(
+                              () => attachServiceToCalving(calvingId, serviceId),
+                              "Service attached — the calf has its sire.",
+                            )
+                          }
+                        />
 
                         {[...seasons].reverse().map((season) => (
                           <div className="brd-season" key={season.key}>

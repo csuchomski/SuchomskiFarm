@@ -7,6 +7,7 @@ import {
   fitInWords,
   summarise,
   toSeasons,
+  unattributedCalvings,
   untiedCalves,
   whatsNext,
   type Season,
@@ -34,11 +35,17 @@ export function ReproTimeline({
   herd,
   showWait,
   onShowWait,
+  onAttachService,
+  busy = false,
 }: {
   input: TimelineInput;
   herd: RealAnimal[];
   showWait: boolean;
   onShowWait: (v: boolean) => void;
+  /** Point a calving at the service that made it. Omitted where there's
+   *  nothing to write with, and the prompt then just explains. */
+  onAttachService?: (calvingId: string, serviceId: string) => void;
+  busy?: boolean;
 }) {
   const seasons = toSeasons(input);
   const axis = axisDays(seasons);
@@ -50,6 +57,10 @@ export function ReproTimeline({
   // a season — so without this the page reports her overdue with the calf
   // standing next to her.
   const untied = untiedCalves(input, herd);
+  // The mirror image: a calving recorded before its service was logged keeps
+  // a null link, so the calf has no sire even though the breeding is right
+  // there on the page.
+  const unattributed = unattributedCalvings(input);
   const nothingYet = seasons.length === 1 && seasons[0].anchor === "birth";
 
   return (
@@ -88,6 +99,26 @@ export function ReproTimeline({
                 Record the calving
               </Link>{" "}
               to tie them together — it attaches her rather than creating a second record.
+            </p>
+          ))}
+
+          {unattributed.map((c) => (
+            <p className="rt-untied" key={c.calvingId}>
+              Her calving on <strong>{c.on}</strong> names no service, so the calf has no sire. The closest fit is{" "}
+              {c.serviceDate} · {c.sire} — {fitInWords(c.daysOff)}.{" "}
+              {onAttachService ? (
+                <button
+                  type="button"
+                  className="link-button mono"
+                  disabled={busy}
+                  onClick={() => onAttachService(c.calvingId, c.serviceId)}
+                >
+                  attach it
+                </button>
+              ) : (
+                <>Attach it on <Link to="/breedings">Breedings</Link>.</>
+              )}{" "}
+              The calf's sire follows, and its breeds if both parents have them on file.
             </p>
           ))}
 

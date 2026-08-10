@@ -301,6 +301,21 @@ export async function recordCheck(input: {
   return data as string;
 }
 
+/**
+ * Point an existing calving at the service that made it.
+ *
+ * For a calving recorded before its service was logged — the link is null and
+ * nothing reaches back. Sets the sire on the calving's live calves and gives
+ * them the breeds they should have inherited. See docs/migrations/034.
+ */
+export async function attachServiceToCalving(calvingId: string, breedingEventId: string): Promise<void> {
+  const { error } = await herdSchema().rpc("attach_service_to_calving", {
+    p_calving_id: calvingId,
+    p_breeding_event_id: breedingEventId,
+  });
+  if (error) throw new Error(error.message);
+}
+
 export async function recordCalving(input: {
   damId: string;
   date: string;

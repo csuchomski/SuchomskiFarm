@@ -87,3 +87,22 @@
     padding: 10px 11px;
   }
 }
+
+/* Between the purpose chips and the class chips. They filter on different
+   things and reading them as one run of six invites picking one of each and
+   wondering where the herd went. */
+.animals-filters__split {
+  width: 1px;
+  height: 20px;
+  align-self: center;
+  margin: 0 4px;
+  background: var(--hairline);
+}
+
+/* Below this the chips wrap onto four lines and the rule lands mid-row,
+   marking nothing. The wrap itself separates the two groups. */
+@media (max-width: 640px) {
+  .animals-filters__split {
+    display: none;
+  }
+}

@@ -15,6 +15,7 @@ import {
   fetchAnimals,
   fetchBreedComposition,
   formatAge,
+  isMilked,
   type BreedShare,
   type RealAnimal,
 } from "../lib/herd";
@@ -156,6 +157,9 @@ export default function AnimalRecord() {
               <span>·</span>
               <span>{formatAge(animal.birth_date)} old</span>
               <Pill variant="outline-green">{animal.class}</Pill>
+              {/* Beef or dairy, on the identity line rather than buried in the
+                  edit form — it decides whether she has a lactation at all. */}
+              <Pill variant={isMilked(animal) ? "outline-green" : "outline"}>{animal.purpose}</Pill>
               {animal.status !== "active" && <Pill variant="outline">{animal.status}</Pill>}
             </div>
           </div>
@@ -278,12 +282,20 @@ export default function AnimalRecord() {
 
           {/* Lactations are real now. Treatments and per-animal costs are
               still empty, so they stay a single note rather than two boxes
-              that can only say the same thing. */}
-          <LactationSection
-            animalId={animal.id}
-            farmId={farmId}
-            canWrite={animal.sex === "female" && animal.class !== "calf"}
-          />
+              that can only say the same thing.
+
+              Nothing here for a beef cow. She calves and raises the calf, so
+              an empty lactation section on her page reads as a gap in her
+              record when it is simply how she's run — and it offered a
+              "record a freshening" button that would have opened a lactation
+              the database itself refuses to open at calving. */}
+          {isMilked(animal) && (
+            <LactationSection
+              animalId={animal.id}
+              farmId={farmId}
+              canWrite={animal.sex === "female" && animal.class !== "calf"}
+            />
+          )}
 
           <GeneticsSection animalId={animal.id} farmId={farmId} />
 

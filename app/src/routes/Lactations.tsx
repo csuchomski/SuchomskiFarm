@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Callout, EarTag, GridRow, Pill, StatTile } from "../components/ui";
-import { fetchAnimals, type RealAnimal } from "../lib/herd";
+import { fetchAnimals, isMilked, milkingHerd, type RealAnimal } from "../lib/herd";
 import {
   byFreshDateDesc,
   daysInMilk,
@@ -15,12 +15,19 @@ import { LactationCharts } from "../components/herd/LactationCharts";
 import { useWorkspace } from "../lib/workspace";
 
 /**
- * The herd's milking picture: who's in milk, how far along, and who has no
- * lactation on record at all.
+ * The dairy herd's milking picture: who's in milk, how far along, and who has
+ * no lactation on record at all.
  *
  * That last group is the point of the second table. A cow milking today with
  * nothing recorded looks identical to a dry cow if you only list lactations,
  * so the animals *without* one are shown rather than left implicit.
+ *
+ * Beef cows are not in any of it. They calve and raise the calf; nobody
+ * milks them, so "no lactation on record" is not a gap in the record — it is
+ * the record. Counting them here put every beef cow in a red stat tile that
+ * could never be cleared. The dairy/beef split comes from `purpose`, which is
+ * also what herd.record_calving reads when it decides whether a calving opens
+ * a lactation.
  */
 
 type Load =
@@ -70,10 +77,12 @@ export default function Lactations() {
   const dims = inMilk.map((l) => daysInMilk(l)).filter((d): d is number => d !== null);
   const avgDim = dims.length > 0 ? Math.round(dims.reduce((s, d) => s + d, 0) / dims.length) : null;
 
-  // Females old enough to have calved, with nothing on record.
+  // Dairy females old enough to have calved, with nothing on record.
   const withLactation = new Set(lactations.map((l) => l.animal_id));
-  const missing = animals.filter(
-    (a) => a.sex === "female" && a.class !== "calf" && !withLactation.has(a.id),
+  const dairyFemales = milkingHerd(animals);
+  const missing = dairyFemales.filter((a) => !withLactation.has(a.id));
+  const beefFemales = animals.filter(
+    (a) => a.record_type !== "reference" && a.sex === "female" && a.class !== "calf" && !isMilked(a),
   );
 
   return (
@@ -100,7 +109,7 @@ export default function Lactations() {
             <StatTile value={lactations.length} label="Lactations on record" />
             <StatTile
               value={missing.length}
-              label="Cows with none"
+              label="Dairy cows with none"
               tone={missing.length > 0 ? "red" : "ink"}
             />
           </div>
@@ -197,8 +206,8 @@ export default function Lactations() {
                 No lactation on record
               </div>
               <p style={{ fontSize: 13, color: "var(--ink-muted)", marginBottom: 12 }}>
-                Females past calf age with nothing recorded. A cow milking today looks the same as a dry one until
-                someone records her freshening.
+                Dairy females past calf age with nothing recorded. A cow milking today looks the same as a dry one
+                until someone records her freshening.
               </p>
               {missing.map((a) => (
                 <Link key={a.id} to={`/animals/${a.ear_tag}`} style={{ color: "inherit", display: "contents" }}>
@@ -212,6 +221,16 @@ export default function Lactations() {
                 </Link>
               ))}
             </div>
+          )}
+          {beefFemales.length > 0 && (
+            <p style={{ fontSize: 13, color: "var(--ink-muted)", paddingTop: 24 }}>
+              {beefFemales.length === 1
+                ? `${beefFemales[0].barn_name ?? `Tag ${beefFemales[0].ear_tag}`} is a beef cow and isn't counted here`
+                : `${beefFemales.length} beef females aren't counted here`}{" "}
+              — they raise their calves rather than being milked. Their calvings are on{" "}
+              <Link to="/calvings">Calvings</Link>, and each one's breeding record is on her own page. Change a cow's
+              purpose on her record if that's wrong.
+            </p>
           )}
         </>
       )}

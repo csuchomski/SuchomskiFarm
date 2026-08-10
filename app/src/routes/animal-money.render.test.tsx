@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { RealAnimal } from "../lib/herd";
 import type { MoneyEntry } from "../lib/animal-money";
+import type { Valuation } from "../lib/depreciation";
 
 /**
  * An animal's record, showing what she has cost and what she has returned —
@@ -42,6 +43,18 @@ const martha: RealAnimal = {
   record_type: "herd",
 };
 
+/** An AI bull: reached from Sires, and not on the Animals list at all. */
+const dutton: RealAnimal = {
+  ...martha,
+  id: "ai-1",
+  ear_tag: "250JE2379",
+  barn_name: "Dutton",
+  sex: "male",
+  class: "bull",
+  purpose: "dairy",
+  record_type: "reference",
+};
+
 const entry = (over: Partial<MoneyEntry> & { kind: MoneyEntry["kind"]; amountCents: number }): MoneyEntry => ({
   id: Math.random().toString(36).slice(2),
   date: "2026-08-04",
@@ -56,6 +69,13 @@ const entry = (over: Partial<MoneyEntry> & { kind: MoneyEntry["kind"]; amountCen
 
 const money: MoneyEntry[] = [];
 
+const valuations: Valuation[] = [];
+
+vi.mock("../lib/depreciation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/depreciation")>()),
+  fetchValuations: vi.fn(async () => valuations),
+}));
+
 vi.mock("../lib/animal-money", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/animal-money")>()),
   fetchAnimalMoney: vi.fn(async () => money),
@@ -63,8 +83,8 @@ vi.mock("../lib/animal-money", async (importOriginal) => ({
 
 vi.mock("../lib/herd", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/herd")>()),
-  fetchAnimals: vi.fn(async () => [martha]),
-  fetchAnimalByTag: vi.fn(async () => martha),
+  fetchAnimals: vi.fn(async () => [martha, dutton]),
+  fetchAnimalByTag: vi.fn(async (tag: string) => [martha, dutton].find((a) => a.ear_tag === tag) ?? null),
   fetchBreedComposition: vi.fn(async () => new Map()),
 }));
 
@@ -80,12 +100,13 @@ vi.mock("../lib/genetics", async (importOriginal) => ({
 afterEach(() => {
   cleanup();
   money.length = 0;
+  valuations.length = 0;
 });
 
-const mount = async () => {
+const mount = async (tag = "1") => {
   const { default: AnimalRecord } = await import("./AnimalRecord");
   render(
-    <MemoryRouter initialEntries={["/animals/1"]}>
+    <MemoryRouter initialEntries={[`/animals/${tag}`]}>
       <Routes>
         <Route path="/animals/:tag" element={<AnimalRecord />} />
       </Routes>
@@ -94,11 +115,54 @@ const mount = async () => {
   await screen.findByText("Pedigree");
 };
 
-describe("A way back to Animals", () => {
-  it("is a link that says where it goes", async () => {
+describe("A way back", () => {
+  it("goes to Animals from a cow's record", async () => {
     await mount();
-    const back = screen.getByRole("link", { name: /Animals/ });
+    const back = screen.getByRole("link", { name: /← Animals/ });
     expect(back.getAttribute("href")).toBe("/animals");
+    expect(document.querySelector(".record-topbar .eyebrow")?.textContent).toBe("Herd · Animals · Martha");
+  });
+
+  it("goes to Sires from a bull's record, which is where he was opened from", async () => {
+    await mount("250JE2379");
+    const back = screen.getByRole("link", { name: /← Sires/ });
+    expect(back.getAttribute("href")).toBe("/sires");
+    // Animals would be a link to a page he isn't on: reference bulls are kept
+    // off that list on purpose.
+    expect(screen.queryByRole("link", { name: /← Animals/ })).toBeNull();
+    expect(document.querySelector(".record-topbar .eyebrow")?.textContent).toBe("Herd · Sires · Dutton");
+  });
+});
+
+describe("What she is carried at", () => {
+  it("says she isn't marked yet, and why the roll doesn't speak for her", async () => {
+    // Martha is a beef cow — the herd roll covers the dairy string.
+    await mount();
+    await waitFor(() =>
+      expect(screen.getByText(/The herd roll covers the dairy string; anyone else is valued by hand/)).toBeTruthy(),
+    );
+  });
+
+  it("lists the roll as dated rows, newest first, with the movement between them", async () => {
+    valuations.push(
+      { id: "v2", animalId: "cow-2", asOf: "2026-08-10", valueCents: 142458, basis: "marked", note: "" },
+      { id: "v1", animalId: "cow-2", asOf: "2025-08-10", valueCents: 179601, basis: "marked", note: "" },
+    );
+    await mount();
+
+    await waitFor(() => expect(screen.getAllByText("marked in the herd roll").length).toBe(2));
+    const amounts = [...document.querySelectorAll(".money-row__amount")].map((n) => n.textContent);
+    // A year of depreciation, shown as the change rather than left to be
+    // worked out — the reason the history is kept at all.
+    expect(amounts[0]).toContain("$1,424.58");
+    expect(amounts[0]).toContain("−$371.43");
+    expect(amounts[1]).toContain("$1,796.01");
+  });
+
+  it("keeps another animal's valuations off her page", async () => {
+    valuations.push({ id: "v9", animalId: "someone-else", asOf: "2026-08-10", valueCents: 500000, basis: "marked", note: "" });
+    await mount();
+    await waitFor(() => expect(screen.getByText(/No value on file/)).toBeTruthy());
   });
 });
 

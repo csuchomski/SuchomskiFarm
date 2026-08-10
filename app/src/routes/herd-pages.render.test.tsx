@@ -148,7 +148,6 @@ vi.mock("../lib/sires", async (importOriginal) => ({
     registrationNumber: "REG-9",
     birthDate: "2019-04-01",
     notes: "",
-    purpose: "dairy",
   })),
   updateSire: (id: string, d: SireDraft) => updateSire(id, d),
 }));
@@ -293,10 +292,20 @@ describe("Sires · editing a bull", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "edit" })[0]);
     await screen.findByDisplayValue("Chief");
 
-    fireEvent.change(screen.getByLabelText("Purpose"), { target: { value: "beef" } });
+    fireEvent.change(screen.getByDisplayValue("Chief"), { target: { value: "Chieftain" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(updateSire).toHaveBeenCalledTimes(1));
-    expect(updateSire.mock.calls[0][1]).toMatchObject({ purpose: "beef", registrationNumber: "REG-9" });
+    expect(updateSire.mock.calls[0][1]).toMatchObject({ barnName: "Chieftain", registrationNumber: "REG-9" });
+  });
+
+  it("has no purpose field — it follows his breeds", async () => {
+    await mountSires();
+    fireEvent.click(screen.getAllByRole("button", { name: "edit" })[0]);
+    await screen.findByDisplayValue("Chief");
+    // Maintaining the same fact in two places is what put a beef breed on a
+    // bull recorded as dairy. See docs/migrations/033.
+    expect(screen.queryByLabelText("Purpose")).toBeNull();
+    expect(screen.getByText(/follows from his breeds rather than being a field/)).toBeTruthy();
   });
 
   it("won't take a birth date in the future", async () => {

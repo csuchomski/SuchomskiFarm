@@ -6,6 +6,7 @@ import {
   fitInWords,
   summarise,
   toSeasons,
+  unattributedCalvings,
   untiedCalves,
   whatsNext,
   type TimelineInput,
@@ -459,5 +460,51 @@ describe("fitInWords", () => {
     expect(fitInWords(1)).toBe("1 day late");
     expect(fitInWords(0)).toBe("on the day it was due");
     expect(fitInWords(null)).toBe("no due date to compare it against");
+  });
+});
+
+describe("unattributedCalvings", () => {
+  // Patience's real shape: a calving recorded at 12:21, her two Overalls
+  // services logged at 14:19 and 14:26, and nothing reaching back.
+  const patience: TimelineInput = {
+    ...base,
+    gestationDays: 279, // Jersey
+    calvings: [calving({ id: "c1", date: "2024-07-09" })],
+    outcomes: [outcome({ id: "o1", calving_id: "c1", calf_animal_id: "calf-9" })],
+    breedings: [
+      service({ id: "s1", date: "2023-07-01", sire_id: "bull-2" }),
+      service({ id: "s2", date: "2023-09-26", sire_id: "bull-2" }),
+    ],
+  };
+
+  it("finds the calving with no service, and the one that fits", () => {
+    const found = unattributedCalvings(patience);
+    expect(found.length).toBe(1);
+    // 26 Sep + 279 = 1 Jul, eight days before she calved. The July service
+    // would be 95 days out, which is not a gestation.
+    expect(found[0]).toMatchObject({ calvingId: "c1", on: "2024-07-09", serviceId: "s2", daysOff: 8 });
+    expect(found[0].sire).toBe("AI · Rook");
+  });
+
+  it("says nothing once the calving names a service", () => {
+    expect(
+      unattributedCalvings({ ...patience, calvings: [calving({ id: "c1", date: "2024-07-09", breeding_event_id: "s2" })] }),
+    ).toEqual([]);
+  });
+
+  it("says nothing when she has no service it could be", () => {
+    // Every service after the calving — which is exactly the state that made
+    // the link null in the first place.
+    expect(unattributedCalvings({ ...patience, breedings: [service({ id: "s9", date: "2026-01-07" })] })).toEqual([]);
+  });
+
+  it("ignores another cow's calving", () => {
+    expect(unattributedCalvings({ ...patience, calvings: [calving({ id: "c1", date: "2024-07-09", dam_id: "cow-2" })] }))
+      .toEqual([]);
+  });
+
+  it("won't offer a voided service", () => {
+    const voided = patience.breedings.map((b) => ({ ...b, voided: true }));
+    expect(unattributedCalvings({ ...patience, breedings: voided })).toEqual([]);
   });
 });

@@ -311,15 +311,19 @@ export interface SireDraft {
   registrationNumber: string;
   birthDate: string;
   notes: string;
-  /**
-   * dairy | beef | dual. Only asked for when editing; a new AI bull defaults
-   * to dairy, which is what this herd buys. It matters because it is the
-   * gestation fallback for any calf of his whose breeds aren't on file, and
-   * because a beef bull recorded as dairy reads as a mistake to anyone
-   * scanning the list.
-   */
-  purpose?: string;
 }
+
+/**
+ * A bull's purpose is not a field. It follows his breed composition —
+ * herd.breeds.species_type and herd.animals.purpose use the same three words,
+ * and herd.set_breed_composition keeps them in step for males. It was briefly
+ * a select on the edit form, which meant maintaining the same fact twice; the
+ * species-mismatch warning that shipped alongside it existed only because two
+ * copies could disagree. See docs/migrations/033.
+ *
+ * A cow's purpose *is* a field, because it is a decision about how she is run
+ * rather than a summary of what she is.
+ */
 
 export function validateSire(draft: SireDraft, todayIso: string): string | null {
   if (!draft.barnName.trim() && !draft.earTag.trim()) return "Give the bull a name or a tag.";
@@ -371,8 +375,6 @@ export async function createReferenceSire(farmId: string, draft: SireDraft): Pro
  * different decision with different consequences (he'd start appearing in
  * herd counts), and it is not this form's job to make it by accident.
  */
-export const SIRE_PURPOSES = ["dairy", "beef", "dual"] as const;
-
 export async function updateSire(id: string, draft: SireDraft): Promise<RealAnimal> {
   const { data, error } = await herdSchema()
     .from("animals")
@@ -382,7 +384,6 @@ export async function updateSire(id: string, draft: SireDraft): Promise<RealAnim
       registration_number: draft.registrationNumber.trim(),
       birth_date: draft.birthDate,
       notes: draft.notes.trim(),
-      ...(draft.purpose ? { purpose: draft.purpose } : {}),
     })
     .eq("id", id)
     .select(
@@ -404,7 +405,7 @@ export async function updateSire(id: string, draft: SireDraft): Promise<RealAnim
 export async function fetchSireDraft(id: string): Promise<SireDraft> {
   const { data, error } = await herdSchema()
     .from("animals")
-    .select("barn_name, ear_tag, registration_number, birth_date, notes, purpose")
+    .select("barn_name, ear_tag, registration_number, birth_date, notes")
     .eq("id", id)
     .single();
   if (error) throw new Error(error.message);
@@ -415,7 +416,6 @@ export async function fetchSireDraft(id: string): Promise<SireDraft> {
     registration_number: string | null;
     birth_date: string;
     notes: string | null;
-    purpose: string;
   };
   return {
     barnName: a.barn_name ?? "",
@@ -424,7 +424,6 @@ export async function fetchSireDraft(id: string): Promise<SireDraft> {
     registrationNumber: a.registration_number ?? "",
     birthDate: a.birth_date,
     notes: a.notes ?? "",
-    purpose: a.purpose,
   };
 }
 

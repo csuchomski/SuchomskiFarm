@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
@@ -71,6 +71,23 @@ const animals = [
     origin: "purchased",
     record_type: "reference",
   },
+  {
+    // A bull with no composition — Sunnybrook Patriot's real position, and
+    // the reason a calf by him inherits nothing.
+    id: "bull-2",
+    ear_tag: "",
+    barn_name: "Dutton",
+    sex: "male",
+    class: "bull",
+    status: "active",
+    birth_date: "2019-06-02",
+    sire_id: null,
+    dam_id: null,
+    notes: null,
+    purpose: "dairy",
+    origin: "purchased",
+    record_type: "reference",
+  },
 ];
 
 vi.mock("../lib/herd", async (importOriginal) => ({
@@ -123,6 +140,20 @@ vi.mock("../lib/sires", async (importOriginal) => ({
   fetchSemenTransactions: vi.fn(async () => []),
 }));
 
+// Sires now shows each bull's breed composition — a bull with none leaves his
+// calves with none, so it belongs where the bulls are.
+const herdBreeds = [
+  { id: "je", code: "JE", name: "Jersey", species_type: "dairy", default_gestation_days: 279, active: true },
+  { id: "an", code: "AN", name: "Angus", species_type: "beef", default_gestation_days: 283, active: true },
+];
+
+vi.mock("../lib/gestation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/gestation")>()),
+  fetchBreeds: vi.fn(async () => herdBreeds),
+  fetchComposition: vi.fn(async () => [{ animal_id: "bull-1", breed_id: "je", percent: 100 }]),
+  fetchOverrides: vi.fn(async () => []),
+}));
+
 afterEach(cleanup);
 
 /** Mounts the page and waits for its data effect to settle. `settled` is a
@@ -136,6 +167,12 @@ const mount = async (Component: React.ComponentType, settled: string | RegExp) =
     </MemoryRouter>,
   );
   await screen.findByText(settled);
+};
+
+/** Sires, settled. "Semen lots" only renders once the fetch resolves. */
+const mountSires = async () => {
+  const { default: Sires } = await import("./Sires");
+  await mount(Sires, "Semen lots");
 };
 
 describe("Genetics page", () => {
@@ -176,7 +213,9 @@ describe("Sires page", () => {
 
     expect(screen.getAllByText("Sires").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Chief").length).toBeGreaterThan(0);
-    expect(screen.getByText("AI sire · not in the herd")).toBeTruthy();
+    // Two AI bulls on file now, so this label is expected twice — one per
+    // sire in the "New semen lot" picker's hint.
+    expect(screen.getAllByText("AI sire · not in the herd").length).toBe(2);
     expect(screen.getByText("Tank A · can 3 · cane 7")).toBeTruthy();
   });
 
@@ -193,5 +232,31 @@ describe("Sires page", () => {
     await mount(Sires, "Semen lots");
     // Once on the "Inventory value" tile, once on the sire's own row.
     expect(screen.getAllByText("$50.00")).toHaveLength(2);
+  });
+});
+
+describe("Sires · breeds on the bull", () => {
+  it("shows each bull's breeds and marks the ones with none", async () => {
+    await mountSires();
+    // Chief has Jersey on file from the mock; Dutton has nothing, which is
+    // Sunnybrook Patriot's real position.
+    expect(screen.getByText("Jersey")).toBeTruthy();
+    expect(screen.getByText("no breeds on file")).toBeTruthy();
+    expect(document.querySelectorAll(".sire-row--needs-breeds").length).toBe(1);
+  });
+
+  it("says why a bull without breeds matters", async () => {
+    await mountSires();
+    expect(screen.getByText(/A bull with none leaves his calves with none/)).toBeTruthy();
+  });
+
+  it("opens a breed editor on the bull you pick", async () => {
+    await mountSires();
+    const buttons = screen.getAllByRole("button", { name: "set breeds" });
+    fireEvent.click(buttons[0]);
+    // The editor is the same one the animal record uses.
+    expect(screen.getByRole("button", { name: /Save/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "cancel" }));
+    expect(screen.queryByRole("button", { name: /Save/ })).toBeNull();
   });
 });

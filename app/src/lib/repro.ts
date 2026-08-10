@@ -83,9 +83,24 @@ export interface CalfDraft {
   earTag: string;
   barnName: string;
   birthWeight: string;
+  /**
+   * An animal already on file that *is* this calf. Empty means make a new
+   * record, which is the ordinary case — you record the calving as it
+   * happens. It is filled in when the calf was entered before the calving
+   * was, which is how every animal born before Herd -> Calvings existed got
+   * onto the farm. See docs/migrations/031.
+   */
+  animalId: string;
 }
 
-export const emptyCalf = (): CalfDraft => ({ outcome: "live", sex: "", earTag: "", barnName: "", birthWeight: "" });
+export const emptyCalf = (): CalfDraft => ({
+  outcome: "live",
+  sex: "",
+  earTag: "",
+  barnName: "",
+  birthWeight: "",
+  animalId: "",
+});
 
 // ─── reads ─────────────────────────────────────────────────────────────
 
@@ -254,6 +269,8 @@ export function validateCalving(input: { damId: string; date: string; calves: Ca
     if (!OUTCOMES.some((o) => o.code === calf.outcome)) return "Each calf is live, stillborn, or died within 24h.";
     // animals.sex is NOT NULL, so a live calf can't get a record without one.
     if (calf.outcome === "live" && calf.sex === "") return "A live calf needs a sex before it can have its own record.";
+    // Only a live calf has an animal record, so only a live calf can name one.
+    if (calf.animalId !== "" && calf.outcome !== "live") return "Only a live calf can be an animal already on file.";
     const w = calf.birthWeight.trim();
     if (w !== "" && (!Number.isFinite(Number(w)) || Number(w) <= 0)) return "A birth weight has to be a number above zero.";
   }
@@ -306,6 +323,9 @@ export async function recordCalving(input: {
       ear_tag: c.earTag.trim(),
       barn_name: c.barnName.trim(),
       birth_weight_lb: c.birthWeight.trim() === "" ? null : Number(c.birthWeight),
+      // Omitted rather than sent empty: the function reads `animal_id` being
+      // present at all as "adopt this one".
+      ...(c.animalId === "" ? {} : { animal_id: c.animalId }),
     })),
     p_calving_ease: input.calvingEase,
     p_assistance: input.assistance,

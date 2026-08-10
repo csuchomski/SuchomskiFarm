@@ -28,6 +28,8 @@ import {
   type TxReason,
   type UnitType,
 } from "../lib/sires";
+import { BreedEditor } from "../components/herd/BreedEditor";
+import { fetchBreeds as fetchHerdBreeds, fetchComposition, type Breed, type BreedShare } from "../lib/gestation";
 import { useWorkspace } from "../lib/workspace";
 import "./sires.css";
 
@@ -48,7 +50,14 @@ const COLS_SM = "1fr 74px 84px";
 type Load =
   | { state: "loading" }
   | { state: "error"; message: string }
-  | { state: "ok"; animals: RealAnimal[]; lots: SemenLot[]; transactions: SemenTransaction[] };
+  | {
+      state: "ok";
+      animals: RealAnimal[];
+      lots: SemenLot[];
+      transactions: SemenTransaction[];
+      composition: BreedShare[];
+      breeds: Breed[];
+    };
 
 const emptyLot = (): LotDraft => ({
   sireId: "",
@@ -89,15 +98,24 @@ export default function Sires() {
   const [drawing, setDrawing] = useState<string | null>(null);
   const [drawCount, setDrawCount] = useState("1");
   const [drawReason, setDrawReason] = useState<TxReason>("service");
+  // Which bull's breeds are being edited. A bull with none leaves every calf
+  // he sires with none, because inheritance needs both parents — so this is
+  // the field that decides whether the herd's genetics carry forward at all.
+  const [composing, setComposing] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!farmId) {
-      setLoad({ state: "ok", animals: [], lots: [], transactions: [] });
+      setLoad({ state: "ok", animals: [], lots: [], transactions: [], composition: [], breeds: [] });
       return;
     }
-    const [animals, lots] = await Promise.all([fetchAnimals(), fetchSemenLots(farmId)]);
+    const [animals, lots, composition, breeds] = await Promise.all([
+      fetchAnimals(),
+      fetchSemenLots(farmId),
+      fetchComposition(farmId),
+      fetchHerdBreeds(farmId),
+    ]);
     const transactions = await fetchSemenTransactions(lots.map((l) => l.id));
-    setLoad({ state: "ok", animals, lots, transactions });
+    setLoad({ state: "ok", animals, lots, transactions, composition, breeds });
   }, [farmId]);
 
   useEffect(() => {
@@ -114,6 +132,9 @@ export default function Sires() {
   const animals = load.state === "ok" ? load.animals : EMPTY_ANIMALS;
   const lots = load.state === "ok" ? load.lots : EMPTY_LOTS;
   const transactions = load.state === "ok" ? load.transactions : EMPTY_TX;
+  const composition = load.state === "ok" ? load.composition : EMPTY_SHARES;
+  const breeds = load.state === "ok" ? load.breeds : EMPTY_BREEDS;
+  const breedName = (id: string) => breeds.find((b) => b.id === id)?.name ?? "unknown breed";
 
   const sires = useMemo(() => siresIn(animals), [animals]);
   const byId = useMemo(() => new Map(animals.map((a) => [a.id, a])), [animals]);
@@ -368,25 +389,86 @@ export default function Sires() {
               <div className="serif" style={{ fontSize: 21, margin: "32px 0 12px" }}>
                 Sires
               </div>
+              <p style={{ fontSize: 13, color: "var(--ink-muted)", margin: "-8px 0 12px" }}>
+                A calf born here inherits half its breeds from each parent, and only when <em>both</em> have a
+                composition on file. A bull with none leaves his calves with none — so his breeds are set here,
+                where the bulls are.
+              </p>
+
               {sires.map((a) => {
                 const s = stock.find((r) => r.sireId === a.id);
+                const mine = composition.filter((c) => c.animal_id === a.id);
                 return (
-                  <Link key={a.id} to={`/animals/${a.ear_tag}`} className="sire-row">
-                    <EarTag tag={a.ear_tag || "—"} accent="herd" />
-                    <span style={{ minWidth: 0 }}>
-                      <span className="serif" style={{ fontSize: 17 }}>
-                        {sireName(a)}
+                  <div key={a.id}>
+                    {/* Not one big Link any more: a link can't contain a
+                        button, and setting his breeds is the reason to be
+                        looking at this row. His name still opens his record —
+                        for an AI bull with no ear tag there was never a record
+                        to open. */}
+                    <div className={`sire-row${mine.length === 0 ? " sire-row--needs-breeds" : ""}`}>
+                      <EarTag tag={a.ear_tag || "—"} accent="herd" />
+                      <span className="sire-row__name" style={{ minWidth: 0 }}>
+                        {a.ear_tag ? (
+                          <Link to={`/animals/${a.ear_tag}`} className="serif" style={{ fontSize: 17 }}>
+                            {sireName(a)}
+                          </Link>
+                        ) : (
+                          <span className="serif" style={{ fontSize: 17 }}>
+                            {sireName(a)}
+                          </span>
+                        )}
+                        <br />
+                        <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+                          {a.record_type === "reference"
+                            ? "AI sire · not in the herd"
+                            : `${a.class} · ${formatAge(a.birth_date)}`}
+                        </span>
                       </span>
-                      <br />
-                      <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
-                        {a.record_type === "reference" ? "AI sire · not in the herd" : `${a.class} · ${formatAge(a.birth_date)}`}
+                      <span className="sire-row__breeds" style={{ minWidth: 0, fontSize: 13 }}>
+                        {mine.length === 0 ? (
+                          <span style={{ color: "var(--ink-faint)" }}>no breeds on file</span>
+                        ) : (
+                          mine
+                            .map((c) =>
+                              Number(c.percent) === 100
+                                ? breedName(c.breed_id)
+                                : `${Number(c.percent)}% ${breedName(c.breed_id)}`,
+                            )
+                            .join(", ")
+                        )}
+                        <br />
+                        <button
+                          type="button"
+                          className="link-button mono"
+                          onClick={() => setComposing(composing === a.id ? null : a.id)}
+                        >
+                          {composing === a.id ? "cancel" : mine.length === 0 ? "set breeds" : "change"}
+                        </button>
                       </span>
-                    </span>
-                    <span className="mono sire-row__straws">
-                      {s ? `${s.straws} straw${s.straws === 1 ? "" : "s"}` : "no semen"}
-                    </span>
-                    <span className="mono sire-row__value hide-sm">{s && s.valueCents > 0 ? formatMoney(s.valueCents) : ""}</span>
-                  </Link>
+                      <span className="mono sire-row__straws">
+                        {s ? `${s.straws} straw${s.straws === 1 ? "" : "s"}` : "no semen"}
+                      </span>
+                      <span className="mono sire-row__value hide-sm">
+                        {s && s.valueCents > 0 ? formatMoney(s.valueCents) : ""}
+                      </span>
+                    </div>
+
+                    {composing === a.id && (
+                      <div style={{ padding: "12px 8px" }}>
+                        <BreedEditor
+                          animalId={a.id}
+                          farmId={farmId}
+                          current={mine.map((c) => ({ breedId: c.breed_id, percent: Number(c.percent) }))}
+                          onCancel={() => setComposing(null)}
+                          onSaved={() => {
+                            setComposing(null);
+                            setNote(`${sireName(a)}'s breeds saved — calves he sires will inherit half from him.`);
+                            void refresh();
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </>
@@ -554,3 +636,5 @@ function Field({
 const EMPTY_ANIMALS: RealAnimal[] = [];
 const EMPTY_LOTS: SemenLot[] = [];
 const EMPTY_TX: SemenTransaction[] = [];
+const EMPTY_SHARES: BreedShare[] = [];
+const EMPTY_BREEDS: Breed[] = [];

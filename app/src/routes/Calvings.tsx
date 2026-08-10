@@ -129,6 +129,19 @@ export default function Calvings() {
   const freshens = dam !== null && (dam.purpose === "dairy" || dam.purpose === "dual");
 
   const outcomesFor = (calvingId: string) => outcomes.filter((o) => o.calving_id === calvingId);
+
+  // Animals already on file who could *be* one of today's calves: born on the
+  // calving date, and not already attached to a calving. The date is the
+  // filter because a calf's birth date is the calving — the database refuses
+  // any other pairing, so offering one would only produce an error later.
+  const claimed = useMemo(
+    () => new Set(outcomes.map((o) => o.calf_animal_id).filter((id): id is string => id !== null)),
+    [outcomes],
+  );
+  const onFile = useMemo(
+    () => animals.filter((a) => a.birth_date === date && !claimed.has(a.id) && a.record_type !== "reference"),
+    [animals, date, claimed],
+  );
   const problem = adding ? validateCalving({ damId, date, calves }) : null;
 
   // Her standing services before this date — the ones that could have made
@@ -350,6 +363,47 @@ export default function Calvings() {
               </div>
               {calves.map((calf, i) => (
                 <div className="calf-row" key={i}>
+                  {/* A calf entered before the calving was — every animal born
+                      before this page existed is in that position. Picking her
+                      here attaches her rather than creating a second record of
+                      the same animal. */}
+                  {onFile.length > 0 && (
+                    <label style={{ fontSize: 13 }}>
+                      <div className="eyebrow">Record</div>
+                      <select
+                        className="order-select"
+                        value={calf.animalId}
+                        aria-label={`Calf ${i + 1} record`}
+                        disabled={calf.outcome !== "live"}
+                        onChange={(e) => {
+                          const picked = animals.find((a) => a.id === e.target.value);
+                          setCalves((prev) =>
+                            prev.map((c, j) =>
+                              j === i
+                                ? {
+                                    ...c,
+                                    animalId: e.target.value,
+                                    // Her own record is the authority on all
+                                    // three; typing over them here would only
+                                    // be rejected by the database.
+                                    sex: picked ? picked.sex : c.sex,
+                                    earTag: picked ? picked.ear_tag : c.earTag,
+                                    barnName: picked ? (picked.barn_name ?? "") : c.barnName,
+                                  }
+                                : c,
+                            ),
+                          );
+                        }}
+                      >
+                        <option value="">New record</option>
+                        {onFile.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.barn_name?.trim() || `Tag ${a.ear_tag}`} — already on file
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                   <label style={{ fontSize: 13 }}>
                     <div className="eyebrow">Outcome</div>
                     <select
@@ -373,6 +427,7 @@ export default function Calvings() {
                       className="order-select"
                       value={calf.sex}
                       aria-label={`Calf ${i + 1} sex`}
+                      disabled={calf.animalId !== ""}
                       onChange={(e) =>
                         setCalves((prev) => prev.map((c, j) => (j === i ? { ...c, sex: e.target.value } : c)))
                       }
@@ -388,7 +443,7 @@ export default function Calvings() {
                       className="order-select"
                       value={calf.earTag}
                       aria-label={`Calf ${i + 1} ear tag`}
-                      disabled={calf.outcome !== "live"}
+                      disabled={calf.outcome !== "live" || calf.animalId !== ""}
                       onChange={(e) =>
                         setCalves((prev) => prev.map((c, j) => (j === i ? { ...c, earTag: e.target.value } : c)))
                       }
@@ -400,7 +455,7 @@ export default function Calvings() {
                       className="order-select"
                       value={calf.barnName}
                       aria-label={`Calf ${i + 1} name`}
-                      disabled={calf.outcome !== "live"}
+                      disabled={calf.outcome !== "live" || calf.animalId !== ""}
                       onChange={(e) =>
                         setCalves((prev) => prev.map((c, j) => (j === i ? { ...c, barnName: e.target.value } : c)))
                       }
@@ -486,7 +541,10 @@ export default function Calvings() {
                   {busy ? "Saving…" : "Record it"}
                 </Button>
                 <span style={{ fontSize: 13, color: problem ? "var(--red)" : "var(--ink-muted)" }}>
-                  {problem ?? "A live calf gets its own record, with dam and sire filled in."}
+                  {problem ??
+                    (calves.some((c) => c.animalId !== "")
+                      ? "The calf already on file is attached to this calving — her dam and sire are filled in, nothing new is created."
+                      : "A live calf gets its own record, with dam and sire filled in.")}
                 </span>
               </div>
 

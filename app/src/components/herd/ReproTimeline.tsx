@@ -1,17 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Callout } from "../ui";
-import { fetchBreeds, fetchComposition, fetchOverrides, gestationFor, type GestationInputs } from "../../lib/gestation";
-import { fetchBreedings } from "../../lib/breedings";
-import { fetchLactations } from "../../lib/lactations";
-import {
-  fetchCalfOutcomes,
-  fetchCalvings,
-  daysBetween,
-  fetchGestationDays,
-  fetchPregnancyChecks,
-  fetchVoluntaryWaitDays,
-} from "../../lib/repro";
+import { daysBetween } from "../../lib/repro";
 import {
   atDay,
   axisDays,
@@ -34,93 +23,23 @@ import "./repro-timeline.css";
  * what makes "day 84" mean the same thing in every row and lets the columns
  * be compared by eye.
  *
- * The assembly is in lib/repro-timeline.ts and is pure. This file turns days
- * into percentages and decides what a marker looks like, which is all it
- * should be doing.
+ * Presentational. It used to fetch its own ten tables, which was right when
+ * it lived alone on an animal's page and wrong the moment Breedings started
+ * drawing one of these per cow — the same reads, once per expand. The caller
+ * assembles the input now; lib/alerts.ts has timelineFor() for exactly that.
  */
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
-
-type Load =
-  | { state: "loading" }
-  | { state: "error"; message: string }
-  | { state: "ok"; input: TimelineInput };
-
-export function ReproTimeline({ animal, herd, farmId }: { animal: RealAnimal; herd: RealAnimal[]; farmId: string }) {
-  const [load, setLoad] = useState<Load>({ state: "loading" });
-  const [showWait, setShowWait] = useState(true);
-
-  const names = useMemo(
-    () => new Map(herd.map((a) => [a.id, a.barn_name?.trim() || a.ear_tag || "unnamed"])),
-    [herd],
-  );
-
-  const refresh = useCallback(async () => {
-    const [calvings, outcomes, breedings, checks, lactations, breeds, composition, overrides, bySpecies, wait] =
-      await Promise.all([
-        fetchCalvings(farmId),
-        fetchCalfOutcomes(farmId),
-        fetchBreedings(farmId),
-        fetchPregnancyChecks(farmId),
-        fetchLactations(farmId),
-        fetchBreeds(farmId),
-        fetchComposition(farmId),
-        fetchOverrides(farmId),
-        fetchGestationDays(),
-        fetchVoluntaryWaitDays(),
-      ]);
-
-    const gestation: GestationInputs = { breeds, composition, overrides, bySpecies };
-    setLoad({
-      state: "ok",
-      input: {
-        animal,
-        calvings,
-        outcomes,
-        breedings,
-        checks,
-        lactations,
-        names,
-        gestationDays: gestationFor(animal, gestation)?.days ?? null,
-        voluntaryWaitDays: wait,
-        today: todayIso(),
-      },
-    });
-  }, [farmId, animal, names]);
-
-  useEffect(() => {
-    if (!farmId) return;
-    let cancelled = false;
-    setLoad({ state: "loading" });
-    refresh().catch(
-      (err) => !cancelled && setLoad({ state: "error", message: err instanceof Error ? err.message : String(err) }),
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [farmId, refresh]);
-
-  if (!farmId) return null;
-
-  if (load.state === "loading") {
-    return (
-      <section className="rt">
-        <Head />
-        <p className="rt-quiet">Loading her record…</p>
-      </section>
-    );
-  }
-
-  if (load.state === "error") {
-    return (
-      <section className="rt">
-        <Head />
-        <p style={{ fontSize: 13, color: "var(--red)" }}>Couldn't load her record: {load.message}</p>
-      </section>
-    );
-  }
-
-  const { input } = load;
+export function ReproTimeline({
+  input,
+  herd,
+  showWait,
+  onShowWait,
+}: {
+  input: TimelineInput;
+  herd: RealAnimal[];
+  showWait: boolean;
+  onShowWait: (v: boolean) => void;
+}) {
   const seasons = toSeasons(input);
   const axis = axisDays(seasons);
   const stats = summarise(seasons);
@@ -184,7 +103,7 @@ export function ReproTimeline({ animal, herd, farmId }: { animal: RealAnimal; he
 
           {input.voluntaryWaitDays !== null && (
             <label className="rt-toggle">
-              <input type="checkbox" checked={showWait} onChange={(e) => setShowWait(e.target.checked)} />
+              <input type="checkbox" checked={showWait} onChange={(e) => onShowWait(e.target.checked)} />
               Shade the voluntary waiting period ({input.voluntaryWaitDays} days after calving)
             </label>
           )}

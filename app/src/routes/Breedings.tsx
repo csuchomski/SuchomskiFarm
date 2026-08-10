@@ -2,12 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, GridRow, Pill, StatTile } from "../components/ui";
-import { fetchAnimals, type RealAnimal } from "../lib/herd";
+import type { RealAnimal } from "../lib/herd";
 import { fetchSemenLots, type SemenLot } from "../lib/sires";
 import {
   countServices,
   fetchBreedingCosts,
-  fetchBreedings,
   isActive,
   METHODS,
   recordBreeding,
@@ -23,20 +22,19 @@ import {
   CHECK_RESULTS,
   daysBetween,
   dueDate,
-  fetchGestationDays,
-  fetchPregnancyChecks,
+  emptyCalf,
   latestCheck,
+  recordCalving,
   recordCheck,
+  validateCalving,
   validateCheck,
-  type PregnancyCheck,
+  type CalfDraft,
 } from "../lib/repro";
-import {
-  fetchBreeds,
-  fetchComposition,
-  fetchOverrides,
-  gestationFor,
-  type GestationInputs,
-} from "../lib/gestation";
+import { gestationFor } from "../lib/gestation";
+import { fetchLactations, type RealLactation } from "../lib/lactations";
+import { fetchAlertInputs, timelineFor, type AlertInputs } from "../lib/alerts";
+import { toSeasons, nextBreeding, type Season } from "../lib/repro-timeline";
+import { ReproTimeline } from "../components/herd/ReproTimeline";
 import { useWorkspace } from "../lib/workspace";
 import "./store-orders.css";
 import "./breedings.css";
@@ -58,16 +56,32 @@ type Load =
   | { state: "error"; message: string }
   | {
       state: "ok";
-      breedings: Breeding[];
-      animals: RealAnimal[];
+      repro: AlertInputs;
       lots: SemenLot[];
       costs: Map<string, number>;
-      checks: PregnancyCheck[];
-      gestation: GestationInputs;
+      lactations: RealLactation[];
     };
 
-const COLS = "110px 1fr 150px 150px 100px 100px";
-const COLS_SM = "92px 1fr 96px";
+/* Narrower than the flat list these rows came from: they now sit two levels
+   in, and the indent is width the table used to have. Measured at 768, where
+   the old tracks overflowed by 16px and squeezed the sire to nothing. */
+const COLS = "100px minmax(0, 1fr) 130px 110px 84px 84px";
+const COLS_SM = "84px minmax(0, 1fr) 76px";
+
+/** Her name for a heading, falling back to the tag. */
+const nameOfCow = (a: RealAnimal) => a.barn_name?.trim() || (a.ear_tag ? `Tag ${a.ear_tag}` : "Unnamed");
+
+/** The one-word summary on a collapsed animal. Same source as the Animals
+ *  column and the alerts — nextBreeding() — so they can't disagree. */
+const STATUS_WORD: Record<string, string> = {
+  carrying: "carrying",
+  wait: "waiting period",
+  ready: "ready to breed",
+  bred: "awaiting a check",
+  recheck: "recheck",
+  open: "open",
+  none: "nothing standing",
+};
 
 const emptyDraft = (): BreedingDraft => ({
   animalId: "",
@@ -99,32 +113,34 @@ export default function Breedings() {
   const [checkDate, setCheckDate] = useState(todayIso);
   const [checkMethod, setCheckMethod] = useState<string>("palpation");
   const [checkResult, setCheckResult] = useState<string>("pregnant");
+  // A check that comes back pregnant can carry the calving with it. That is
+  // only useful in arrears — the calf doesn't exist 30 days after a service —
+  // but recording a season out of the notebook is exactly when it is useful,
+  // and the alternative is a second trip to another page.
+  const [alsoCalved, setAlsoCalved] = useState(false);
+  const [calvingDate, setCalvingDate] = useState("");
+  const [calf, setCalf] = useState<CalfDraft>(emptyCalf);
+
+  /** Which cow's record is open. One at a time — the drawn timeline is a wide
+   *  thing and a page of them stacked is a page nobody reads. */
+  const [openCow, setOpenCow] = useState<string | null>(null);
+  const [showWait, setShowWait] = useState(true);
 
   const refresh = useCallback(async () => {
     if (!farmId) {
-      setLoad({
-        state: "ok",
-        breedings: [],
-        animals: [],
-        lots: [],
-        costs: new Map(),
-        checks: [],
-        gestation: EMPTY_GESTATION,
-      });
+      setLoad({ state: "ok", repro: EMPTY_REPRO, lots: [], costs: new Map(), lactations: [] });
       return;
     }
-    const [breedings, animals, lots, costs, checks, gestation] = await Promise.all([
-      fetchBreedings(farmId),
-      fetchAnimals(),
+    // One read of the whole repro record, shared by the seasons, the drawn
+    // timeline and the due-date column. It is the same set lib/alerts.ts
+    // needs, so it is the same function.
+    const [repro, lots, costs, lactations] = await Promise.all([
+      fetchAlertInputs(farmId, todayIso()),
       fetchSemenLots(farmId),
       fetchBreedingCosts(farmId),
-      fetchPregnancyChecks(farmId),
-      // Her breeds decide her gestation; the species settings are only the
-      // fallback for an animal with no composition on file. A failure here
-      // costs the due-date column and nothing else.
-      loadGestation(farmId).catch(() => EMPTY_GESTATION),
+      fetchLactations(farmId),
     ]);
-    setLoad({ state: "ok", breedings, animals, lots, costs, checks, gestation });
+    setLoad({ state: "ok", repro, lots, costs, lactations });
   }, [farmId]);
 
   useEffect(() => {
@@ -138,12 +154,14 @@ export default function Breedings() {
     };
   }, [refresh]);
 
-  const breedings = load.state === "ok" ? load.breedings : EMPTY_BREEDINGS;
-  const animals = load.state === "ok" ? load.animals : EMPTY_ANIMALS;
+  const repro = load.state === "ok" ? load.repro : EMPTY_REPRO;
   const lots = load.state === "ok" ? load.lots : EMPTY_LOTS;
   const costs = load.state === "ok" ? load.costs : EMPTY_COSTS;
-  const checks = load.state === "ok" ? load.checks : EMPTY_CHECKS;
-  const gestation = load.state === "ok" ? load.gestation : EMPTY_GESTATION;
+  const lactations = load.state === "ok" ? load.lactations : EMPTY_LACTATIONS;
+  const breedings = repro.breedings;
+  const animals = repro.animals;
+  const checks = repro.checks;
+  const gestation = repro.gestation;
 
   const byId = useMemo(() => new Map(animals.map((a) => [a.id, a])), [animals]);
   const name = (id: string | null | undefined) => {
@@ -164,9 +182,425 @@ export default function Breedings() {
   const chosenLot = usableLots.find((l) => l.id === draft.semenLotId) ?? null;
   const problem = adding ? validateBreeding(draft, chosenLot?.straws_remaining) : null;
 
+  // Animals -> breeding season -> the services in it. The flat list answered
+  // "what did we do lately" and nothing about any one cow; this is the shape
+  // the record actually has, and it is the shape toSeasons already returns.
+  const byBreedingId = useMemo(() => new Map(breedings.map((b) => [b.id, b])), [breedings]);
+
+  const cows = useMemo(() => {
+    if (load.state !== "ok") return [] as { cow: RealAnimal; input: ReturnType<typeof timelineFor>; seasons: Season[] }[];
+    return females
+      .map((cow) => {
+        const input = { ...timelineFor(cow, repro), lactations };
+        return { cow, input, seasons: toSeasons(input) };
+      })
+      // A cow with nothing logged has no record to show. She is on Animals,
+      // and listing her here as an empty heading would be noise on the page
+      // whose whole job is the ones that do have a record.
+      .filter((c) => c.seasons.some((s) => s.services.length > 0 || s.ending !== null))
+      .sort((a, b) => nameOfCow(a.cow).localeCompare(nameOfCow(b.cow)));
+  }, [load.state, females, repro, lactations]);
+
   const standing = breedings.filter(isActive);
   const strawsLeft = lots.reduce((s, l) => s + (l.active ? l.straws_remaining : 0), 0);
   const spent = [...costs.values()].reduce((s, n) => s + n, 0);
+
+  /** One service: the row, and the check and void forms it opens. Lifted out
+   *  of the old flat map so the same markup can sit three levels down. */
+  const renderService = (b: Breeding) => {
+    const cost = costs.get(b.id);
+    const check = latestCheck(checks, b.id);
+    const dam = byId.get(b.animal_id);
+    const carried = dam ? gestationFor(dam, gestation) : null;
+    const due = dam ? dueDate(b.date, carried?.days) : null;
+    // Once she's confirmed open or aborted there is nothing left to be due,
+    // and a date sitting there would be a lie.
+    const stillCarrying = !b.voided && check?.result !== "open" && check?.result !== "aborted";
+
+    // Animals already on file who could be the calf from this service: born
+    // on the calving date, not already attached to a calving, and not out of
+    // some other cow. The database refuses every other pairing, so offering
+    // one would only produce an error later.
+    const claimedCalves = new Set(
+      repro.outcomes.map((o) => o.calf_animal_id).filter((id): id is string => id !== null),
+    );
+    const onFile = animals.filter(
+      (a) =>
+        a.record_type !== "reference" &&
+        a.birth_date === calvingDate &&
+        !claimedCalves.has(a.id) &&
+        (a.dam_id === null || a.dam_id === b.animal_id),
+    );
+    const asRecorded = ((): CalfDraft => {
+      const picked = calf.animalId === "" ? undefined : byId.get(calf.animalId);
+      return picked
+        ? { ...calf, sex: picked.sex, earTag: picked.ear_tag, barnName: picked.barn_name ?? "" }
+        : calf;
+    })();
+    const calvingProblem =
+      alsoCalved && checkResult === "pregnant"
+        ? validateCalving({ damId: b.animal_id, date: calvingDate, calves: [asRecorded] })
+        : null;
+    return (
+                  <div key={b.id}>
+                    <GridRow cols={COLS} mobileCols={COLS_SM} as="body" highlight={b.voided}>
+                      <span className="mono" style={{ fontSize: 13 }}>
+                        {b.date}
+                      </span>
+                      <span style={{ minWidth: 0 }}>
+                        {/* Her name opens her record, where the same services
+                            are drawn as a timeline. This list answers "what
+                            did we do lately"; that page answers "how is she
+                            doing", and there was no way to get from one to
+                            the other. */}
+                        {dam ? (
+                          <Link to={`/animals/${dam.ear_tag}`} className="serif" style={{ fontSize: 17 }}>
+                            {name(b.animal_id) ?? "Unknown"}
+                          </Link>
+                        ) : (
+                          <span className="serif" style={{ fontSize: 17 }}>
+                            {name(b.animal_id) ?? "Unknown"}
+                          </span>
+                        )}
+                        <br />
+                        <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+                          {sireLabel(b, name(b.sire_id))}
+                          {b.technician.trim() && ` · ${b.technician}`}
+                        </span>
+                        {b.voided && (
+                          <>
+                            {" "}
+                            <Pill variant="outline">voided</Pill>
+                          </>
+                        )}
+                      </span>
+                      <span className="hide-sm" style={{ fontSize: 13, minWidth: 0 }}>
+                        {check ? (
+                          <>
+                            {/* Green for in calf, plain for everything else.
+                                The one other colour a pill has is hazard
+                                yellow, and tokens.css reserves that strictly
+                                for withdrawal. */}
+                            <Pill variant={check.result === "pregnant" ? "outline-green" : "outline"}>
+                              {check.result}
+                            </Pill>
+                            <br />
+                            <span className="mono" style={{ color: "var(--ink-muted)" }}>
+                              {check.estimated_days_bred !== null
+                                ? `${check.estimated_days_bred}d · ${check.method}`
+                                : check.method}
+                            </span>
+                          </>
+                        ) : (
+                          <span style={{ color: "var(--ink-faint)" }}>not yet</span>
+                        )}
+                      </span>
+                      <span className="mono hide-sm" style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+                        {!stillCarrying || !due ? (
+                          "—"
+                        ) : (
+                          <>
+                            {due}
+                            <br />
+                            <span style={{ color: "var(--ink-faint)" }}>
+                              {daysBetween(todayIso(), due) >= 0
+                                ? `in ${daysBetween(todayIso(), due)}d`
+                                : `${-daysBetween(todayIso(), due)}d ago`}
+                              {carried && ` · ${carried.days}d ${carried.basis}`}
+                            </span>
+                          </>
+                        )}
+                      </span>
+                      <span className="mono text-right">{cost === undefined ? "—" : money(cost)}</span>
+                      <span className="text-right hide-sm" style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                        {!b.voided && (
+                          <>
+                            <button
+                              type="button"
+                              className="link-button mono"
+                              onClick={() => {
+                                setCheckingId(checkingId === b.id ? null : b.id);
+                                setAlsoCalved(false);
+                                setCalvingDate(due ?? "");
+                                setCalf(emptyCalf());
+                                setVoidingId(null);
+                                setCheckDate(todayIso());
+                                setCheckMethod("palpation");
+                                setCheckResult("pregnant");
+                                setError(null);
+                              }}
+                            >
+                              check
+                            </button>
+                            <button
+                              type="button"
+                              className="link-button mono"
+                              onClick={() => {
+                                setVoidingId(voidingId === b.id ? null : b.id);
+                                setCheckingId(null);
+                                setVoidReason("");
+                                setError(null);
+                              }}
+                            >
+                              void
+                            </button>
+                          </>
+                        )}
+                      </span>
+                    </GridRow>
+
+                    {checkingId === b.id && (
+                      <div className="breeding-void">
+                        <div className="eyebrow" style={{ marginBottom: 8 }}>
+                          Was she checked in calf?
+                        </div>
+                        <div className="breeding-check__row">
+                          <label style={{ fontSize: 13 }}>
+                            <div className="eyebrow">Date</div>
+                            <input
+                              className="order-select"
+                              type="date"
+                              value={checkDate}
+                              aria-label="Check date"
+                              onChange={(e) => setCheckDate(e.target.value)}
+                            />
+                          </label>
+                          <label style={{ fontSize: 13 }}>
+                            <div className="eyebrow">How</div>
+                            <select
+                              className="order-select"
+                              value={checkMethod}
+                              aria-label="Check method"
+                              onChange={(e) => setCheckMethod(e.target.value)}
+                            >
+                              {CHECK_METHODS.map((m) => (
+                                <option key={m.code} value={m.code}>
+                                  {m.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label style={{ fontSize: 13 }}>
+                            <div className="eyebrow">Result</div>
+                            <select
+                              className="order-select"
+                              value={checkResult}
+                              aria-label="Check result"
+                              onChange={(e) => setCheckResult(e.target.value)}
+                            >
+                              {CHECK_RESULTS.map((r) => (
+                                <option key={r.code} value={r.code}>
+                                  {r.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                        {/* Only on a pregnant result: the other three say she
+                            isn't in calf, so there is no calf to name. */}
+                        {checkResult === "pregnant" && (
+                          <div className="brd-calved">
+                            <label className="rt-toggle" style={{ marginTop: 0 }}>
+                              <input
+                                type="checkbox"
+                                checked={alsoCalved}
+                                aria-label="She has since calved from this service"
+                                onChange={(e) => setAlsoCalved(e.target.checked)}
+                              />
+                              She has since calved from this service
+                            </label>
+
+                            {alsoCalved && (
+                              <>
+                                <div className="breeding-check__row" style={{ marginTop: 12 }}>
+                                  <label style={{ fontSize: 13 }}>
+                                    <div className="eyebrow">Calved on</div>
+                                    <input
+                                      className="order-select"
+                                      type="date"
+                                      value={calvingDate}
+                                      aria-label="Calving date"
+                                      onChange={(e) => setCalvingDate(e.target.value)}
+                                    />
+                                  </label>
+                                  {onFile.length > 0 && (
+                                    <label style={{ fontSize: 13 }}>
+                                      <div className="eyebrow">Calf</div>
+                                      <select
+                                        className="order-select"
+                                        value={calf.animalId}
+                                        aria-label="Calf record"
+                                        onChange={(e) => setCalf({ ...calf, animalId: e.target.value })}
+                                      >
+                                        <option value="">New record</option>
+                                        {onFile.map((a) => (
+                                          <option key={a.id} value={a.id}>
+                                            {a.barn_name?.trim() || `Tag ${a.ear_tag}`} — already on file
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                  )}
+                                  <label style={{ fontSize: 13 }}>
+                                    <div className="eyebrow">Sex</div>
+                                    <select
+                                      className="order-select"
+                                      value={asRecorded.sex}
+                                      aria-label="Calf sex"
+                                      disabled={calf.animalId !== ""}
+                                      onChange={(e) => setCalf({ ...calf, sex: e.target.value })}
+                                    >
+                                      <option value="">Not recorded</option>
+                                      <option value="female">Heifer</option>
+                                      <option value="male">Bull</option>
+                                    </select>
+                                  </label>
+                                  <label style={{ fontSize: 13 }}>
+                                    <div className="eyebrow">Ear tag</div>
+                                    <input
+                                      className="order-select"
+                                      value={asRecorded.earTag}
+                                      aria-label="Calf ear tag"
+                                      disabled={calf.animalId !== ""}
+                                      onChange={(e) => setCalf({ ...calf, earTag: e.target.value })}
+                                    />
+                                  </label>
+                                  <label style={{ fontSize: 13 }}>
+                                    <div className="eyebrow">Name</div>
+                                    <input
+                                      className="order-select"
+                                      value={asRecorded.barnName}
+                                      aria-label="Calf name"
+                                      disabled={calf.animalId !== ""}
+                                      onChange={(e) => setCalf({ ...calf, barnName: e.target.value })}
+                                    />
+                                  </label>
+                                </div>
+                                <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 8 }}>
+                                  {calvingProblem ? (
+                                    <span style={{ color: "var(--red)" }}>{calvingProblem}</span>
+                                  ) : calf.animalId !== "" ? (
+                                    "The calf already on file is attached to this calving — her dam and sire are filled in, nothing new is created."
+                                  ) : (
+                                    "A live calf gets its own record, with this service's sire filled in. Ease and assistance can be added on Calvings."
+                                  )}
+                                </p>
+                              </>
+                            )}
+                          </div>
+                        )}
+
+                        <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
+                          <Button
+                            variant="filled"
+                            size="sm"
+                            disabled={
+                              busy ||
+                              calvingProblem !== null ||
+                              validateCheck({
+                                animalId: b.animal_id,
+                                date: checkDate,
+                                method: checkMethod,
+                                result: checkResult,
+                                bredOn: b.date,
+                              }) !== null
+                            }
+                            onClick={() =>
+                              void act(async () => {
+                                await recordCheck({
+                                  animalId: b.animal_id,
+                                  date: checkDate,
+                                  method: checkMethod,
+                                  result: checkResult,
+                                  breedingEventId: b.id,
+                                });
+                                // Two writes, deliberately not one. A check is
+                                // a fact and a calving is a fact; either is
+                                // worth keeping without the other, unlike the
+                                // halves of an AI service. If the second
+                                // fails the message says the first landed.
+                                if (alsoCalved && checkResult === "pregnant") {
+                                  try {
+                                    await recordCalving({
+                                      damId: b.animal_id,
+                                      date: calvingDate,
+                                      calves: [asRecorded],
+                                      calvingEase: 1,
+                                      assistance: "unassisted",
+                                      presentation: "anterior",
+                                      retainedPlacenta: false,
+                                      breedingEventId: b.id,
+                                    });
+                                  } catch (err) {
+                                    throw new Error(
+                                      `The check is recorded. The calving isn't: ${
+                                        err instanceof Error ? err.message : String(err)
+                                      }`,
+                                    );
+                                  }
+                                }
+                                setCheckingId(null);
+                              }, alsoCalved && checkResult === "pregnant" ? "Check and calving recorded." : "Check recorded.")
+                            }
+                          >
+                            {busy ? "Saving…" : "Record it"}
+                          </Button>
+                          <Button size="sm" onClick={() => setCheckingId(null)}>
+                            Cancel
+                          </Button>
+                          <span style={{ fontSize: 13, color: "var(--red)" }}>
+                            {validateCheck({
+                              animalId: b.animal_id,
+                              date: checkDate,
+                              method: checkMethod,
+                              result: checkResult,
+                              bredOn: b.date,
+                            })}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 8 }}>
+                          Bred {b.date} — that's {daysBetween(b.date, checkDate)} days.
+                        </p>
+                      </div>
+                    )}
+
+                    {voidingId === b.id && (
+                      <div className="breeding-void">
+                        <p style={{ fontSize: 13, color: "var(--ink-muted)", marginBottom: 12 }}>
+                          {b.semen_lot_id
+                            ? "The straw goes back into the tank and the cost comes off her. The breeding stays on the record, marked voided."
+                            : "The breeding stays on the record, marked voided, and any cost comes off her."}
+                        </p>
+                        <div className="breeding-void__row">
+                          <input
+                            className="order-select"
+                            placeholder="Why?"
+                            value={voidReason}
+                            aria-label={`Reason for voiding ${name(b.animal_id) ?? "this breeding"}`}
+                            onChange={(e) => setVoidReason(e.target.value)}
+                          />
+                          <Button
+                            variant="filled"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() =>
+                              void act(async () => {
+                                await voidBreeding(b.id, voidReason);
+                                setVoidingId(null);
+                              }, "Voided.")
+                            }
+                          >
+                            {busy ? "Voiding…" : "Void it"}
+                          </Button>
+                          <Button size="sm" onClick={() => setVoidingId(null)}>
+                            Keep it
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+  };
 
   const act = async (what: () => Promise<void>, done: string) => {
     setBusy(true);
@@ -376,11 +810,15 @@ export default function Breedings() {
             </div>
           )}
 
-          <div className="serif" style={{ fontSize: 21, margin: "32px 0 12px" }}>
+          <div className="serif" style={{ fontSize: 21, margin: "32px 0 4px" }}>
             Recorded
           </div>
+          <p style={{ fontSize: 13, color: "var(--ink-muted)", marginBottom: 12 }}>
+            By animal, then by season. A season runs from one calving to the next, so the services inside one are the
+            ones that were trying for the same calf.
+          </p>
 
-          {breedings.length === 0 ? (
+          {cows.length === 0 ? (
             <Callout>
               Nothing logged yet. Straws are added and counted on <Link to="/sires">Sires</Link>; logging a breeding
               here is what takes one out of the tank.
@@ -396,247 +834,87 @@ export default function Breedings() {
                 <span className="text-right hide-sm">Actions</span>
               </GridRow>
 
-              {breedings.map((b) => {
-                const cost = costs.get(b.id);
-                const check = latestCheck(checks, b.id);
-                const dam = byId.get(b.animal_id);
-                const carried = dam ? gestationFor(dam, gestation) : null;
-                const due = dam ? dueDate(b.date, carried?.days) : null;
-                // Once she's confirmed open or aborted there is nothing left
-                // to be due, and a date sitting there would be a lie.
-                const stillCarrying = !b.voided && check?.result !== "open" && check?.result !== "aborted";
+              {cows.map(({ cow, input, seasons }) => {
+                const open = seasons[seasons.length - 1];
+                const status = nextBreeding(open, {
+                  today: repro.today,
+                  voluntaryWaitDays: repro.voluntaryWaitDays,
+                });
+                const expanded = openCow === cow.id;
                 return (
-                  <div key={b.id}>
-                    <GridRow cols={COLS} mobileCols={COLS_SM} as="body" highlight={b.voided}>
-                      <span className="mono" style={{ fontSize: 13 }}>
-                        {b.date}
+                  <div className="brd-animal" key={cow.id}>
+                    <button
+                      type="button"
+                      className="brd-animal__head"
+                      aria-expanded={expanded}
+                      onClick={() => setOpenCow(expanded ? null : cow.id)}
+                    >
+                      <span className="mono brd-animal__caret" aria-hidden="true">
+                        {expanded ? "\u2013" : "+"}
                       </span>
-                      <span style={{ minWidth: 0 }}>
-                        {/* Her name opens her record, where the same services
-                            are drawn as a timeline. This list answers "what
-                            did we do lately"; that page answers "how is she
-                            doing", and there was no way to get from one to
-                            the other. */}
-                        {dam ? (
-                          <Link to={`/animals/${dam.ear_tag}`} className="serif" style={{ fontSize: 17 }}>
-                            {name(b.animal_id) ?? "Unknown"}
-                          </Link>
-                        ) : (
-                          <span className="serif" style={{ fontSize: 17 }}>
-                            {name(b.animal_id) ?? "Unknown"}
-                          </span>
-                        )}
-                        <br />
-                        <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
-                          {sireLabel(b, name(b.sire_id))}
-                          {b.technician.trim() && ` · ${b.technician}`}
+                      <span className="brd-animal__name">
+                        <span className="serif" style={{ fontSize: 19 }}>
+                          {nameOfCow(cow)}
                         </span>
-                        {b.voided && (
-                          <>
-                            {" "}
-                            <Pill variant="outline">voided</Pill>
-                          </>
-                        )}
+                        <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+                          {" "}
+                          · tag {cow.ear_tag || "—"} · {cow.class}
+                        </span>
                       </span>
-                      <span className="hide-sm" style={{ fontSize: 13, minWidth: 0 }}>
-                        {check ? (
-                          <>
-                            {/* Green for in calf, plain for everything else.
-                                The one other colour a pill has is hazard
-                                yellow, and tokens.css reserves that strictly
-                                for withdrawal. */}
-                            <Pill variant={check.result === "pregnant" ? "outline-green" : "outline"}>
-                              {check.result}
-                            </Pill>
-                            <br />
-                            <span className="mono" style={{ color: "var(--ink-muted)" }}>
-                              {check.estimated_days_bred !== null
-                                ? `${check.estimated_days_bred}d · ${check.method}`
-                                : check.method}
-                            </span>
-                          </>
-                        ) : (
-                          <span style={{ color: "var(--ink-faint)" }}>not yet</span>
-                        )}
+                      <span className="brd-animal__status">
+                        <Pill variant={status.state === "carrying" ? "outline-green" : "outline"}>
+                          {STATUS_WORD[status.state]}
+                        </Pill>
+                        <span className="mono" style={{ fontSize: 12, color: "var(--ink-muted)" }}>
+                          {seasons.reduce((n, s) => n + s.services.length, 0)} service
+                          {seasons.reduce((n, s) => n + s.services.length, 0) === 1 ? "" : "s"}
+                        </span>
                       </span>
-                      <span className="mono hide-sm" style={{ fontSize: 13, color: "var(--ink-muted)" }}>
-                        {!stillCarrying || !due ? (
-                          "—"
-                        ) : (
-                          <>
-                            {due}
-                            <br />
-                            <span style={{ color: "var(--ink-faint)" }}>
-                              {daysBetween(todayIso(), due) >= 0
-                                ? `in ${daysBetween(todayIso(), due)}d`
-                                : `${-daysBetween(todayIso(), due)}d ago`}
-                              {carried && ` · ${carried.days}d ${carried.basis}`}
-                            </span>
-                          </>
-                        )}
-                      </span>
-                      <span className="mono text-right">{cost === undefined ? "—" : money(cost)}</span>
-                      <span className="text-right hide-sm" style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                        {!b.voided && (
-                          <>
-                            <button
-                              type="button"
-                              className="link-button mono"
-                              onClick={() => {
-                                setCheckingId(checkingId === b.id ? null : b.id);
-                                setVoidingId(null);
-                                setCheckDate(todayIso());
-                                setCheckMethod("palpation");
-                                setCheckResult("pregnant");
-                                setError(null);
-                              }}
-                            >
-                              check
-                            </button>
-                            <button
-                              type="button"
-                              className="link-button mono"
-                              onClick={() => {
-                                setVoidingId(voidingId === b.id ? null : b.id);
-                                setCheckingId(null);
-                                setVoidReason("");
-                                setError(null);
-                              }}
-                            >
-                              void
-                            </button>
-                          </>
-                        )}
-                      </span>
-                    </GridRow>
+                    </button>
 
-                    {checkingId === b.id && (
-                      <div className="breeding-void">
-                        <div className="eyebrow" style={{ marginBottom: 8 }}>
-                          Was she checked in calf?
-                        </div>
-                        <div className="breeding-check__row">
-                          <label style={{ fontSize: 13 }}>
-                            <div className="eyebrow">Date</div>
-                            <input
-                              className="order-select"
-                              type="date"
-                              value={checkDate}
-                              aria-label="Check date"
-                              onChange={(e) => setCheckDate(e.target.value)}
-                            />
-                          </label>
-                          <label style={{ fontSize: 13 }}>
-                            <div className="eyebrow">How</div>
-                            <select
-                              className="order-select"
-                              value={checkMethod}
-                              aria-label="Check method"
-                              onChange={(e) => setCheckMethod(e.target.value)}
-                            >
-                              {CHECK_METHODS.map((m) => (
-                                <option key={m.code} value={m.code}>
-                                  {m.label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label style={{ fontSize: 13 }}>
-                            <div className="eyebrow">Result</div>
-                            <select
-                              className="order-select"
-                              value={checkResult}
-                              aria-label="Check result"
-                              onChange={(e) => setCheckResult(e.target.value)}
-                            >
-                              {CHECK_RESULTS.map((r) => (
-                                <option key={r.code} value={r.code}>
-                                  {r.label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        </div>
-                        <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
-                          <Button
-                            variant="filled"
-                            size="sm"
-                            disabled={
-                              busy ||
-                              validateCheck({
-                                animalId: b.animal_id,
-                                date: checkDate,
-                                method: checkMethod,
-                                result: checkResult,
-                                bredOn: b.date,
-                              }) !== null
-                            }
-                            onClick={() =>
-                              void act(async () => {
-                                await recordCheck({
-                                  animalId: b.animal_id,
-                                  date: checkDate,
-                                  method: checkMethod,
-                                  result: checkResult,
-                                  breedingEventId: b.id,
-                                });
-                                setCheckingId(null);
-                              }, "Check recorded.")
-                            }
-                          >
-                            {busy ? "Saving…" : "Record it"}
-                          </Button>
-                          <Button size="sm" onClick={() => setCheckingId(null)}>
-                            Cancel
-                          </Button>
-                          <span style={{ fontSize: 13, color: "var(--red)" }}>
-                            {validateCheck({
-                              animalId: b.animal_id,
-                              date: checkDate,
-                              method: checkMethod,
-                              result: checkResult,
-                              bredOn: b.date,
-                            })}
-                          </span>
-                        </div>
-                        <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 8 }}>
-                          Bred {b.date} — that's {daysBetween(b.date, checkDate)} days.
-                        </p>
-                      </div>
-                    )}
+                    {expanded && (
+                      <div className="brd-animal__body">
+                        {/* The drawn record, under her name, among the
+                            services it is drawn from. It used to be on her
+                            animal page, a click away from any of this. */}
+                        <ReproTimeline input={input} herd={animals} showWait={showWait} onShowWait={setShowWait} />
 
-                    {voidingId === b.id && (
-                      <div className="breeding-void">
-                        <p style={{ fontSize: 13, color: "var(--ink-muted)", marginBottom: 12 }}>
-                          {b.semen_lot_id
-                            ? "The straw goes back into the tank and the cost comes off her. The breeding stays on the record, marked voided."
-                            : "The breeding stays on the record, marked voided, and any cost comes off her."}
-                        </p>
-                        <div className="breeding-void__row">
-                          <input
-                            className="order-select"
-                            placeholder="Why?"
-                            value={voidReason}
-                            aria-label={`Reason for voiding ${name(b.animal_id) ?? "this breeding"}`}
-                            onChange={(e) => setVoidReason(e.target.value)}
-                          />
-                          <Button
-                            variant="filled"
-                            size="sm"
-                            disabled={busy}
-                            onClick={() =>
-                              void act(async () => {
-                                await voidBreeding(b.id, voidReason);
-                                setVoidingId(null);
-                              }, "Voided.")
-                            }
-                          >
-                            {busy ? "Voiding…" : "Void it"}
-                          </Button>
-                          <Button size="sm" onClick={() => setVoidingId(null)}>
-                            Keep it
-                          </Button>
-                        </div>
+                        {[...seasons].reverse().map((season) => (
+                          <div className="brd-season" key={season.key}>
+                            <div className="brd-season__head">
+                              <span className="serif" style={{ fontSize: 17 }}>
+                                {season.title}
+                              </span>
+                              <span className="mono brd-season__meta">
+                                {season.anchor === "calving" ? `calved ${season.startsOn}` : `from ${season.startsOn}`}
+                                {season.intervalDays !== null && ` · ${season.intervalDays} d interval`}
+                                {season.daysOpen !== null && ` · ${season.daysOpen} d open`}
+                              </span>
+                            </div>
+
+                            {season.services.length === 0 ? (
+                              <p className="brd-season__empty">
+                                No service logged in this season{season.ending ? "" : " yet"}.
+                              </p>
+                            ) : (
+                              <>
+                                <GridRow cols={COLS} mobileCols={COLS_SM} as="header">
+                                  <span>Date</span>
+                                  <span>Sire</span>
+                                  <span className="hide-sm">Checked</span>
+                                  <span className="hide-sm">Due</span>
+                                  <span className="text-right">Cost</span>
+                                  <span className="text-right hide-sm">Actions</span>
+                                </GridRow>
+                                {[...season.services].reverse().map((svc) => {
+                                  const b = byBreedingId.get(svc.id);
+                                  if (!b) return null;
+                                  return renderService(b);
+                                })}
+                              </>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -659,22 +937,16 @@ export default function Breedings() {
   );
 }
 
-const EMPTY_BREEDINGS: Breeding[] = [];
-const EMPTY_ANIMALS: RealAnimal[] = [];
 const EMPTY_LOTS: SemenLot[] = [];
 const EMPTY_COSTS = new Map<string, number>();
-const EMPTY_CHECKS: PregnancyCheck[] = [];
-const EMPTY_GESTATION: GestationInputs = { breeds: [], composition: [], overrides: [], bySpecies: {} };
-
-/** The four small reads a due date needs, in one round trip's worth of
- * parallel. Kept here rather than in the lib so the lib stays pure enough to
- * test without a database. */
-async function loadGestation(farmId: string): Promise<GestationInputs> {
-  const [breeds, composition, overrides, bySpecies] = await Promise.all([
-    fetchBreeds(farmId),
-    fetchComposition(farmId),
-    fetchOverrides(farmId),
-    fetchGestationDays(),
-  ]);
-  return { breeds, composition, overrides, bySpecies };
-}
+const EMPTY_LACTATIONS: RealLactation[] = [];
+const EMPTY_REPRO: AlertInputs = {
+  animals: [],
+  calvings: [],
+  outcomes: [],
+  breedings: [],
+  checks: [],
+  gestation: { breeds: [], composition: [], overrides: [], bySpecies: {} },
+  voluntaryWaitDays: null,
+  today: todayIso(),
+};

@@ -39,3 +39,118 @@
   padding: 12px 0;
   border-top: 1px solid var(--hairline);
 }
+
+/* ── Animals → breeding season → services ──────────────────────────────
+ *
+ * The page used to be one flat list of every service on the farm, which
+ * answers "what did we do lately" and nothing about any one cow. This is the
+ * shape the record actually has, so it is the shape the page has.
+ */
+
+.brd-animal {
+  border-bottom: 1px solid var(--hairline);
+}
+
+.brd-animal__head {
+  appearance: none;
+  background: none;
+  border: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 8px;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  min-height: 52px;
+}
+
+.brd-animal__head:hover {
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+
+.brd-animal__caret {
+  font-size: 15px;
+  color: var(--ink-muted);
+  text-align: center;
+}
+
+.brd-animal__name {
+  min-width: 0;
+}
+
+.brd-animal__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* The indent says "inside her". It is also width the table inside it needs,
+   so it shrinks before the table does. */
+.brd-animal__body {
+  padding: 0 8px 24px 32px;
+  border-left: 1px solid var(--hairline);
+  margin-left: 12px;
+}
+
+@media (max-width: 900px) {
+  .brd-animal__body {
+    padding-left: 12px;
+  }
+}
+
+.brd-season {
+  margin-top: 24px;
+}
+
+.brd-season__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.brd-season__meta {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.brd-season__empty {
+  font-size: 13px;
+  color: var(--ink-muted);
+  padding: 4px 0 8px;
+}
+
+@media (max-width: 640px) {
+  /* 44px of a 320px screen is a lot to spend on saying "inside her". The
+     left rule alone says it. */
+  .brd-animal__body {
+    padding-left: 8px;
+    margin-left: 4px;
+  }
+
+  .brd-animal__head {
+    grid-template-columns: 20px minmax(0, 1fr);
+    row-gap: 6px;
+  }
+
+  .brd-animal__status {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+}
+
+/* The calving half of a check form. Set apart because it is optional and
+   about a different event — the check is what happened at 30 days, this is
+   what happened at 280. */
+.brd-calved {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}

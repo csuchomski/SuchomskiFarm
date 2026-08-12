@@ -199,12 +199,14 @@ real schema before any of it is written.
 Two things from the brief's own "before you run this", both still open:
 
 1. **The Wisconsin 528 Implementation Requirements sheet and the grazing plan
-   worksheet**, from the district conservationist — plus confirmation that
-   the Wisconsin FOTG is on the June 2025 national revision rather than an
-   older state version. This schema assumes it is. If Wisconsin is still on
-   an earlier revision, the carrying-capacity figure removed from
-   `plan_paddock_targets` may need to come back, and the forage balance may
-   be more than the state asks for.
+   worksheet**, from the district conservationist.
+
+   *Settled 2026-08-12: assume Wisconsin FOTG is on the June 2025 national
+   revision.* The owner's call, and the schema is built on it. If that turns
+   out to be wrong, the consequence is bounded and known — the
+   carrying-capacity figure removed from `plan_paddock_targets` comes back,
+   and the feed-and-forage balance is more than the state asks for rather
+   than wrong.
 
    The IR sheet is what a state office actually holds you to and may name
    documentation items that should be required rather than optional.

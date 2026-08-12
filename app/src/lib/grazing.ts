@@ -124,6 +124,36 @@ export interface Infrastructure {
   notes: string | null;
 }
 
+/**
+ * The basemap: a georeferenced static image, not a tile service.
+ *
+ * Chosen deliberately. The farm already has an aerial from its EQIP plan, one
+ * image caches whole, and it renders in a pasture with no signal — which is
+ * the condition the map is needed in. A tile service trades that away for
+ * zoom the map does not need.
+ */
+export interface MapOverlay {
+  id: string;
+  name: string;
+  storagePath: string;
+  /** WGS84 bounding box: all four, or none and `controlPoints` instead. */
+  north: number | null;
+  south: number | null;
+  east: number | null;
+  west: number | null;
+  rotationDeg: number | null;
+  /** For an image a bounding box cannot place. */
+  controlPoints: unknown | null;
+  imageWidthPx: number | null;
+  imageHeightPx: number | null;
+  /** The credit and the flight date, both of which belong on an exported
+   * record — a map should say where it came from and when it was flown. */
+  sourceNote: string | null;
+  imageryDate: string | null;
+  active: boolean;
+  notes: string | null;
+}
+
 // ─── the plan ──────────────────────────────────────────────────────────
 
 /** How often monitoring is expected. Never a constant — see the header. */

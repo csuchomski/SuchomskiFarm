@@ -74,12 +74,12 @@ grazed before its recovery target, monitoring overdue — use **ochre**, which
 
 ## Step 1: what was built
 
-Migration 036 adds twenty-four tables in the `herd` schema, grouped by the
+Migration 036 adds twenty-five tables in the `herd` schema, grouped by the
 plan element each one serves:
 
 - **Management units** — `paddocks`, `paddock_forages`,
   `paddock_water_sources`, `holding_areas`
-- **The map layer** — `infrastructure`
+- **The map layer** — `infrastructure`, `map_overlays`
 - **The plan** — `grazing_plans`, `plan_resource_concerns`,
   `plan_paddock_targets`, `plan_schedule_periods`, `contingency_plans`
 - **The mob** — `grazing_groups`, `grazing_group_members`
@@ -141,6 +141,17 @@ records what was really grazed without redefining the paddock.
 queries — the app reads a boundary back whole and draws it. An extension
 bought for storage alone is a dependency for nothing.
 
+**The basemap is a georeferenced static image, not a tile service.** Decided
+2026-08-12. The farm already has an aerial from its EQIP plan; one image
+caches whole and renders in a pasture with no signal, which is the condition
+the map is needed in. A tile service trades that away for zoom the map does
+not need. `map_overlays` holds the image with a WGS84 bounding box and its
+pixel size — enough to place a boundary on a north-up aerial — with
+`rotation_deg` for one that isn't north-up and `control_points` for one a box
+cannot place at all. The source credit and imagery date travel with it,
+because a map in an exported record should say where it came from and when it
+was flown.
+
 **Derived, never stored:** occupancy days, animal-days, stocking density,
 AUM consumed, rest days since last exit, grazing days per season, animal
 units. All are functions of the rows and would go stale the moment one is
@@ -148,7 +159,7 @@ edited. Their implementations arrive with step 2.
 
 **Nothing cascades from a plan.** Marking a plan inactive hides nothing and
 deletes nothing; prior years stay queryable. There is no DELETE policy on any
-of the twenty-four tables — removal is `deleted_at`, the schema-wide convention.
+of the twenty-five tables — removal is `deleted_at`, the schema-wide convention.
 
 ### Rehearsal
 
@@ -199,9 +210,30 @@ Two things from the brief's own "before you run this", both still open:
 2. **The real paddock list, acreage, boundaries, and current plan targets.**
    Seed data was deliberately not written. Placeholder paddocks would be
    worse than an empty table: they are the kind of thing that survives to a
-   review. Ask the conservationist for the digital unit map already on file
-   from the EQIP plan — importing it beats redrawing it, and
-   `paddocks.boundary` takes GeoJSON as-is.
+   review.
+
+   The EQIP plan map arrived on 2026-08-12 as a static image, and it settles
+   the *approach* without settling the *data*. What it shows: a red dashed
+   perimeter along County Hwy NN, three white dashed cross-fences labelled
+   410 ft, 372 ft and 417 ft, a north–south segment of 401 ft joining the top
+   and bottom ones, two yellow pins on that segment at the 372 ft and 417 ft
+   junctions, and a purple pin with two black pins along an orange dashed
+   line down the east side.
+
+   What it cannot give: the legend is cut off at the right edge, so the
+   marker meanings are inference rather than reading. Nor can an image be
+   georeferenced without coordinates — a scale bar fixes distance, not
+   position. Still needed:
+
+   - the **KML/KMZ or shapefile** behind the map, if NRCS produced it
+     digitally. That carries real coordinates, and acreage per unit can then
+     be computed rather than estimated. `paddocks.boundary` takes GeoJSON
+     as-is.
+   - failing that, **two known points** on the image — a fence corner, a gate
+     — with latitude and longitude, which is enough to fill the bounding box.
+   - the **legend**, uncropped.
+   - **acreage per unit** from the plan, and how many units the cross-fences
+     are meant to make.
 
 ## Open decision: offline
 

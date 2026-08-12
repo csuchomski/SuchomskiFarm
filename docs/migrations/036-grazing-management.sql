@@ -217,6 +217,68 @@ create table if not exists herd.infrastructure (
 create index if not exists infrastructure_farm_kind_idx
   on herd.infrastructure (farm_id, kind) where deleted_at is null;
 
+-- ── the basemap ────────────────────────────────────────────────────────
+--
+-- The unit map is drawn over a **georeferenced static image** rather than a
+-- live tile service. Chosen deliberately: the farm already has an aerial
+-- from its EQIP plan, one image is a few hundred kilobytes that can be
+-- cached whole, and it renders in a pasture with no signal — which is the
+-- condition the map is actually needed in. A tile service is the opposite
+-- trade: better zoom, useless off-grid, and a running dependency.
+--
+-- Georeferencing is a bounding box in WGS84 plus the image's pixel size,
+-- which is all a north-up aerial needs to place a boundary on it. An image
+-- that isn't north-up carries `rotation_deg`; one that is genuinely skewed
+-- carries `control_points` instead, and the app reads that when it is there.
+--
+-- Attribution travels with the image. The source aerial carries a "Google"
+-- credit and an imagery date, and both belong on an exported record — a map
+-- in an annual grazing record should say where it came from and when it was
+-- flown.
+
+create table if not exists herd.map_overlays (
+  id       uuid primary key default gen_random_uuid(),
+  farm_id  uuid not null references herd.farms(id),
+  name     text not null,
+  storage_path text not null,
+  -- WGS84 bounding box. All four or none.
+  north numeric,
+  south numeric,
+  east  numeric,
+  west  numeric,
+  rotation_deg numeric,
+  -- For an image that a bounding box cannot place. GeoJSON control points,
+  -- pixel to lat/long.
+  control_points jsonb,
+  image_width_px  integer,
+  image_height_px integer,
+  -- "EQIP plan map, Google imagery 2024" — the credit and the flight date.
+  source_note text,
+  imagery_date date,
+  active   boolean not null default true,
+  notes    text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  created_by uuid references auth.users(id),
+  updated_by uuid references auth.users(id),
+  deleted_at timestamptz,
+  rev integer not null default 1,
+  constraint map_overlays_bbox_complete check (
+    (north is null and south is null and east is null and west is null)
+    or (north is not null and south is not null and east is not null and west is not null)
+  ),
+  constraint map_overlays_bbox_ordered check (
+    north is null or (north > south and east > west)
+  ),
+  constraint map_overlays_placeable check (
+    north is not null or control_points is not null
+  ),
+  constraint map_overlays_pixels_positive check (
+    (image_width_px is null or image_width_px > 0) and
+    (image_height_px is null or image_height_px > 0)
+  )
+);
+
 -- ── the plan ───────────────────────────────────────────────────────────
 
 create table if not exists herd.grazing_plans (
@@ -797,7 +859,7 @@ declare
   t text;
   tables text[] := array[
     'paddocks', 'paddock_forages', 'paddock_water_sources', 'holding_areas',
-    'infrastructure',
+    'infrastructure', 'map_overlays',
     'grazing_plans', 'plan_resource_concerns', 'plan_paddock_targets',
     'plan_schedule_periods', 'contingency_plans',
     'forage_availability', 'forage_demand', 'forage_removals',

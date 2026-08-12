@@ -6,17 +6,44 @@
 -- Step 1 of the grazing module: the tables and nothing else. No UI, no seed
 -- data — the paddocks have to be the farm's real ones, not placeholders.
 --
--- What this is for: an EQIP contract with 528 as a scheduled practice. The
--- standard does not enumerate required record fields. It requires a Grazing
--- Management Plan with goals and objectives, a resource inventory, a forage
--- inventory with carrying capacity, a grazing schedule naming grazing and
--- rest/deferment periods, contingency preparations, and a monitoring
--- strategy with protocols and records — plus, under Operation and
--- Maintenance, that adaptive-management decisions be documented and that the
--- records actually get used to make changes.
+-- What this is for: an EQIP contract with 528 as a scheduled practice.
 --
--- So every one of those plan elements gets a durable home here, not just the
--- move log. The tables below are grouped in that order.
+-- Written against the **June 2025 revision** (NHCP). The standard does not
+-- enumerate required record fields; its Plans and Specifications section
+-- requires, at minimum:
+--
+--   * the client's goals and objectives
+--   * a map of planned grazing management units showing existing supporting
+--     infrastructure — livestock water, fence, gates
+--   * an inventory of current and planned forage availability by management
+--     unit: seasonal production, species, quality, availability
+--   * current and planned livestock and/or wildlife forage demand
+--   * a feed and forage balance by management unit, aligning demand with
+--     availability and accounting for distribution, wildlife use, quality,
+--     seasonal availability and hay production
+--   * a grazing strategy: intensity, timing, duration, frequency
+--   * a contingency plan for episodic events
+--   * monitoring protocols and records
+--
+-- Operation and Maintenance additionally require documented adaptive-
+-- management decisions, identified key areas / key plants / indicators, and
+-- that the records actually get used to make changes.
+--
+-- Every one of those has a durable home here, not just the move log. The map,
+-- the forage balance and the decision log are first-class — the tables below
+-- are grouped in that order.
+--
+-- Two things the 2025 revision changed about an earlier draft of this file:
+--
+--   * **The forage balance replaces a single carrying-capacity figure.**
+--     Supply and demand are modelled separately (`forage_availability`,
+--     `forage_demand`, `forage_removals`) and the balance is derived. The
+--     `carrying_capacity_aum` column that used to sit on a paddock target is
+--     gone rather than kept beside it: one fact in two places is how the two
+--     end up disagreeing.
+--   * **Sensitive areas, ecological site and heavy-use notes are no longer
+--     named by the standard.** They stay — they are useful — but they are
+--     optional inventory and belong out of the way in the UI.
 --
 -- Two rules this schema holds to:
 --
@@ -46,12 +73,22 @@ create table if not exists herd.paddocks (
   code                text,
   acres_measured      numeric,
   acres_grazable      numeric,
-  ecological_site     text,
-  soil_map_unit       text,
+  -- How the unit is bounded. A poly-wire subdivision and a virtual-fence unit
+  -- are both real management units, and neither has a fence you could point
+  -- at on the infrastructure map — so the type has to be recorded rather than
+  -- inferred from whether a fence exists.
+  unit_type           text not null default 'permanent',
   seeding_date        date,
   fence_type          text,
-  -- Sensitive areas drive site-specific strategy under the standard, so they
-  -- are flags rather than free text — they have to be filterable.
+  -- ── optional inventory ───────────────────────────────────────────────
+  -- Useful, and no longer named by the 2025 standard. Nullable, and the UI
+  -- keeps them out of the way rather than in the main flow.
+  ecological_site     text,
+  soil_map_unit       text,
+  noxious_species     text,
+  noxious_extent      text,
+  -- Sensitive areas drive site-specific strategy, so they are flags rather
+  -- than free text — they have to be filterable.
   sensitive_riparian      boolean not null default false,
   sensitive_wetland       boolean not null default false,
   sensitive_habitat       boolean not null default false,
@@ -75,6 +112,9 @@ create table if not exists herd.paddocks (
   ),
   constraint paddocks_grazable_within_measured check (
     acres_measured is null or acres_grazable is null or acres_grazable <= acres_measured
+  ),
+  constraint paddocks_unit_type check (
+    unit_type in ('permanent', 'temporary', 'virtual')
   )
 );
 
@@ -131,6 +171,52 @@ create table if not exists herd.holding_areas (
   rev integer not null default 1
 );
 
+-- ── infrastructure: the map layer ──────────────────────────────────────
+--
+-- The standard requires a map of the management units *showing existing
+-- supporting infrastructure* — water, fence, gates. So this has to be real
+-- geometry that renders, not a list of things that exist somewhere.
+--
+-- Geometry is GeoJSON in jsonb: a Point for a tank or gate, a LineString for
+-- a fence, pipeline or lane. No PostGIS — nothing here does spatial queries,
+-- and adding an extension for storage the app only ever reads back whole
+-- would be a dependency bought for nothing.
+
+create table if not exists herd.infrastructure (
+  id       uuid primary key default gen_random_uuid(),
+  farm_id  uuid not null references herd.farms(id),
+  -- Optional: a pipeline crosses paddocks, a tank serves two. Null means it
+  -- belongs to the farm rather than to one unit.
+  paddock_id uuid references herd.paddocks(id),
+  kind     text not null,
+  name     text,
+  geometry jsonb,
+  install_date date,
+  condition    text,
+  -- Where the item is itself an NRCS practice — Fence is 382, Watering
+  -- Facility 614, Pipeline 516 — so the map can carry the practice number a
+  -- reviewer is looking for.
+  nrcs_practice_code text,
+  active   boolean not null default true,
+  notes    text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  created_by uuid references auth.users(id),
+  updated_by uuid references auth.users(id),
+  deleted_at timestamptz,
+  rev integer not null default 1,
+  constraint infrastructure_kind check (
+    kind in (
+      'water_source', 'tank', 'pipeline', 'well',
+      'permanent_fence', 'temporary_fence', 'gate', 'lane',
+      'holding_area', 'shade', 'mineral_station', 'other'
+    )
+  )
+);
+
+create index if not exists infrastructure_farm_kind_idx
+  on herd.infrastructure (farm_id, kind) where deleted_at is null;
+
 -- ── the plan ───────────────────────────────────────────────────────────
 
 create table if not exists herd.grazing_plans (
@@ -150,6 +236,11 @@ create table if not exists herd.grazing_plans (
   -- a count, every_rotation -> value unused.
   monitoring_cadence_kind  text not null default 'every_n_days',
   monitoring_cadence_value numeric,
+  -- Dry-matter intake as a share of body weight, used to turn head and weight
+  -- into forage demand. A plan-level default that any demand row may override,
+  -- because it is a number somebody should be able to argue with — not a
+  -- constant this app asserts.
+  default_dmi_pct_bw numeric,
   active        boolean not null default false,
   notes         text,
   created_at timestamptz not null default now(),
@@ -202,7 +293,9 @@ create table if not exists herd.plan_paddock_targets (
   min_recovery_days_growing  integer,
   min_recovery_days_dormant  integer,
   target_utilization_pct     numeric,
-  carrying_capacity_aum      numeric,
+  -- No carrying_capacity_aum here. The 2025 revision replaces that single
+  -- figure with the feed and forage balance below, and keeping both would be
+  -- one fact in two places waiting to disagree.
   planned_grazing_notes      text,
   planned_deferment_notes    text,
   sensitive_area_strategy    text,
@@ -317,6 +410,140 @@ create unique index if not exists grazing_group_members_open_uniq
   on herd.grazing_group_members (group_id, animal_id)
   where left_on is null and deleted_at is null;
 
+-- ── feed and forage balance ────────────────────────────────────────────
+--
+-- Its own required deliverable in the 2025 revision, and the reason the old
+-- single carrying-capacity number is gone. Supply and demand are separate
+-- tables; the balance — availability, less demand, less what was hauled off
+-- as hay — is derived per unit per period and never stored.
+--
+-- Periods are a date range rather than a month number, so the same tables
+-- carry a monthly step, a seasonal step, or the irregular one a plan actually
+-- uses. The label is what the farm calls it.
+--
+-- On units: the header of this file says one canonical unit per quantity, and
+-- these tables look like they break it by offering both pounds of dry matter
+-- and AUM. They don't — each *column* is one unit, and both are recorded as
+-- entered. Converting between them needs an assumption about what an animal
+-- unit month is worth in dry matter, and this app inventing that number
+-- quietly is exactly what it must not do. Whichever the farm entered is what
+-- gets shown.
+
+create table if not exists herd.forage_availability (
+  id         uuid primary key default gen_random_uuid(),
+  farm_id    uuid not null references herd.farms(id),
+  plan_id    uuid references herd.grazing_plans(id),
+  paddock_id uuid not null references herd.paddocks(id),
+  period_start date not null,
+  period_end   date not null,
+  period_label text,
+  lb_dm_per_acre numeric,
+  aum            numeric,
+  species_mix    text,
+  quality_note   text,
+  -- Current inventory or planned/projected: the standard asks for both, and
+  -- a projection shown as a measurement is a lie a reviewer will catch.
+  is_planned  boolean not null default false,
+  -- Where the number came from. A visual estimate and a clipping are not the
+  -- same evidence, and the balance should say which it is built on.
+  basis       text,
+  notes       text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  created_by uuid references auth.users(id),
+  updated_by uuid references auth.users(id),
+  deleted_at timestamptz,
+  rev integer not null default 1,
+  constraint forage_availability_period_order check (period_end >= period_start),
+  constraint forage_availability_has_a_figure check (
+    lb_dm_per_acre is not null or aum is not null
+  ),
+  constraint forage_availability_nonneg check (
+    (lb_dm_per_acre is null or lb_dm_per_acre >= 0) and (aum is null or aum >= 0)
+  ),
+  constraint forage_availability_basis check (
+    basis is null or basis in (
+      'clipping', 'plate_meter', 'visual', 'ecological_site', 'extension_table', 'other'
+    )
+  )
+);
+
+create index if not exists forage_availability_paddock_period_idx
+  on herd.forage_availability (paddock_id, period_start) where deleted_at is null;
+
+create table if not exists herd.forage_demand (
+  id         uuid primary key default gen_random_uuid(),
+  farm_id    uuid not null references herd.farms(id),
+  plan_id    uuid references herd.grazing_plans(id),
+  -- Null paddock means the demand is against the whole farm rather than one
+  -- unit — which is the honest shape for a wildlife estimate.
+  paddock_id uuid references herd.paddocks(id),
+  group_id   uuid references herd.grazing_groups(id),
+  -- Wildlife use has to be accounted for under the standard, so it is a row
+  -- type here rather than a footnote somebody remembers to subtract.
+  kind       text not null default 'livestock',
+  period_start date not null,
+  period_end   date not null,
+  period_label text,
+  head_count    integer,
+  animal_class  text,
+  avg_weight_lb numeric,
+  -- Overrides the plan's default when set.
+  dmi_pct_bw    numeric,
+  -- Or state the demand outright, which is how a wildlife row gets entered.
+  demand_lb_dm  numeric,
+  demand_aum    numeric,
+  notes         text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  created_by uuid references auth.users(id),
+  updated_by uuid references auth.users(id),
+  deleted_at timestamptz,
+  rev integer not null default 1,
+  constraint forage_demand_period_order check (period_end >= period_start),
+  constraint forage_demand_kind check (kind in ('livestock', 'wildlife', 'other')),
+  constraint forage_demand_nonneg check (
+    (head_count is null or head_count >= 0) and
+    (avg_weight_lb is null or avg_weight_lb >= 0) and
+    (dmi_pct_bw is null or dmi_pct_bw >= 0) and
+    (demand_lb_dm is null or demand_lb_dm >= 0) and
+    (demand_aum is null or demand_aum >= 0)
+  )
+);
+
+create index if not exists forage_demand_period_idx
+  on herd.forage_demand (farm_id, period_start) where deleted_at is null;
+
+-- Hay and haylage off a management unit. Two jobs: the standard requires hay
+-- production be carried in the balance, and without it the rotation timeline
+-- reads a long gap as rest when the forage actually left on a wagon.
+create table if not exists herd.forage_removals (
+  id         uuid primary key default gen_random_uuid(),
+  farm_id    uuid not null references herd.farms(id),
+  paddock_id uuid not null references herd.paddocks(id),
+  removed_on date not null,
+  kind       text not null default 'hay',
+  cutting_number integer,
+  yield_lb   numeric,
+  -- Weighed or estimated. Same reasoning as the availability basis.
+  yield_basis text,
+  notes      text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  created_by uuid references auth.users(id),
+  updated_by uuid references auth.users(id),
+  deleted_at timestamptz,
+  rev integer not null default 1,
+  constraint forage_removals_kind check (kind in ('hay', 'haylage', 'baleage', 'green_chop', 'other')),
+  constraint forage_removals_basis check (yield_basis is null or yield_basis in ('weighed', 'estimated')),
+  constraint forage_removals_nonneg check (
+    (yield_lb is null or yield_lb >= 0) and (cutting_number is null or cutting_number > 0)
+  )
+);
+
+create index if not exists forage_removals_paddock_date_idx
+  on herd.forage_removals (paddock_id, removed_on desc) where deleted_at is null;
+
 -- ── the move log ───────────────────────────────────────────────────────
 
 create table if not exists herd.grazing_events (
@@ -339,6 +566,11 @@ create table if not exists herd.grazing_events (
   notes            text,
   latitude         numeric,
   longitude        numeric,
+  -- A virtual-fence unit is a different shape each time it is grazed. This
+  -- carries that grazing's actual boundary without redefining the paddock,
+  -- so the map can draw what was really grazed and the paddock keeps meaning
+  -- one thing across the season.
+  boundary_override jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   created_by uuid references auth.users(id),
@@ -565,8 +797,10 @@ declare
   t text;
   tables text[] := array[
     'paddocks', 'paddock_forages', 'paddock_water_sources', 'holding_areas',
+    'infrastructure',
     'grazing_plans', 'plan_resource_concerns', 'plan_paddock_targets',
     'plan_schedule_periods', 'contingency_plans',
+    'forage_availability', 'forage_demand', 'forage_removals',
     'grazing_groups', 'grazing_group_members', 'grazing_events',
     'key_areas', 'monitoring_records', 'grazing_photos',
     'management_decisions', 'decision_paddocks', 'decision_groups',

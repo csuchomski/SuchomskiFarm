@@ -29,16 +29,25 @@ import { herdSchema } from "./supabase";
 
 // ─── management units ──────────────────────────────────────────────────
 
+/** How the unit is bounded. A poly-wire subdivision and a virtual-fence unit
+ * are both real management units, and neither has a fence on the map. */
+export type PaddockUnitType = "permanent" | "temporary" | "virtual";
+
 export interface Paddock {
   id: string;
   name: string;
   code: string | null;
   acresMeasured: number | null;
   acresGrazable: number | null;
-  ecologicalSite: string | null;
-  soilMapUnit: string | null;
+  unitType: PaddockUnitType;
   seedingDate: string | null;
   fenceType: string | null;
+  /** Optional inventory: useful, not named by the 2025 standard, and kept
+   * out of the main flow in the UI. */
+  ecologicalSite: string | null;
+  soilMapUnit: string | null;
+  noxiousSpecies: string | null;
+  noxiousExtent: string | null;
   sensitive: {
     riparian: boolean;
     wetland: boolean;
@@ -78,6 +87,43 @@ export interface HoldingArea {
   notes: string | null;
 }
 
+// ─── infrastructure: the map layer ─────────────────────────────────────
+
+export type InfrastructureKind =
+  | "water_source"
+  | "tank"
+  | "pipeline"
+  | "well"
+  | "permanent_fence"
+  | "temporary_fence"
+  | "gate"
+  | "lane"
+  | "holding_area"
+  | "shade"
+  | "mineral_station"
+  | "other";
+
+/** The standard requires a map of the units *showing* supporting
+ * infrastructure, so this is geometry that renders, not a list of things
+ * that exist somewhere. GeoJSON: a Point for a tank, a LineString for a
+ * fence or pipeline. */
+export interface Infrastructure {
+  id: string;
+  /** Null when it belongs to the farm rather than one unit — a pipeline
+   * crosses paddocks. */
+  paddockId: string | null;
+  kind: InfrastructureKind;
+  name: string | null;
+  geometry: unknown | null;
+  installDate: string | null;
+  condition: string | null;
+  /** Fence is 382, Watering Facility 614, Pipeline 516 — the number a
+   * reviewer looks for. */
+  nrcsPracticeCode: string | null;
+  active: boolean;
+  notes: string | null;
+}
+
 // ─── the plan ──────────────────────────────────────────────────────────
 
 /** How often monitoring is expected. Never a constant — see the header. */
@@ -96,6 +142,10 @@ export interface GrazingPlan {
   benchmarkStockingRateAumPerAcre: number | null;
   monitoringCadenceKind: MonitoringCadenceKind;
   monitoringCadenceValue: number | null;
+  /** Dry-matter intake as a share of body weight, for turning head and weight
+   * into demand. A default any demand row may override — a number somebody
+   * should be able to argue with, not a constant this app asserts. */
+  defaultDmiPctBw: number | null;
   active: boolean;
   notes: string | null;
 }
@@ -121,7 +171,6 @@ export interface PlanPaddockTarget {
   minRecoveryDaysGrowing: number | null;
   minRecoveryDaysDormant: number | null;
   targetUtilizationPct: number | null;
-  carryingCapacityAum: number | null;
   plannedGrazingNotes: string | null;
   plannedDefermentNotes: string | null;
   sensitiveAreaStrategy: string | null;
@@ -182,6 +231,85 @@ export interface GrazingGroupMember {
   leftOn: string | null;
 }
 
+// ─── feed and forage balance ───────────────────────────────────────────
+//
+// The 2025 revision's own required deliverable, and the reason there is no
+// single carrying-capacity figure anywhere in this module. Supply and demand
+// are separate; the balance is derived.
+//
+// Both pounds of dry matter and AUM appear, which looks like two units for
+// one quantity. It isn't — each field is one unit, recorded as entered.
+// Converting between them needs an assumption about what an animal unit
+// month is worth in dry matter, and this app inventing that number quietly
+// is exactly what it must not do.
+
+/** Where an availability figure came from. A visual estimate and a clipping
+ * are not the same evidence. */
+export type AvailabilityBasis =
+  | "clipping"
+  | "plate_meter"
+  | "visual"
+  | "ecological_site"
+  | "extension_table"
+  | "other";
+
+export interface ForageAvailability {
+  id: string;
+  planId: string | null;
+  paddockId: string;
+  periodStart: string;
+  periodEnd: string;
+  periodLabel: string | null;
+  lbDmPerAcre: number | null;
+  aum: number | null;
+  speciesMix: string | null;
+  qualityNote: string | null;
+  /** A projection shown as a measurement is a lie a reviewer will catch. */
+  isPlanned: boolean;
+  basis: AvailabilityBasis | null;
+  notes: string | null;
+}
+
+export type DemandKind = "livestock" | "wildlife" | "other";
+
+export interface ForageDemand {
+  id: string;
+  planId: string | null;
+  /** Null means against the whole farm rather than one unit — the honest
+   * shape for a wildlife estimate. */
+  paddockId: string | null;
+  groupId: string | null;
+  kind: DemandKind;
+  periodStart: string;
+  periodEnd: string;
+  periodLabel: string | null;
+  headCount: number | null;
+  animalClass: string | null;
+  avgWeightLb: number | null;
+  /** Overrides the plan default when set. */
+  dmiPctBw: number | null;
+  /** Or state the demand outright, which is how a wildlife row is entered. */
+  demandLbDm: number | null;
+  demandAum: number | null;
+  notes: string | null;
+}
+
+export type RemovalKind = "hay" | "haylage" | "baleage" | "green_chop" | "other";
+
+/** Hay off a unit. Two jobs: the standard requires hay production be carried
+ * in the balance, and without it the rotation timeline reads a long gap as
+ * rest when the forage actually left on a wagon. */
+export interface ForageRemoval {
+  id: string;
+  paddockId: string;
+  removedOn: string;
+  kind: RemovalKind;
+  cuttingNumber: number | null;
+  yieldLb: number | null;
+  yieldBasis: "weighed" | "estimated" | null;
+  notes: string | null;
+}
+
 // ─── the move log ──────────────────────────────────────────────────────
 
 export type SoilMoisture = "dry" | "moist" | "saturated";
@@ -206,6 +334,9 @@ export interface GrazingEvent {
   notes: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** A virtual-fence unit is a different shape each time it is grazed. This
+   * is that grazing's actual boundary, without redefining the paddock. */
+  boundaryOverride: unknown | null;
 }
 
 // ─── monitoring ────────────────────────────────────────────────────────
@@ -310,7 +441,7 @@ export async function fetchPaddocks(farmId: string): Promise<Paddock[]> {
   const { data, error } = await herdSchema()
     .from("paddocks")
     .select(
-      "id, name, code, acres_measured, acres_grazable, ecological_site, soil_map_unit, seeding_date, fence_type, sensitive_riparian, sensitive_wetland, sensitive_habitat, sensitive_karst, sensitive_high_erosion, heavy_use_notes, boundary, active, notes",
+      "id, name, code, acres_measured, acres_grazable, unit_type, seeding_date, fence_type, ecological_site, soil_map_unit, noxious_species, noxious_extent, sensitive_riparian, sensitive_wetland, sensitive_habitat, sensitive_karst, sensitive_high_erosion, heavy_use_notes, boundary, active, notes",
     )
     .eq("farm_id", farmId)
     .is("deleted_at", null)
@@ -323,10 +454,13 @@ export async function fetchPaddocks(farmId: string): Promise<Paddock[]> {
     code: (r.code as string) ?? null,
     acresMeasured: num(r.acres_measured),
     acresGrazable: num(r.acres_grazable),
-    ecologicalSite: (r.ecological_site as string) ?? null,
-    soilMapUnit: (r.soil_map_unit as string) ?? null,
+    unitType: r.unit_type as PaddockUnitType,
     seedingDate: (r.seeding_date as string) ?? null,
     fenceType: (r.fence_type as string) ?? null,
+    ecologicalSite: (r.ecological_site as string) ?? null,
+    soilMapUnit: (r.soil_map_unit as string) ?? null,
+    noxiousSpecies: (r.noxious_species as string) ?? null,
+    noxiousExtent: (r.noxious_extent as string) ?? null,
     sensitive: {
       riparian: Boolean(r.sensitive_riparian),
       wetland: Boolean(r.sensitive_wetland),
@@ -366,7 +500,7 @@ export async function fetchGrazingEvents(farmId: string): Promise<GrazingEvent[]
   const { data, error } = await herdSchema()
     .from("grazing_events")
     .select(
-      "id, paddock_id, group_id, entered_at, exited_at, head_count, avg_weight_lb, forage_height_in_entry, residual_height_in_exit, utilization_pct, soil_moisture, supplemental_feed, weather_notes, notes, latitude, longitude",
+      "id, paddock_id, group_id, entered_at, exited_at, head_count, avg_weight_lb, forage_height_in_entry, residual_height_in_exit, utilization_pct, soil_moisture, supplemental_feed, weather_notes, notes, latitude, longitude, boundary_override",
     )
     .eq("farm_id", farmId)
     .is("deleted_at", null)
@@ -390,6 +524,7 @@ export async function fetchGrazingEvents(farmId: string): Promise<GrazingEvent[]
     notes: (r.notes as string) ?? null,
     latitude: num(r.latitude),
     longitude: num(r.longitude),
+    boundaryOverride: r.boundary_override ?? null,
   }));
 }
 
@@ -400,7 +535,7 @@ export async function fetchPlanPaddockTargets(planId: string): Promise<PlanPaddo
   const { data, error } = await herdSchema()
     .from("plan_paddock_targets")
     .select(
-      "id, plan_id, paddock_id, target_entry_height_in, target_residual_height_in, min_recovery_days_growing, min_recovery_days_dormant, target_utilization_pct, carrying_capacity_aum, planned_grazing_notes, planned_deferment_notes, sensitive_area_strategy, notes",
+      "id, plan_id, paddock_id, target_entry_height_in, target_residual_height_in, min_recovery_days_growing, min_recovery_days_dormant, target_utilization_pct, planned_grazing_notes, planned_deferment_notes, sensitive_area_strategy, notes",
     )
     .eq("plan_id", planId)
     .is("deleted_at", null);
@@ -415,7 +550,6 @@ export async function fetchPlanPaddockTargets(planId: string): Promise<PlanPaddo
     minRecoveryDaysGrowing: num(r.min_recovery_days_growing),
     minRecoveryDaysDormant: num(r.min_recovery_days_dormant),
     targetUtilizationPct: num(r.target_utilization_pct),
-    carryingCapacityAum: num(r.carrying_capacity_aum),
     plannedGrazingNotes: (r.planned_grazing_notes as string) ?? null,
     plannedDefermentNotes: (r.planned_deferment_notes as string) ?? null,
     sensitiveAreaStrategy: (r.sensitive_area_strategy as string) ?? null,
@@ -429,7 +563,7 @@ export async function fetchActivePlan(farmId: string): Promise<GrazingPlan | nul
   const { data, error } = await herdSchema()
     .from("grazing_plans")
     .select(
-      "id, name, period_start, period_end, contract_number, tract_number, field_ids, long_term_goals, immediate_objectives, benchmark_stocking_rate_aum_per_acre, monitoring_cadence_kind, monitoring_cadence_value, active, notes",
+      "id, name, period_start, period_end, contract_number, tract_number, field_ids, long_term_goals, immediate_objectives, benchmark_stocking_rate_aum_per_acre, monitoring_cadence_kind, monitoring_cadence_value, default_dmi_pct_bw, active, notes",
     )
     .eq("farm_id", farmId)
     .eq("active", true)
@@ -452,6 +586,7 @@ export async function fetchActivePlan(farmId: string): Promise<GrazingPlan | nul
     benchmarkStockingRateAumPerAcre: num(r.benchmark_stocking_rate_aum_per_acre),
     monitoringCadenceKind: r.monitoring_cadence_kind as MonitoringCadenceKind,
     monitoringCadenceValue: num(r.monitoring_cadence_value),
+    defaultDmiPctBw: num(r.default_dmi_pct_bw),
     active: Boolean(r.active),
     notes: (r.notes as string) ?? null,
   };

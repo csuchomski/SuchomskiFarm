@@ -1,6 +1,6 @@
 # Grazing management (NRCS CPS 528)
 
-A six-step module, built one reviewable step at a time. This file is the
+An eight-step module, built one reviewable step at a time. This file is the
 running record of what was decided and what is still open.
 
 **Step 1 — schema and types — is built and rehearsed, not run.** See
@@ -13,16 +13,29 @@ things at once: work in a pasture on a phone with one hand, produce records a
 district conservationist can review, and stay readable long after the
 contract closes.
 
-CPS 528 does not enumerate required record fields. What it requires is a
-Grazing Management Plan containing goals and objectives, a resource
-inventory, a forage inventory with carrying capacity, a grazing schedule
-identifying grazing and rest/deferment periods, contingency preparations for
-episodic events, and a monitoring strategy with protocols and records.
-Operation and Maintenance further require that adaptive-management decisions
-be documented and that the records get used to make changes.
+Built against the **June 2025 revision** (NHCP). CPS 528 does not enumerate
+required record fields; its Plans and Specifications section requires, at
+minimum:
+
+- the client's goals and objectives
+- a map of planned management units showing existing supporting
+  infrastructure — livestock water, fence, gates
+- an inventory of current and planned forage availability by unit: seasonal
+  production, species, quality, availability
+- current and planned livestock and/or wildlife forage demand
+- a feed and forage balance by unit, accounting for distribution, wildlife
+  use, quality, seasonal availability and hay production
+- a grazing strategy: intensity, timing, duration, frequency
+- a contingency plan for episodic events
+- monitoring protocols and records
+
+Operation and Maintenance further require documented adaptive-management
+decisions, identified key areas / key plants / indicators, and that the
+records get used to make changes.
 
 Each of those has its own table in migration 036, rather than everything
-being crammed into the move log.
+being crammed into the move log. The map, the forage balance and the decision
+log are first-class.
 
 ## Two rules that run through the whole module
 
@@ -61,21 +74,25 @@ grazed before its recovery target, monitoring overdue — use **ochre**, which
 
 ## Step 1: what was built
 
-Migration 036 adds twenty tables in the `herd` schema, grouped by the plan
-element each one serves:
+Migration 036 adds twenty-four tables in the `herd` schema, grouped by the
+plan element each one serves:
 
 - **Management units** — `paddocks`, `paddock_forages`,
   `paddock_water_sources`, `holding_areas`
+- **The map layer** — `infrastructure`
 - **The plan** — `grazing_plans`, `plan_resource_concerns`,
   `plan_paddock_targets`, `plan_schedule_periods`, `contingency_plans`
 - **The mob** — `grazing_groups`, `grazing_group_members`
+- **Feed and forage balance** — `forage_availability`, `forage_demand`,
+  `forage_removals`
 - **The move log** — `grazing_events`
 - **Monitoring** — `key_areas`, `monitoring_records`, `grazing_photos`
 - **Adaptive management and its inputs** — `management_decisions`,
   `decision_paddocks`, `decision_groups`, `supplemental_feeding`,
   `soil_tests`
 
-Types and the four reads step 2 needs are in `app/src/lib/grazing.ts`.
+Types for all of it, and the four reads step 2 needs, are in
+`app/src/lib/grazing.ts`.
 
 ### Decisions worth knowing
 
@@ -101,6 +118,29 @@ whole year is the assumption that gets paddocks hurt.
 grazing periods *and* rest/deferment periods, and the rotation timeline in
 step 3 has to draw planned against actual.
 
+**The forage balance replaced carrying capacity, rather than sitting beside
+it.** The 2025 revision names the balance as its own deliverable, so
+`plan_paddock_targets.carrying_capacity_aum` is gone: one fact in two places
+is how the two end up disagreeing. Supply, demand and hay removals are three
+tables and the balance is derived from them.
+
+**Both lb DM and AUM are storable, and that is not two units for one
+quantity.** Each column is one unit, recorded as entered. Converting needs an
+assumption about what an animal unit month is worth in dry matter, and this
+app inventing that number quietly is exactly what it must not do.
+
+**Hay removals exist for two reasons.** The standard requires hay production
+be carried in the balance — and without it the rotation timeline reads a long
+gap as rest when the forage actually left on a wagon.
+
+**A grazing event can carry its own boundary.** A virtual-fence unit is a
+different shape each time it is grazed; `grazing_events.boundary_override`
+records what was really grazed without redefining the paddock.
+
+**Geometry is GeoJSON in `jsonb`, not PostGIS.** Nothing here does spatial
+queries — the app reads a boundary back whole and draws it. An extension
+bought for storage alone is a dependency for nothing.
+
 **Derived, never stored:** occupancy days, animal-days, stocking density,
 AUM consumed, rest days since last exit, grazing days per season, animal
 units. All are functions of the rows and would go stale the moment one is
@@ -108,7 +148,7 @@ edited. Their implementations arrive with step 2.
 
 **Nothing cascades from a plan.** Marking a plan inactive hides nothing and
 deletes nothing; prior years stay queryable. There is no DELETE policy on any
-of the twenty tables — removal is `deleted_at`, the schema-wide convention.
+of the twenty-four tables — removal is `deleted_at`, the schema-wide convention.
 
 ### Rehearsal
 
@@ -116,35 +156,52 @@ Applied inside a rolled-back transaction, with the write path exercised as
 the farmer under a real `authenticated` role:
 
 ```
-1  tables created                     20
-2  rls enabled on all                 20
-3  policies (want 60, 0 delete)       60 total, 0 delete
-4  paddocks and a move recorded       ok
-5  moved to the next paddock          ok
-6  second open event refused          one open event per mob
-7  exit before entry refused          ok
-8  foreign farm insert refused        RLS
-9  orphan photo refused               ok
-10 two active plans refused           one at a time
-11 utilization 140% refused           ok
-12 rest days on North since exit      0
+01 tables created (want 24)                24
+02 rls enabled (want 24)                   24
+03 policies (want 72, 0 delete)            72 total, 0 delete
+04 carrying_capacity_aum gone              yes
+05 paddock, mob and plan                   ok
+06 event carries its own boundary          ok
+07 infrastructure rows                     2
+08 supply, demand and a hay cutting        ok
+09 June balance, lb DM                     8668
+10 availability with no figure refused     ok
+11 period ending before it starts refused  ok
+12 unknown unit type refused               ok
+13 unknown infrastructure kind refused     ok
+14 foreign farm infrastructure refused     RLS
+15 second open event refused               one open per mob
 ```
+
+The balance in step 09 checks out by hand: 2,400 lb DM/acre over 8 grazable
+acres is 19,200, less 3,432 for four cows at 1,100 lb eating 2.6% of body
+weight for 30 days, less 900 for deer, less a 6,200 lb hay cutting — 8,668.
+That is the derivation the balance screen will do, exercised against the
+real schema before any of it is written.
 
 ## Before this can be run
 
 Two things from the brief's own "before you run this", both still open:
 
 1. **The Wisconsin 528 Implementation Requirements sheet and the grazing plan
-   worksheet**, from the district conservationist. The IR sheet is what a
-   state office actually holds you to and may name specific documentation
-   items that should be required fields rather than optional ones. Everything
-   is optional today, so the sheet can only tighten — but if it prescribes a
-   worksheet layout, that becomes a seventh build step: an export reproducing
-   that exact layout.
+   worksheet**, from the district conservationist — plus confirmation that
+   the Wisconsin FOTG is on the June 2025 national revision rather than an
+   older state version. This schema assumes it is. If Wisconsin is still on
+   an earlier revision, the carrying-capacity figure removed from
+   `plan_paddock_targets` may need to come back, and the forage balance may
+   be more than the state asks for.
 
-2. **The real paddock list, acreage, and current plan targets.** Seed data
-   was deliberately not written. Placeholder paddocks would be worse than an
-   empty table: they are the kind of thing that survives to a review.
+   The IR sheet is what a state office actually holds you to and may name
+   documentation items that should be required rather than optional.
+   Everything is optional today, so the sheet can only tighten — but if it
+   prescribes a worksheet layout, that becomes a ninth build step.
+
+2. **The real paddock list, acreage, boundaries, and current plan targets.**
+   Seed data was deliberately not written. Placeholder paddocks would be
+   worse than an empty table: they are the kind of thing that survives to a
+   review. Ask the conservationist for the digital unit map already on file
+   from the EQIP plan — importing it beats redrawing it, and
+   `paddocks.boundary` takes GeoJSON as-is.
 
 ## Open decision: offline
 
@@ -171,8 +228,11 @@ The third is the recommendation. Nothing in step 1 forecloses any of them.
 
 1. **Schema + types** — built, rehearsed, awaiting the paddock list.
 2. Log a Move + paddock board.
-3. Rotation timeline.
-4. Monitoring + key areas + photo points.
-5. Plan editor + contingency triggers + decision log.
-6. Exports — annual grazing record, and CSV of raw events and monitoring.
-7. *(conditional)* A worksheet-shaped export, if the IR sheet prescribes one.
+3. Rotation timeline + hay/forage removal entry.
+4. Unit map + infrastructure layer.
+5. Feed and forage balance.
+6. Monitoring + key areas + photo points.
+7. Plan editor + contingency triggers + decision log.
+8. Exports — annual grazing record in the standard's own section order, and
+   CSV of raw events, forage records and monitoring.
+9. *(conditional)* A worksheet-shaped export, if the IR sheet prescribes one.

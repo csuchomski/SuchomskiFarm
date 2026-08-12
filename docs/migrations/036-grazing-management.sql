@@ -191,6 +191,11 @@ create table if not exists herd.infrastructure (
   kind     text not null,
   name     text,
   geometry jsonb,
+  -- Existing or planned. The standard asks the map to show *existing*
+  -- supporting infrastructure, while an EQIP plan map draws both — the farm's
+  -- own map distinguishes them by colour and the schema has to keep that
+  -- apart, or a planned gate reads on the map as a gate that is there.
+  status   text not null default 'existing',
   install_date date,
   condition    text,
   -- Where the item is itself an NRCS practice — Fence is 382, Watering
@@ -211,6 +216,9 @@ create table if not exists herd.infrastructure (
       'permanent_fence', 'temporary_fence', 'gate', 'lane',
       'holding_area', 'shade', 'mineral_station', 'other'
     )
+  ),
+  constraint infrastructure_status check (
+    status in ('existing', 'planned', 'removed')
   )
 );
 

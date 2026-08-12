@@ -107,6 +107,11 @@ export type InfrastructureKind =
  * infrastructure, so this is geometry that renders, not a list of things
  * that exist somewhere. GeoJSON: a Point for a tank, a LineString for a
  * fence or pipeline. */
+/** Existing or planned. An EQIP plan map draws both and distinguishes them by
+ * colour; without this a planned gate reads on the map as a gate that is
+ * there. */
+export type InfrastructureStatus = "existing" | "planned" | "removed";
+
 export interface Infrastructure {
   id: string;
   /** Null when it belongs to the farm rather than one unit — a pipeline
@@ -115,6 +120,7 @@ export interface Infrastructure {
   kind: InfrastructureKind;
   name: string | null;
   geometry: unknown | null;
+  status: InfrastructureStatus;
   installDate: string | null;
   condition: string | null;
   /** Fence is 382, Watering Facility 614, Pipeline 516 — the number a

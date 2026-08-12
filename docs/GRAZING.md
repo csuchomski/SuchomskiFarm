@@ -141,6 +141,10 @@ records what was really grazed without redefining the paddock.
 queries — the app reads a boundary back whole and draws it. An extension
 bought for storage alone is a dependency for nothing.
 
+**Infrastructure carries an existing/planned status.** An EQIP plan map draws
+both and tells them apart by colour; without the column a planned gate reads
+on the map as a gate that is there.
+
 **The basemap is a georeferenced static image, not a tile service.** Decided
 2026-08-12. The farm already has an aerial from its EQIP plan; one image
 caches whole and renders in a pasture with no signal, which is the condition
@@ -213,17 +217,39 @@ Two things from the brief's own "before you run this", both still open:
    review.
 
    The EQIP plan map arrived on 2026-08-12 as a static image, and it settles
-   the *approach* without settling the *data*. What it shows: a red dashed
-   perimeter along County Hwy NN, three white dashed cross-fences labelled
-   410 ft, 372 ft and 417 ft, a north–south segment of 401 ft joining the top
-   and bottom ones, two yellow pins on that segment at the 372 ft and 417 ft
-   junctions, and a purple pin with two black pins along an orange dashed
-   line down the east side.
+   the *approach* without settling the *data*.
 
-   What it cannot give: the legend is cut off at the right edge, so the
-   marker meanings are inference rather than reading. Nor can an image be
-   georeferenced without coordinates — a scale bar fixes distance, not
-   position. Still needed:
+   **The legend, as given by the owner** — the image's own is cropped at the
+   right edge:
+
+   | On the map | Means |
+   |---|---|
+   | Red dashed | Perimeter fencing |
+   | White dashed | Interior fencing |
+   | Coloured circles | Gates |
+
+   So the map reads as: a perimeter along County Hwy NN, three interior
+   cross-fences labelled 410 ft, 372 ft and 417 ft, a north–south interior
+   segment of 401 ft joining the top and bottom ones, two gates on that
+   segment at the 372 ft and 417 ft junctions, and three more gates on the
+   east side.
+
+   That corrects an earlier guess in this file: the coloured pins are gates,
+   **not** watering facilities.
+
+   **Which means no livestock water appears on this map at all** — no tank,
+   no well, no pipeline, no water gap. The 2025 standard names livestock
+   water among the infrastructure the unit map has to show, so this is worth
+   raising with the conservationist rather than leaving to be noticed at a
+   review. Either the water exists and was left off the drawing, or it is not
+   yet planned, and those want different answers.
+
+   `infrastructure.status` distinguishes existing from planned, because the
+   map draws both by colour and a planned gate must not read as a gate that
+   is there.
+
+   What the image cannot give: it cannot be georeferenced without
+   coordinates — a scale bar fixes distance, not position. Still needed:
 
    - the **KML/KMZ or shapefile** behind the map, if NRCS produced it
      digitally. That carries real coordinates, and acreage per unit can then
@@ -231,7 +257,7 @@ Two things from the brief's own "before you run this", both still open:
      as-is.
    - failing that, **two known points** on the image — a fence corner, a gate
      — with latitude and longitude, which is enough to fill the bounding box.
-   - the **legend**, uncropped.
+   - **whether livestock water exists on this field**, and where.
    - **acreage per unit** from the plan, and how many units the cross-fences
      are meant to make.
 

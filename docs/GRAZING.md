@@ -3,17 +3,23 @@
 An eight-step module, built one reviewable step at a time. This file is the
 running record of what was decided and what is still open.
 
-**Steps 1, 2 and 3 are done**, and step 2 was rebuilt for strip grazing.
-Migrations 036–040 are run. Herd → Grazing shows the paddock board and logs a
-move as a *strip*: where the wire went along the unit's fixed sweep. Herd →
-Rotation shows the season as rounds and takes hay off a unit.
+**All eight steps are built.** Migrations 036–042 are run. The module lives
+under Herd:
 
-The five units carry real measured boundaries and acreage from the farm's own
-KML (040), so they are no longer a flat 1.91 acres each.
+| Screen | What it is for |
+|---|---|
+| **Grazing** | The board, and logging a move as a strip |
+| **Rotation** | The season as rounds, and hay off a unit |
+| **Pasture map** | The units drawn, with the fences that make them |
+| **Forage balance** | Supply against demand, by unit and period |
+| **Monitoring** | Key areas, what was seen there, and the photo series |
+| **Plan** | Every threshold the rest of the module compares against |
+| **Decisions** | What changed, why, and what came of it |
+| **Annual record** | All of it, in the standard's own section order |
 
-Step 4 — the unit map and infrastructure layer — is next and not started. It
-is smaller than it was: the boundaries and fences now have real geometry, and
-water and gates are settled as not mapped.
+Step 9 is conditional and not started: a worksheet-shaped export, only if the
+Wisconsin implementation requirements prescribe one. Nothing seen so far
+does.
 
 ## The strip-grazing redesign
 
@@ -634,16 +640,17 @@ want a real test in the pasture before either party believes it.
 
 ## Build order
 
-1. **Schema + types** — built, rehearsed, awaiting the paddock list.
-2. Log a Move + paddock board.
+1. **Schema + types** — built. Migration 036.
+2. **Log a Move + paddock board** — built, then rebuilt for strip grazing (039).
 3. **Rotation timeline + hay/forage removal entry** — built. See below.
-4. Unit map + infrastructure layer.
-5. Feed and forage balance.
-6. Monitoring + key areas + photo points.
-7. Plan editor + contingency triggers + decision log.
-8. Exports — annual grazing record in the standard's own section order, and
-   CSV of raw events, forage records and monitoring.
+4. **Unit map + infrastructure layer** — built. See below.
+5. **Feed and forage balance** — built. See below.
+6. **Monitoring + key areas + photo points** — built. Migration 041.
+7. **Plan editor + contingency triggers + decision log** — built. Migration 042.
+8. **Exports** — built: the annual record in the standard's section order, and
+   CSV of events, forage, monitoring and decisions.
 9. *(conditional)* A worksheet-shaped export, if the IR sheet prescribes one.
+   **Not started** — nothing seen so far prescribes one.
 
 ## Step 3: the rotation as rounds, and hay
 
@@ -735,3 +742,102 @@ wrong. The first round's window runs back to the start of the record and the
 last one's runs to now, so **every cutting lands in exactly one round** and
 none is silently dropped; a farm that has cut but never turned out still sees
 its cuttings listed.
+
+## Steps 4 to 8
+
+### Step 4: the map is drawn, not photographed
+
+There is no basemap. The boundaries and fences came from the owner's own KML
+(040), water and gates are settled as not mapped, and what is left is a plan
+in ink — which is what the standard asks for and what the rest of this app
+already looks like.
+
+`lib/pasture-map.ts` is deliberately planar. Over 600 ft at 42.9° N a local
+equirectangular projection is accurate to well under a tenth of an acre, and
+the alternative is a projection library for a field you can see across. The
+one correction that matters is **cos(lat) on the east–west axis** — without
+it the farm renders 27% too wide at this latitude, which is visible. Height
+comes from the farm's own proportions rather than being passed in: forcing a
+shape into the wrong aspect is how a map starts lying about distance.
+
+**The strip model pays off here.** A strip was recorded as two fractions
+along a fixed heading, with no coordinates at all — and because the heading
+is fixed, that is enough to clip the real polygon and draw exactly the ground
+the mob has had this pass. The slice is Sutherland–Hodgman against two
+half-planes; no geometry library, and it is checked by area.
+
+GeoJSON arrives from `jsonb` as `unknown` and is parsed defensively rather
+than cast, so a malformed boundary costs one paddock and not the page.
+
+### Step 5: the balance never converts pounds to AUM
+
+They look like two units for one quantity and they are not. Turning an AUM
+into pounds needs an assumption about what an animal unit eats in a month;
+an app that made it quietly would put a number in a conservationist's hands
+that nobody chose. Each is carried as entered, netted only against its own
+kind, and a balance that cannot be struck says **"that conversion is yours
+to make, not this app's"**.
+
+Windows net **exactly** and are never apportioned. Splitting a June figure
+across two half-June windows assumes growth is even through the month, which
+is precisely what a grazier would dispute. Mismatched windows show as their
+own lines with the gap named.
+
+What is missing is named rather than treated as zero, and the classification
+turns on whether a row was *entered*, not whether a figure came out of it —
+a demand row with head but no weight is a row somebody did not finish, and
+telling them nothing was recorded would send them to add a second one.
+
+### Step 6: due, never overdue
+
+There is no default cadence anywhere in the code. A farm with no plan gets
+silence rather than a number this app invented and somebody would then have
+to argue with. "Never looked at" is kept apart from "due": there is no
+interval to be late against until there has been a first look.
+
+A photo point needs a **spot and a bearing**. Without both, successive
+photographs are just pictures of grass — no telling a change in the sward
+from a change in where somebody stood.
+
+Migration 041 adds the first Storage bucket this app has used, and it is
+private. **Tenancy lives in the object path** because `storage.objects` has
+no farm column for RLS to attach to: the first path segment is the farm id,
+the policies compare it against membership, and the path is therefore
+generated from the caller's own farm id rather than from a filename.
+
+### Step 7: the plan is superseded, never rewritten
+
+Both plan writes are RPCs because they upsert against **partial** unique
+indexes, which PostgREST cannot infer for `on_conflict` — the lesson from
+011. It is also the only place the one-active-plan rule can hold atomically.
+
+A plan you can quietly rewrite is not one a reviewer can rely on, so starting
+a new one stands the old one down and leaves its targets, concerns and
+decisions exactly where they are.
+
+The decision log keeps **what you saw, what it meant, and what you did** as
+three fields. Collapsed into one note they become a story written afterwards,
+which is what the log exists to replace.
+
+**The strip readout now reads the plan**, closing a promise the code carried
+since step 2. Intake from the plan, utilization from the paddock's target,
+standing forage from the availability record — and the readout names the
+source of each figure, labelling anything still falling back as "this app's
+figure".
+
+### Step 8: a missing section is information
+
+The annual record follows CPS 528's own Plans and Specifications order, and
+a section with nothing in it **says so** rather than being dropped. Silently
+omitting it would leave a reader to guess whether the farm has no contingency
+plan or the app forgot to print one, and those are very different things.
+
+It prints: the `@media print` rules drop the nav and the buttons, so "save as
+PDF" gives the document rather than a screenshot of an app.
+
+The CSVs neutralise **formula injection**. These files are opened in Excel
+and Sheets, where a field beginning `=`, `+`, `-`, `@` or a tab is run as a
+formula — so a pasted note could execute on open. A leading apostrophe fixes
+it and is stripped on display. The BOM is not decoration either: without it
+Excel on Windows reads UTF-8 as the local code page and every ° and ″ in a
+monitoring record turns to mojibake.

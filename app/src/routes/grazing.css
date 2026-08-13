@@ -146,6 +146,9 @@
   padding: 9px 11px; border: 1px solid var(--hairline);
   background: transparent; color: var(--ink-muted); cursor: pointer;
 }
+/* A real touch target. Without this it is 31 px, and only clears 44 on a
+   phone by accidentally wrapping to two lines — which is not a design. */
+.grz-preset { min-height: 44px; }
 .grz-preset:hover { border-color: var(--ink-faint); color: var(--ink); }
 .grz-preset:focus-visible { outline: 2px solid var(--herd-green); outline-offset: 2px; }
 
@@ -387,3 +390,88 @@
 
 /* The act is the point of the entry, so it carries the weight. */
 .dec-line--act { color: var(--ink); }
+
+/* ── The annual record ───────────────────────────────────────────────────
+   Laid out to be read once, by somebody with the standard open beside it,
+   and to print as a document rather than a screenshot of an app. */
+
+.rec { max-width: 78ch; }
+
+.rec-meta {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  border-bottom: 1px solid var(--hairline);
+  padding: 10px 0 14px;
+  margin: 8px 0 0;
+}
+
+.rec-section { margin-top: 26px; break-inside: auto; }
+
+.rec-h2 {
+  font-size: 19px;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--ink);
+  break-after: avoid;
+}
+
+.rec-n { font-size: 13px; color: var(--ink-faint); margin-right: 6px; }
+
+.rec-h3 {
+  font: 500 12px/1 "IBM Plex Sans", sans-serif;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin: 20px 0 8px;
+  break-after: avoid;
+}
+
+.rec-field { font-size: 14px; margin: 0 0 12px; }
+.rec-none, .rec-missing { color: var(--ink-muted); }
+
+.rec-missing { font-size: 13px; margin: 6px 0; display: flex; align-items: center; gap: 7px; }
+
+.rec-note { font-size: 12.5px; color: var(--ink-muted); margin: 0 0 10px; }
+
+.rec-list { font-size: 14px; margin: 6px 0; padding-left: 20px; }
+.rec-list li { margin: 3px 0; }
+
+/* Wide tables scroll in their own box rather than pushing the page sideways. */
+.rec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 6px 0 4px;
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.rec-table th {
+  text-align: left;
+  font: 500 11px/1.4 "IBM Plex Sans", sans-serif;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  border-bottom: 1px solid var(--ink);
+  padding: 6px 10px 6px 0;
+}
+
+.rec-table td {
+  border-bottom: 1px solid var(--hairline);
+  padding: 7px 10px 7px 0;
+  vertical-align: top;
+}
+
+.rec-exports { margin-top: 30px; }
+
+@media print {
+  /* The document, not the app around it. */
+  .ops-nav, .ops-shell__nav, nav, .rec-exports, .btn, .rot-back {
+    display: none !important;
+  }
+  .rec { max-width: none; }
+  .rec-section { break-inside: avoid-page; }
+  .rec-table { white-space: normal; overflow-x: visible; display: table; }
+  a { text-decoration: none; color: inherit; }
+}

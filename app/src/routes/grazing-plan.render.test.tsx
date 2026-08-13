@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import type {
+  ContingencyDraft,
   ContingencyPlan,
   GrazingPlan,
   Paddock,
@@ -51,8 +52,10 @@ const contingencies: ContingencyPlan[] = [];
 
 const savedPlan = vi.fn(async (_f: string, _d: PlanDraft) => "plan-new");
 const savedTarget = vi.fn(async (_f: string, _d: TargetDraft) => "t-new");
-const addedConcern = vi.fn(async () => "c-new");
-const addedContingency = vi.fn(async () => "x-new");
+const addedConcern = vi.fn(
+  async (_f: string, _plan: string, _category: string, _concern: string, _notes: string) => "c-new",
+);
+const addedContingency = vi.fn(async (_f: string, _d: ContingencyDraft) => "x-new");
 
 vi.mock("../lib/grazing", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/grazing")>();

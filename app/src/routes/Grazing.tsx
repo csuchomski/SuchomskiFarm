@@ -14,11 +14,19 @@ import {
   fetchActivePlan,
   groupAvgWeightLb,
   groupHeadCount,
+  isSwept,
   logMove,
   occupancyDays,
+  planStrip,
   prefillFrom,
+  readinessDays,
   stockingDensityLbPerAcre,
+  sweepBands,
+  sweepInWords,
+  sweptSoFar,
   whereIs,
+  widthForHours,
+  type ForageAssumptions,
   type BoardRow,
   type GrazingEvent,
   type GrazingGroup,
@@ -61,6 +69,16 @@ type Load =
 const COLS = "minmax(0, 1fr) 110px 120px 96px";
 const COLS_SM = "minmax(0, 1fr) 92px";
 
+/** Until the plan editor exists these are the figures the strip readout
+ *  divides by. They belong in the plan, not here — the comment is the
+ *  reminder, and every one of them is shown on screen beside the result so
+ *  nobody mistakes a forecast for a measurement. */
+const ASSUMPTIONS: ForageAssumptions = {
+  standingLbDmPerAcre: 2400,
+  utilizationPct: 50,
+  intakePctBodyweight: 3,
+};
+
 const nowIso = () => new Date().toISOString();
 /** For a datetime-local input, which wants local time with no zone. */
 const toLocalInput = (iso: string) => {
@@ -87,6 +105,8 @@ export default function Grazing() {
   const [utilization, setUtilization] = useState("");
   const [soil, setSoil] = useState<SoilMoisture | "">("");
   const [notes, setNotes] = useState("");
+  /** Where the wire goes, as a fraction along the destination's sweep. */
+  const [wireTo, setWireTo] = useState(0.1);
 
   const refresh = useCallback(async () => {
     if (!farmId) {
@@ -145,6 +165,22 @@ export default function Grazing() {
     setMoving(true);
   };
 
+  // Moving the destination resets the wire to roughly a day's feed, which is
+  // where it lands most days anyway.
+  const pickDestination = (id: string) => {
+    setPaddockId(id);
+    if (load.state !== "ok") return;
+    const p = load.paddocks.find((x) => x.id === id);
+    if (!p || !isSwept(p)) return;
+    const from = here?.paddockId === id ? (here.sweptTo ?? 0) : 0;
+    const w = widthForHours({
+      paddock: p, hours: 24,
+      headCount: num(headCount), avgWeightLb: num(avgWeight),
+      assumptions: ASSUMPTIONS,
+    });
+    setWireTo(Math.min(1, from + (w ?? 0.08)));
+  };
+
   const act = async (what: () => Promise<string>) => {
     setBusy(true);
     setError(null);
@@ -169,6 +205,38 @@ export default function Grazing() {
   // The row they are moving into, so the form can warn before it is saved.
   const target = rows.find((r) => r.paddock.id === paddockId) ?? null;
   const early = target?.eligible && !target.eligible.met ? target.eligible : null;
+
+  // ── the strip ───────────────────────────────────────────────────────
+  // Where this strip starts: where the last one in the same unit ended,
+  // or the beginning of the sweep when this is a fresh pass.
+  const dest = target?.paddock ?? null;
+  const stripped = dest !== null && isSwept(dest);
+  const wireFrom =
+    load.state === "ok" && dest && here?.paddockId === dest.id ? (here.sweptTo ?? 0) : 0;
+
+  const strip =
+    stripped && dest
+      ? planStrip({
+          paddock: dest,
+          from: wireFrom,
+          to: Math.max(wireTo, wireFrom + 0.005),
+          headCount: num(headCount),
+          avgWeightLb: num(avgWeight),
+          assumptions: ASSUMPTIONS,
+        })
+      : null;
+
+  // What a day would look like, so the wire has somewhere sensible to start.
+  const dayWidth =
+    stripped && dest
+      ? widthForHours({
+          paddock: dest,
+          hours: 24,
+          headCount: num(headCount),
+          avgWeightLb: num(avgWeight),
+          assumptions: ASSUMPTIONS,
+        })
+      : null;
 
   return (
     <OpsShell>
@@ -231,13 +299,19 @@ export default function Grazing() {
               <div className="grz-form__row">
                 <label className="grz-field grz-field--wide">
                   <span className="eyebrow">Move to</span>
-                  <select value={paddockId} onChange={(e) => setPaddockId(e.target.value)} aria-label="Move to">
+                  <select value={paddockId} onChange={(e) => pickDestination(e.target.value)} aria-label="Move to">
                     <option value="">Pick a paddock…</option>
                     {rows
-                      .filter((r) => r.paddock.id !== here?.paddockId)
+                      // The unit they are already in stays on the list when it
+                      // is swept — the next strip is the commonest move there
+                      // is, and hiding it would be hiding the daily job.
+                      .filter((r) => r.paddock.id !== here?.paddockId || isSwept(r.paddock))
                       .map((r) => (
                         <option key={r.paddock.id} value={r.paddock.id}>
-                          {r.paddock.name} — {restLabel(r)}
+                          {r.paddock.name}
+                          {r.paddock.id === here?.paddockId
+                            ? " — next strip"
+                            : ` — ${restLabel(r)}`}
                         </option>
                       ))}
                   </select>
@@ -255,6 +329,89 @@ export default function Grazing() {
                   {target!.paddock.name} is {early.shortBy} day{early.shortBy === 1 ? "" : "s"} short of its recovery
                   target — outside plan target, ready {shortDate(early.readyOn)}. Recording it anyway is fine.
                 </p>
+              )}
+
+              {stripped && dest && (
+                <div className="grz-wire">
+                  <div className="grz-wire__head">
+                    <span className="eyebrow">
+                      Wire across {dest.name} · swept {sweepInWords(dest.sweepHeadingDeg)}
+                    </span>
+                    <span className="mono grz-wire__pos">
+                      {Math.round(wireFrom * 100)}% → {Math.round(wireTo * 100)}%
+                    </span>
+                  </div>
+
+                  {/* The ground already taken this pass, then the strip about
+                      to be opened, then what is left standing. */}
+                  <div className="grz-sweep" aria-hidden="true">
+                    <span className="grz-sweep__done" style={{ width: `${wireFrom * 100}%` }} />
+                    <span className="grz-sweep__strip" style={{ width: `${Math.max(0, wireTo - wireFrom) * 100}%` }} />
+                  </div>
+
+                  <input
+                    type="range"
+                    min={Math.round(wireFrom * 1000) + 5}
+                    max={1000}
+                    step={5}
+                    value={Math.round(wireTo * 1000)}
+                    onChange={(e) => setWireTo(Number(e.target.value) / 1000)}
+                    aria-label="Wire position"
+                    className="grz-wire__range"
+                  />
+
+                  {strip && (
+                    <div className="grz-strip-stats">
+                      <div>
+                        <div className="mono grz-strip-stats__v">{strip.acres.toFixed(2)}</div>
+                        <div className="eyebrow">Acres</div>
+                      </div>
+                      <div>
+                        <div className="mono grz-strip-stats__v">
+                          {strip.hoursOfFeed === null ? "—" : formatFeed(strip.hoursOfFeed)}
+                        </div>
+                        <div className="eyebrow">Feed</div>
+                      </div>
+                      <div>
+                        <div className="mono grz-strip-stats__v">
+                          {strip.lbPerAcre === null ? "—" : `${Math.round(strip.lbPerAcre / 100) / 10}k`}
+                        </div>
+                        <div className="eyebrow">lb / acre</div>
+                      </div>
+                      <div>
+                        <div className="mono grz-strip-stats__v">
+                          {strip.widthFt === null ? "—" : `${Math.round(strip.widthFt)}′`}
+                        </div>
+                        <div className="eyebrow">Width</div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grz-wire__presets">
+                    {dayWidth !== null && (
+                      <>
+                        <button type="button" className="grz-preset"
+                          onClick={() => setWireTo(Math.min(1, wireFrom + dayWidth / 2))}>
+                          Half a day
+                        </button>
+                        <button type="button" className="grz-preset"
+                          onClick={() => setWireTo(Math.min(1, wireFrom + dayWidth))}>
+                          A day
+                        </button>
+                      </>
+                    )}
+                    <button type="button" className="grz-preset" onClick={() => setWireTo(1)}>
+                      The rest of it
+                    </button>
+                  </div>
+
+                  <p className="grz-assume">
+                    Feed assumes {ASSUMPTIONS.standingLbDmPerAcre.toLocaleString()} lb DM/acre standing,{" "}
+                    {ASSUMPTIONS.utilizationPct}% utilization and intake at {ASSUMPTIONS.intakePctBodyweight}% of
+                    body weight. A forecast from your figures, not a measurement — and they belong in the plan
+                    once there is one.
+                  </p>
+                </div>
               )}
 
               <p className="grz-optional">
@@ -341,10 +498,14 @@ export default function Grazing() {
                         longitude: null,
                         residualHeightInExit: num(residualOut),
                         utilizationPct: num(utilization),
+                        sweptFrom: stripped ? wireFrom : null,
+                        sweptTo: stripped ? Math.max(wireTo, wireFrom + 0.005) : null,
                       });
                       const to = load.paddocks.find((p) => p.id === paddockId);
                       setMoving(false);
-                      return `${group.name} moved to ${to?.name ?? "the paddock"}.`;
+                      return stripped && strip
+                        ? `${strip.acres.toFixed(2)} acres of ${to?.name ?? "the paddock"} opened to ${group.name}.`
+                        : `${group.name} moved to ${to?.name ?? "the paddock"}.`;
                     })
                   }
                 >
@@ -378,14 +539,23 @@ export default function Grazing() {
                   {[
                     r.paddock.acresGrazable !== null ? `${r.paddock.acresGrazable} ac` : null,
                     r.occupant ? `in ${r.occupant.days} day${r.occupant.days === 1 ? "" : "s"}` : null,
+                    load.state === "ok" && isSwept(r.paddock)
+                      ? sweepNote(r.paddock.id, load.events)
+                      : null,
                   ]
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
+                {/* The unit's ground, oldest rest to newest. A swept unit is
+                    never one rest figure, and this is the shape a single
+                    number could not carry. */}
+                {load.state === "ok" && isSwept(r.paddock) && (
+                  <SweepBar paddockId={r.paddock.id} events={load.events} />
+                )}
               </span>
               <span style={{ minWidth: 0 }}>
                 <span className="mono" style={{ fontSize: 15 }}>
-                  {restLabel(r)}
+                  {load.state === "ok" ? restLabelFor(r, load.events) : restLabel(r)}
                 </span>
                 {r.eligible && (
                   <>
@@ -426,6 +596,59 @@ export default function Grazing() {
   );
 }
 
+/**
+ * The rest a swept unit is judged on.
+ *
+ * Not the days since the last strip. With a fixed sweep the mob re-enters
+ * where it entered last time, so what governs readiness is the ground at the
+ * *start* of the sweep — grazed first, rested longest. Measuring from the
+ * last strip would hold a unit back for weeks after it was fit to graze.
+ */
+function restLabelFor(r: BoardRow, events: GrazingEvent[]): string {
+  // While they are standing in it, that is the fact worth showing. Readiness
+  // is a question about the *next* pass and only becomes the useful figure
+  // once this one is over.
+  if (r.occupant) return "occupied";
+  if (!isSwept(r.paddock)) return restLabel(r);
+  const days = readinessDays(r.paddock.id, events, nowIso());
+  if (days === null) return "never grazed";
+  return `${days} day${days === 1 ? "" : "s"}`;
+}
+
+/** How far through the current pass the mob has got. */
+function sweepNote(paddockId: string, events: GrazingEvent[]): string | null {
+  const done = sweptSoFar(paddockId, events);
+  if (done <= 0) return null;
+  if (done >= 0.999) return "pass complete";
+  return `${Math.round(done * 100)}% of this pass`;
+}
+
+/** Bands of the unit's ground, shaded by rest. Boundaries come from where
+ * wires have actually been, so nothing is bucketed onto an arbitrary grid. */
+function SweepBar({ paddockId, events }: { paddockId: string; events: GrazingEvent[] }) {
+  const bands = sweepBands(paddockId, events, nowIso());
+  return (
+    <span className="grz-bands" aria-hidden="true">
+      {bands.map((b) => (
+        <span
+          key={b.from}
+          style={{ width: `${(b.to - b.from) * 100}%`, background: bandFill(b.restDays, b.occupied) }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function bandFill(restDays: number | null, occupied: boolean): string {
+  if (occupied) return "var(--herd-green)";
+  if (restDays === null) return "var(--paper-tint)";
+  if (restDays >= 30) return "#77805f";
+  if (restDays >= 21) return "#9ba489";
+  if (restDays >= 14) return "#b8bfa4";
+  if (restDays >= 7) return "#cfd3bd";
+  return "#e4e2d5";
+}
+
 function acresOf(paddocks: Paddock[]): number {
   return paddocks
     .filter((p) => p.active)
@@ -442,6 +665,13 @@ function densityNote(event: GrazingEvent, paddock: Paddock): string {
   const density = stockingDensityLbPerAcre(event, paddock);
   if (density === null) return ".";
   return ` — ${Math.round(density).toLocaleString()} lb per acre.`;
+}
+
+/** Hours below a day, days above it — strips can be half a day, and "0.5
+ * days" is not how anybody says that. */
+function formatFeed(hours: number): string {
+  if (hours < 36) return `${Math.round(hours)}h`;
+  return `${(hours / 24).toFixed(1)}d`;
 }
 
 function shortDate(iso: string): string {

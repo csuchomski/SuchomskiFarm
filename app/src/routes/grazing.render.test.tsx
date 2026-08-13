@@ -40,6 +40,8 @@ const paddock = (n: number): Paddock => ({
   acresMeasured: 1.91,
   acresGrazable: 1.91,
   unitType: "permanent",
+  sweepHeadingDeg: n === 5 ? 0 : n % 2 === 0 ? 90 : 270,
+  sweepLengthFt: 400,
   seedingDate: null,
   fenceType: null,
   ecologicalSite: null,
@@ -79,7 +81,9 @@ const event = (over: Partial<GrazingEvent> & { id: string; paddockId: string }):
   notes: null,
   latitude: null,
   longitude: null,
-  boundaryOverride: null,
+  sweptFrom: null,
+  sweptTo: null,
+  grazedShape: null,
   ...over,
 });
 
@@ -225,12 +229,12 @@ describe("logging a move", () => {
     expect((screen.getByLabelText("Avg weight, lb") as HTMLInputElement).value).toBe("1100");
   });
 
-  it("offers every paddock but the one they are standing in", async () => {
-    events.push(event({ id: "c", paddockId: "p3", enteredAt: "2026-08-10T12:00:00.000Z" }));
+  it("keeps the unit they are in on the list, because the next strip is the commonest move", async () => {
+    events.push(event({ id: "c", paddockId: "p3", enteredAt: "2026-08-10T12:00:00.000Z", sweptFrom: 0, sweptTo: 0.2 }));
     await mount();
     fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
     const options = [...(screen.getByLabelText("Move to") as HTMLSelectElement).options].map((o) => o.textContent);
-    expect(options.some((o) => o?.startsWith("Paddock 3"))).toBe(false);
+    expect(options.some((o) => o?.startsWith("Paddock 3") && o.includes("next strip"))).toBe(true);
     expect(options.some((o) => o?.startsWith("Paddock 1"))).toBe(true);
   });
 
@@ -245,7 +249,10 @@ describe("logging a move", () => {
     expect(draft.paddockId).toBe("p2");
     expect(draft.groupId).toBe("mob");
     expect(draft.headCount).toBe(4);
-    await waitFor(() => expect(screen.getByText(/Main mob moved to Paddock 2\./)).toBeTruthy());
+    // A swept unit reports the strip that was opened, not just the move.
+    expect(draft.sweptFrom).toBe(0);
+    expect(draft.sweptTo).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getByText(/acres of Paddock 2 opened to Main mob\./)).toBeTruthy());
   });
 
   it("won't send without a destination", async () => {
@@ -300,6 +307,99 @@ describe("logging a move", () => {
     fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
     fireEvent.click(screen.getByRole("button", { name: "Off pasture" }));
     await waitFor(() => expect(ended).toHaveBeenCalledTimes(1));
+  });
+
+  it("shows the strip in acres, feed and density as the wire moves", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
+    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p2" } });
+
+    // Opens at roughly a day's feed for 4 head at no recorded weight — with
+    // no weight the app cannot size it, so it falls back to a nominal width.
+    const wire = screen.getByLabelText("Wire position") as HTMLInputElement;
+    expect(wire).toBeTruthy();
+
+    fireEvent.change(wire, { target: { value: "200" } }); // 20% of the unit
+    const stats = document.querySelector(".grz-strip-stats")!;
+    // 20% of 1.91 grazable acres.
+    expect(stats.textContent).toContain("0.38");
+    // 400 ft sweep, so 20% is 80 feet of wire advance.
+    expect(stats.textContent).toContain("80′");
+  });
+
+  it("sizes a day and half a day from the plan's assumptions", async () => {
+    weights.set("a1", 1100);
+    weights.set("a2", 1100);
+    weights.set("a3", 1100);
+    weights.set("a4", 1100);
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
+    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p2" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "A day" }));
+    const day = Number((screen.getByLabelText("Wire position") as HTMLInputElement).value);
+
+    fireEvent.click(screen.getByRole("button", { name: "Half a day" }));
+    const half = Number((screen.getByLabelText("Wire position") as HTMLInputElement).value);
+
+    // Half a day is half the ground, give or take the slider's step.
+    expect(Math.abs(day / 2 - half)).toBeLessThanOrEqual(5);
+  });
+
+  it("opens the rest of the unit in one tap, for the last strip of a pass", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
+    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p2" } });
+    fireEvent.click(screen.getByRole("button", { name: "The rest of it" }));
+    expect((screen.getByLabelText("Wire position") as HTMLInputElement).value).toBe("1000");
+  });
+
+  it("starts the next strip where the last one ended", async () => {
+    events.push(event({ id: "c", paddockId: "p3", enteredAt: "2026-08-10T12:00:00.000Z", sweptFrom: 0, sweptTo: 0.35 }));
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
+    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p3" } });
+
+    // The wire cannot go back over ground they have just taken.
+    const wire = screen.getByLabelText("Wire position") as HTMLInputElement;
+    expect(Number(wire.min)).toBe(355);
+    expect(document.querySelector(".grz-wire__pos")!.textContent).toContain("35%");
+  });
+
+  it("says which way the unit is swept", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
+    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p2" } });
+    expect(screen.getByText(/swept west to east/)).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p5" } });
+    expect(screen.getByText(/swept south to north/)).toBeTruthy();
+  });
+
+  it("shows a unit's ground as bands, not one rest figure", async () => {
+    events.push(
+      event({ id: "a", paddockId: "p1", enteredAt: "2026-07-20T12:00:00.000Z", exitedAt: "2026-07-22T12:00:00.000Z", sweptFrom: 0, sweptTo: 0.4 }),
+      event({ id: "b", paddockId: "p1", enteredAt: "2026-08-01T12:00:00.000Z", exitedAt: "2026-08-03T12:00:00.000Z", sweptFrom: 0.4, sweptTo: 1 }),
+    );
+    await mount();
+    const bars = document.querySelectorAll(".grz-bands");
+    expect(bars.length).toBeGreaterThan(0);
+    // Paddock 1 was taken in two strips, so its ground is two bands.
+    const p1Bar = [...document.querySelectorAll(".grid-row--body")]
+      .find((r) => r.textContent?.includes("Paddock 1"))!
+      .querySelector(".grz-bands")!;
+    expect(p1Bar.children.length).toBe(2);
+  });
+
+  it("judges readiness from the start of the sweep, not the last strip", async () => {
+    events.push(
+      event({ id: "a", paddockId: "p1", enteredAt: "2026-06-01T12:00:00.000Z", exitedAt: "2026-06-04T12:00:00.000Z", sweptFrom: 0, sweptTo: 0.5 }),
+      event({ id: "b", paddockId: "p1", enteredAt: "2026-08-09T12:00:00.000Z", exitedAt: "2026-08-11T12:00:00.000Z", sweptFrom: 0.5, sweptTo: 1 }),
+    );
+    await mount();
+    const p1 = [...document.querySelectorAll(".grid-row--body")].find((r) => r.textContent?.includes("Paddock 1"))!;
+    // From the last strip it would read 2 days and hold the unit back.
+    expect(p1.textContent).toContain("70 days");
   });
 
   it("never says anything about compliance", async () => {

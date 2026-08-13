@@ -395,6 +395,26 @@ should take it off the board's list and say why.
 *section* to cut it is the case that needs `swept_from`/`swept_to` on
 `forage_removals`.
 
+### An updated KML is waiting, not loaded
+
+`docs/suchomski-farm-2026-08-13b.kml`, sent the same day, to be used when
+this work resumes. **Deliberately not loaded** — 040's boundaries are still
+what the app is running on.
+
+What changed, so nobody has to work it out later: **only the perimeter**. All
+four interior fence paths are byte-identical. Eight of the twelve perimeter
+vertices moved, none by more than 2.4 ft, and the enclosed area goes from
+**9.532 to 9.568 acres** — about 1,560 sq ft, a third of a percent. It reads
+as a redraw tidying the boundary rather than a change of fact.
+
+Small as it is, it should not be applied on its own. Reloading the perimeter
+re-cuts all five units, and the acreage fix above changes how a strip's acres
+are computed from those units — so both want doing together, once, rather
+than moving the numbers under the farm twice in a week. There are also real
+grazing events on file now, and their recorded `swept_from`/`swept_to`
+fractions are interpreted against whatever the boundary is; changing it
+silently re-prices ground already grazed.
+
 ### The map's move records the wrong head count
 
 Found while checking the above: the farm has started logging real moves, and

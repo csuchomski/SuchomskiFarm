@@ -19,8 +19,11 @@ import {
 /**
  * Strip grazing: the wire as a position along a fixed sweep.
  *
- * The farm's own shape — Paddock 3 at 1.91 grazable acres swept east to
- * west, one mob of 5 head at 1,100 lb, a strip a day and sometimes two.
+ * Shaped like the farm — a unit swept east to west, one mob of 5 head at
+ * 1,100 lb, a strip a day and sometimes two. The acreage here is a round
+ * fixture, not this farm's: the real units run 1.375 to 2.255 acres (040),
+ * and pinning a test to that would break it the next time anything is
+ * re-measured. What is under test is the arithmetic, which does not care.
  */
 
 const NOW = "2026-08-13T12:00:00.000Z";

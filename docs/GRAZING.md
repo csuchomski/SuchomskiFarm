@@ -365,6 +365,12 @@ Two things from the brief's own "before you run this", both still open:
    element the standard asks it to show — but it is a drawing gap, not a
    resource gap.
 
+   *Closed 2026-08-13: the owner does not want water or gates mapped, and the
+   app does not draw them.* The gap was raised twice and the answer is the
+   same both times, so it stops being an open item here. What the farm shows
+   a conservationist is between the farm and the conservationist; this app
+   records what it is told and asserts nothing about compliance either way.
+
    That answer changed the schema. Water on a fence line serves the units on
    **both** sides, and `paddock_water_sources` could not say so: it listed
    sources per paddock, independently of the map. It is now the join between
@@ -387,9 +393,10 @@ Two things from the brief's own "before you run this", both still open:
    - failing that, **two known points** on the image — a fence corner, a gate
      — with latitude and longitude, which is enough to fill the bounding box.
    - **acreage per unit** — see "What acreage per unit means" below.
-   - for the seven water points: **existing or planned**, whether they are
-     tanks off a pipeline or something else, and whether each really does
-     serve both sides of the fence it sits on.
+
+   *All three settled 2026-08-13: the farm produced its own KML, and 040
+   loaded real boundaries and measured acreage from it. The water-point
+   questions below lapsed with the decision not to map water.*
    - *Naming settled 2026-08-13:* the owner has no established names, so
      **Paddock 1 through 5, numbered north to south**, codes `P1`–`P5`. The
      plan map is drawn north-up, so the numbers read down the page and a
@@ -406,9 +413,53 @@ Recorded as the owner gives it, because seed data should be real:
 | Management units | **Five paddocks**, which can be split further as needed |
 | Water | **Seven points along the interior fence** |
 | Livestock | **Five head** |
-| Field | One field on County Hwy NN; perimeter fenced, interior fences at 410 / 372 / 417 ft with a 401 ft segment joining them |
+| Field | One field on County Hwy NN; perimeter fenced, four interior fences |
 
-Still missing: acreage per unit, coordinates, paddock names, plan targets.
+Acreage and boundaries are now measured rather than estimated — see below.
+Still missing: plan targets. Water point and gate locations are settled as
+*not wanted* — see "Water points and gates are not being mapped".
+
+### The KML settles the boundaries
+
+*Received 2026-08-13, loaded by 040.* A Google Earth export of the perimeter
+and the four interior fences. Two things make it trustworthy rather than
+merely present:
+
+- The drawn perimeter measures **9.532 acres** against the **9.55** given from
+  memory — 0.2% apart, from an independent source.
+- The four fences divide that perimeter into **five regions that sum to the
+  whole with nothing left over**, which is what proves the division is
+  complete rather than merely plausible.
+
+| Unit | Where | Acres | Sweep | Along |
+|---|---|---|---|---|
+| Paddock 1 | North band, full width | 2.003 | east to west | 533 ft |
+| Paddock 2 | Upper middle, west of the vertical fence | 1.930 | west to east | 419 ft |
+| Paddock 3 | Lower middle, west of the vertical fence | 1.970 | east to west | 424 ft |
+| Paddock 4 | South band, full width | 2.255 | west to east | 606 ft |
+| Paddock 5 | East lobe | 1.375 | south to north | 405 ft |
+
+**The numbering was derived, then confirmed.** The five sweep headings given
+in 039 fit the drawn shape exactly one way: each unit's sweep ends on the
+corner where the next one begins, and Paddock 5 delivers the mob back to the
+east end of Paddock 1, so the serpentine closes on itself with no dead legs.
+Any other assignment leaves a handoff crossing a fence at a point with no
+gate. That is strong evidence but not proof — gates are not in the KML — so
+it was put to the farmer and confirmed against the ground before loading.
+
+**Why the flat 1.91 was worse than it looked.** A strip's acreage is a
+fraction of its unit's acreage, so a single figure for all five understated
+the 2.255-acre south band by 15% and overstated the 1.375-acre east lobe by
+39% on every strip the app has ever sized. The units differ by 64% end to
+end.
+
+It also fills `sweep_length_ft`, which had been blank: a day's strip is a wire
+moved about 21 ft on the east lobe and about 8 ft on the south band, because
+one is cut along its short axis and the other across its long one.
+
+The file carries no `Point` placemarks, so the seven water points and the
+gates have no geometry. That is now the settled end state rather than a gap —
+see below.
 
 ### Splitting a paddock: two different things
 
@@ -420,8 +471,10 @@ is right depends on the rest clock rather than on the wire:
   `unit_type = 'temporary'`. It accumulates rest days of its own, gets its own
   targets, and appears on the board as a unit.
 - **A strip within a single grazing** — a wire moved across a paddock over
-  three days — is **one grazing event** on the parent paddock, optionally
-  carrying `boundary_override` to record the shape actually grazed.
+  three days — is **one grazing event** on the parent paddock, carrying
+  `swept_from`/`swept_to` and optionally `grazed_shape`. (039 renamed
+  `boundary_override` to `grazed_shape`, since under strip grazing a
+  per-grazing shape is the norm rather than an override of anything.)
 
 Getting this wrong is not cosmetic. Model a moving wire as five paddocks and
 each shows a full rest period it never had; model a season-long division as
@@ -486,20 +539,36 @@ units inside it are about 1.9 acres each. That is arithmetic off a drawing,
 offered only as a sanity check against the real figures; the three remaining
 units cannot be sized without the perimeter dimensions.
 
-### Entering water point locations
+### Water points and gates are not being mapped
 
-*Decided 2026-08-13: not by hand, and not yet.*
+*Decided 2026-08-13, by the owner, after the KML arrived without them.*
 
-Typing fourteen decimal coordinates is error-prone and the errors are silent
-— a digit wrong puts a tank in the next county and nothing complains. Step 4
-builds the unit map over the georeferenced aerial, and tapping a point on
-that image is both easier and self-checking: a mis-tap is visible
-immediately.
+The question had been how to capture fourteen coordinates without typos —
+typing them is error-prone and the errors are silent, since a digit wrong
+puts a tank in the next county and nothing complains. The answer turned out
+to be that the farm does not want them captured at all.
 
-So the seven points are recorded now **without geometry** — name, kind, which
-paddocks each serves, existing or planned. `infrastructure.geometry` is
-nullable exactly so this is possible. The locations get filled in on the map
-screen when it exists, or arrive with the KML if NRCS has one.
+That is a reasonable call on a 9.5-acre field. Water sits along one interior
+fence line, every unit touches it, and nobody walking this farm needs a
+drawing to find a tank. Mapping water earns its keep when units are far
+apart and the question "does this paddock have water" has a non-obvious
+answer. Here it does not.
+
+**The seven rows stay, without geometry.** They record that water exists and
+that it serves both sides of the fence it sits on — which is the part that
+feeds the forage balance and the unit board. Only the coordinates are
+declined, and `infrastructure.geometry` is nullable exactly so that is
+possible.
+
+This simplifies step 4. The unit map draws boundaries and fences, both of
+which now have real geometry, and needs no point-placement affordance at
+all — no tap-to-place, no drag-to-correct, no "is this the right tank"
+confirmation. That was the fiddliest part of the screen and it is gone.
+
+Worth recording rather than leaving as a silent absence: a future reader
+finding seven water rows with null geometry should know that is a decision,
+not an unfinished import. Reversing it is cheap — the rows are there, and
+locations can be filled in later from any source.
 
 ## Settled: online only, for now
 

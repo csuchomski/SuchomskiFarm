@@ -94,6 +94,9 @@ export interface PastureProjection {
   frame: Frame;
   /** Longitude and latitude to SVG user units. */
   project(p: LonLat): [number, number];
+  /** SVG user units back to longitude and latitude. The inverse exists so a
+   * finger on the drawing can become a position on the ground. */
+  unproject(x: number, y: number): LonLat;
   /** Metres to SVG user units — for a scale bar. */
   scale: number;
 }
@@ -140,6 +143,9 @@ export function fitPasture(
       const [x, y] = toLocal(frame, p);
       // y is flipped: SVG counts down the page, latitude counts up the map.
       return [pad + (x - minX) * scale, pad + (maxY - y) * scale];
+    },
+    unproject(x: number, y: number) {
+      return localToLonLat(frame, [(x - pad) / scale + minX, maxY - (y - pad) / scale]);
     },
   };
 }
@@ -225,6 +231,56 @@ export function sweepSlice(
 
   const clipped = clipHalf(clipHalf(ring, extent.axis, hi, true), extent.axis, lo, false);
   return clipped.length >= 3 ? clipped : null;
+}
+
+/**
+ * Where a point sits along a unit's sweep, as the same 0–1 fraction the move
+ * log stores.
+ *
+ * This is what turns a finger on the drawing into a wire position. The point
+ * is projected onto the sweep axis and clamped, so a tap slightly outside the
+ * boundary — which is most taps, on a phone, at a gate — still lands on the
+ * nearest sensible place rather than failing.
+ */
+export function fractionAlong(ring: Local[], headingDeg: number, point: Local): number | null {
+  const extent = sweepExtent(ring, headingDeg);
+  if (extent === null) return null;
+  const d = along(point, extent.axis);
+  return Math.max(0, Math.min(1, (d - extent.min) / (extent.max - extent.min)));
+}
+
+/**
+ * The wire itself: where a cut at fraction `f` crosses the unit's boundary.
+ *
+ * Returns the two extreme crossing points, which is the line to draw. A convex
+ * unit gives exactly two; a concave one can give more, and taking the extremes
+ * draws a wire that spans the unit rather than one of its lobes — which is
+ * what a wire actually does.
+ */
+export function sweepCutLine(ring: Local[], headingDeg: number, f: number): [Local, Local] | null {
+  const extent = sweepExtent(ring, headingDeg);
+  if (extent === null) return null;
+
+  const limit = extent.min + Math.max(0, Math.min(1, f)) * (extent.max - extent.min);
+  const hits: Local[] = [];
+
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i];
+    const b = ring[(i + 1) % ring.length];
+    const da = along(a, extent.axis) - limit;
+    const db = along(b, extent.axis) - limit;
+    if (da === 0) hits.push(a);
+    if ((da < 0 && db > 0) || (da > 0 && db < 0)) {
+      const t = da / (da - db);
+      hits.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]);
+    }
+  }
+  if (hits.length < 2) return null;
+
+  // Sort along the cut — perpendicular to the sweep — and take the ends.
+  const perp: Local = [-extent.axis[1], extent.axis[0]];
+  hits.sort((p, q) => along(p, perp) - along(q, perp));
+  return [hits[0], hits[hits.length - 1]];
 }
 
 /** Local metres back to a projected path, given the projection's own frame. */

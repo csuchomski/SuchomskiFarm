@@ -4,10 +4,12 @@ import {
   asPoint,
   asPolygonRing,
   fitPasture,
+  fractionAlong,
   headingVector,
   pathFor,
   ringCentre,
   scaleBarFeet,
+  sweepCutLine,
   sweepExtent,
   sweepSlice,
   toLocal,
@@ -196,3 +198,81 @@ function areaAcres(ring: Local[]): number {
 function centreX(ring: Local[]): number {
   return ring.reduce((s, p) => s + p[0], 0) / ring.length;
 }
+
+describe("turning a finger on the drawing into a wire position", () => {
+  const frame = { lon0: -88.414, lat0: 42.8778 };
+  const ring: Local[] = P3.map((p) => toLocal(frame, p));
+
+  it("undoes the projection exactly", () => {
+    const p = fitPasture([P3], { width: 400, padding: 10 })!;
+    for (const pt of P3) {
+      const [x, y] = p.project(pt);
+      const back = p.unproject(x, y);
+      expect(back[0]).toBeCloseTo(pt[0], 7);
+      expect(back[1]).toBeCloseTo(pt[1], 7);
+    }
+  });
+
+  it("reads a tap at the entry end as the start of the sweep", () => {
+    // Paddock 3 is swept east to west, so the eastern edge is fraction 0.
+    const easternmost = ring.reduce((a, b) => (a[0] > b[0] ? a : b));
+    expect(fractionAlong(ring, 270, easternmost)).toBeCloseTo(0, 4);
+    const westernmost = ring.reduce((a, b) => (a[0] < b[0] ? a : b));
+    expect(fractionAlong(ring, 270, westernmost)).toBeCloseTo(1, 4);
+  });
+
+  it("reads a tap in the middle as the middle", () => {
+    const mid: Local = [
+      ring.reduce((s, p) => s + p[0], 0) / ring.length,
+      ring.reduce((s, p) => s + p[1], 0) / ring.length,
+    ];
+    expect(fractionAlong(ring, 270, mid)).toBeCloseTo(0.5, 1);
+  });
+
+  it("clamps a tap outside the unit rather than failing", () => {
+    // Most taps at a gate are a bit off the boundary; landing on the nearest
+    // sensible place beats refusing.
+    const outside: Local = [ring[0][0] + 500, ring[0][1] + 500];
+    const f = fractionAlong(ring, 270, outside);
+    expect(f).toBeGreaterThanOrEqual(0);
+    expect(f).toBeLessThanOrEqual(1);
+  });
+
+  it("has no answer for a unit that is not a shape", () => {
+    expect(fractionAlong(ring.slice(0, 2), 270, ring[0])).toBeNull();
+  });
+});
+
+describe("the wire, drawn across the unit", () => {
+  const frame = { lon0: -88.414, lat0: 42.8778 };
+  const ring: Local[] = P3.map((p) => toLocal(frame, p));
+
+  it("spans the unit at the fraction asked for", () => {
+    const line = sweepCutLine(ring, 270, 0.5)!;
+    // Paddock 3 is about 203 ft north to south, and a wire across an
+    // east-to-west sweep runs that way.
+    const len = Math.hypot(line[0][0] - line[1][0], line[0][1] - line[1][1]) * 3.280839895;
+    expect(len).toBeCloseTo(203, -1);
+  });
+
+  it("sits where the fraction puts it", () => {
+    const near = sweepCutLine(ring, 270, 0.1)!;
+    const far = sweepCutLine(ring, 270, 0.9)!;
+    // Swept east to west, so a later fraction is further west.
+    expect(near[0][0]).toBeGreaterThan(far[0][0]);
+  });
+
+  it("agrees with the slice it bounds", () => {
+    // The wire at f and the far edge of the slice 0→f are the same line.
+    const slice = sweepSlice(ring, 270, 0, 0.3)!;
+    const line = sweepCutLine(ring, 270, 0.3)!;
+    const axis = headingVector(270);
+    const at = (p: Local) => p[0] * axis[0] + p[1] * axis[1];
+    const sliceMax = Math.max(...slice.map(at));
+    expect(at(line[0])).toBeCloseTo(sliceMax, 4);
+  });
+
+  it("is null at the very ends, where a cut touches rather than crosses", () => {
+    expect(sweepCutLine(ring.slice(0, 2), 270, 0.5)).toBeNull();
+  });
+});

@@ -215,3 +215,77 @@
   margin: 8px 0 0;
   max-width: 68ch;
 }
+
+/* ── Pasture map ─────────────────────────────────────────────────────
+   Drawn rather than photographed: there is no basemap, and ink on paper is
+   what the rest of the app looks like. */
+
+.pm-figure {
+  margin: 16px 0 0;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  padding: 8px;
+}
+
+.pm-svg { display: block; width: 100%; height: auto; }
+
+.pm-label {
+  font: 500 13px/1 "IBM Plex Sans", sans-serif;
+  fill: var(--ink);
+  letter-spacing: .04em;
+}
+
+.pm-sub {
+  font: 400 10px/1 "IBM Plex Mono", monospace;
+  fill: var(--ink-muted);
+}
+
+.pm-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 10px 2px 0;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+.pm-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.pm-legend__rest i { margin-right: 0; }
+
+.pm-key {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border: 1px solid var(--hairline);
+}
+
+.pm-key--taken { background: #a9bd9a; border-color: var(--herd-green); }
+.pm-key--strip { background: var(--herd-green); border-color: var(--ink); }
+.pm-key--existing { height: 0; border: 0; border-top: 2px solid var(--ink); }
+.pm-key--planned { height: 0; border: 0; border-top: 2px dashed var(--ochre); }
+
+.pm-h2 {
+  font-size: 20px;
+  margin: 26px 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--ink);
+}
+
+.pm-unit {
+  font-size: 14.5px;
+  color: var(--ink);
+  margin: 0;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.pm-unit__sub { font-size: 12.5px; color: var(--ink-muted); }
+
+/* SVG font-size is in viewBox units, and the map scales to its container —
+   so on a phone a 13-unit label would render at about 6 real px. Sizing the
+   text up at the breakpoint is the one place where a bigger number means
+   smaller text on screen. */
+@media (max-width: 860px) {
+  .pm-label { font-size: 24px; }
+  .pm-sub { font-size: 18px; }
+}

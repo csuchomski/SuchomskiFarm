@@ -37,6 +37,7 @@ export const allGroups: NavGroup[] = [
       // pages rather than at the bottom of the group.
       { label: "Grazing", to: "/grazing" },
       { label: "Rotation", to: "/grazing/rotation" },
+      { label: "Pasture map", to: "/grazing/map" },
       { label: "Depreciation", to: "/depreciation" },
       { label: "Health" },
     ],

@@ -1297,6 +1297,39 @@ export function widthForHours(input: {
   return Math.min(1, acres / unitAcres);
 }
 
+/**
+ * The map layer: fences, water, gates and the rest.
+ *
+ * Ordered by kind so the map draws in a stable order and the legend beside it
+ * does not reshuffle between loads.
+ */
+export async function fetchInfrastructure(farmId: string): Promise<Infrastructure[]> {
+  const { data, error } = await herdSchema()
+    .from("infrastructure")
+    .select(
+      "id, paddock_id, kind, name, geometry, status, install_date, condition, nrcs_practice_code, active, notes",
+    )
+    .eq("farm_id", farmId)
+    .is("deleted_at", null)
+    .order("kind")
+    .order("name");
+  if (error) throw new Error(`herd.infrastructure: ${error.message}`);
+
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    paddockId: (r.paddock_id as string) ?? null,
+    kind: r.kind as InfrastructureKind,
+    name: (r.name as string) ?? null,
+    geometry: r.geometry ?? null,
+    status: r.status as InfrastructureStatus,
+    installDate: (r.install_date as string) ?? null,
+    condition: (r.condition as string) ?? null,
+    nrcsPracticeCode: (r.nrcs_practice_code as string) ?? null,
+    active: Boolean(r.active),
+    notes: (r.notes as string) ?? null,
+  }));
+}
+
 // ─── hay off the units ─────────────────────────────────────────────────
 
 export async function fetchForageRemovals(farmId: string): Promise<ForageRemoval[]> {

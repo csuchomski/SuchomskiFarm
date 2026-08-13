@@ -64,8 +64,8 @@ because the difference changes what "follow the existing conventions" means:
 
 The brief also says *"do not introduce new ones"*, and those two instructions
 pull in opposite directions. Step 1 follows the repo, since a schema is
-stack-neutral — but **offline capture is a real decision that is still
-open**, and it is the one that matters most for this module. See below.
+stack-neutral — and the offline question is now **settled: online only**,
+because there is signal at the field. See "Settled: online only" below.
 
 The design-token half of the brief is accurate: the palette, the fonts, and
 hazard yellow being reserved for withdrawal are all real. Grazing warnings —
@@ -263,26 +263,61 @@ Two things from the brief's own "before you run this", both still open:
    - **acreage per unit** from the plan, and how many units the cross-fences
      are meant to make.
 
-## Open decision: offline
+## Settled: online only, for now
 
-The brief asks for full offline capture with background sync, and the use
-case earns it — moves get logged in a pasture with no signal. This app has no
-offline layer of any kind today, so that is a new dependency and a new
-pattern, which the brief separately forbids.
+**Decided 2026-08-12. There is usually cell signal at the field.**
 
-It is a genuine fork and it is the owner's call:
+That fact is what settles it. The brief asks for full offline capture with
+background sync, and the case for it rested entirely on moves being logged
+where there is no signal. There is signal, so the module is built the way the
+rest of the app is built: every screen reads from Supabase when it opens.
 
-- **Add it** — Dexie plus a sync queue, applied to the whole app rather than
-  just grazing, or the app has two data-access patterns forever. Real work,
-  and worth it if moves are logged out of signal.
-- **Skip it for now** — build the module the way the rest of the app works,
-  and capture moves when there is signal. Cheapest, and wrong exactly when
-  the feature is most needed.
-- **Narrow it** — offline for the move form only: queue moves in
-  `localStorage` and flush on reconnect. A fraction of the work, covers the
-  case that actually happens, and leaves the rest of the app alone.
+Worth having written down, because "add offline later" is easy to say and the
+shape of the work is not obvious. **A write queue on its own would not have
+worked.** With no signal there are three separate failures, and the first is
+the one that gets forgotten:
 
-The third is the recommendation. Nothing in step 1 forecloses any of them.
+1. The page does not load at all. The HTML and JavaScript come from GitHub
+   Pages over the network; with no bars you get the browser's error page, not
+   the app.
+2. If the app were already open, the move form has no paddock list, because
+   that lives on the server.
+3. Saving fails.
+
+So offline would have meant a **service worker** (serving the app's own files
+from the phone) and a **manifest** (so it installs to the home screen rather
+than being a bookmark) *before* any question of queuing a write. That is what
+the brief meant by "PWA", and this app is not one.
+
+If signal turns out worse than expected, the path back is:
+
+- **Field-capable** — service worker and manifest so the app boots offline,
+  with paddocks, groups and recent moves cached and moves queued on the phone
+  until signal returns. Days of work, bounded, and the only part of the app
+  that would change is the field-facing part.
+- **Full mirror** — Dexie, every table local, background sync everywhere.
+  Weeks, plus a tail: once one module reads from a local mirror, every future
+  feature has to decide whether it does too, or the app has two data-access
+  patterns forever. Sync conflicts need rules that nothing here has today.
+
+**Nothing in step 2 forecloses either.** The move form writes through one
+function; putting a queue behind that function later does not mean rebuilding
+the screen.
+
+### The mitigation that makes online-only workable
+
+The move form takes an **editable timestamp**, so a move made at the gate can
+be recorded accurately from the house an hour later. This is not a
+consolation prize — it is what the schema already allows, and it is why a
+missed capture is a nuisance rather than a lost record.
+
+### Target device
+
+**iPhone.** Two consequences for every screen in this module: text inputs
+stay at 16px or Safari zooms the page on focus (already the convention in
+this repo — see `sign-in.css`), and if offline is ever revisited, install and
+offline support on iOS is Safari-only and weaker than Android, so it would
+want a real test in the pasture before either party believes it.
 
 ## Build order
 

@@ -333,11 +333,85 @@ is identical on both. Keep the gate readings (forage height, residual out,
 soil) on the same page rather than losing them; they were the reason the
 board's form existed.
 
-Worth settling first: whether setting a back line is its own recorded act
-with its own date, or just a field on the next move. The prototype argued the
-former — "one line per move… it makes the rest map honest" — and the ask does
-not say. It matters, because a back line moved on Tuesday for hay and a move
-logged on Friday are two different days of rest for the ground between them.
+#### Answered: the back line is a position on the whole serpentine
+
+Asked whether setting a back line is its own dated act or a field on the next
+move. The answer reframes it, and is worth quoting:
+
+> The scenario I want to handle where I'm running the cows through paddock 2
+> but I decide to cut paddock 4 for hay. After working our way through paddock
+> 3, I might want to skip paddock 4 in which case I'd want to set the backline
+> to the start of paddock 5.
+
+**"The start of paddock 5" is a back line position.** So the back line is not
+a fraction within one unit — it is a point on the farm's single continuous
+path, P1 → P2 → P3 → P4 → P5 → P1. Skipping a unit is advancing the back line
+past the whole of it.
+
+That settles the dating question by dissolving it. A skipped unit is not
+grazed at all, so nothing about its rest changes when you decide to skip it —
+its clock keeps running from its last defoliation, and the hay cutting resets
+it when it happens. **The back line is a field on the next move, not a
+separately dated act.** The move already carries the date, and that date is
+the only one that means anything.
+
+#### The database already does this — checked, not assumed
+
+Both skips were tested against the live farm inside a rolled-back
+transaction, as an `authenticated` user:
+
+| | |
+|---|---|
+| Jump the back line forward inside a unit (skip a section) | **accepted** |
+| Move on to another unit, leaving one part grazed (skip a unit) | **accepted** |
+| Put the wire back over ground just grazed | still refused |
+
+`log_grazing_move` only ever refused going *backwards*
+(`p_swept_from < v_open.swept_to`), and never constrained `swept_from` at all
+on a move to a different unit. So the skip mechanics need **no migration**.
+What is missing is only that the app never lets `swept_from` be anything but
+the derived value.
+
+That makes this materially smaller than it first read.
+
+#### What genuinely is missing
+
+**The rotation order is not stored anywhere.** "Set the back line to the start
+of Paddock 5" needs the app to know P5 follows P4 follows P3. The serpentine
+is confirmed and is implicit in the sweep headings, but nothing records the
+sequence — `rotationRounds` infers order from what happened, which is the
+wrong direction for this. Wants a `paddocks.rotation_order`, and it is the
+one schema change the skip needs.
+
+**Nothing can say a unit is shut up for hay.** After skipping Paddock 4 its
+rest keeps climbing and the board sorts it to the top as the best next
+choice — exactly the wrong advice, and the reason the skip happened. The
+schema already anticipated this and it was never used:
+`plan_schedule_periods.kind` includes `'deferment'`, and
+`plan_paddock_targets.planned_deferment_notes` exists. Deferring a unit
+should take it off the board's list and say why.
+
+**A partial hay cutting still has nowhere to go** — see above. Skipping a
+*section* to cut it is the case that needs `swept_from`/`swept_to` on
+`forage_removals`.
+
+### The map's move records the wrong head count
+
+Found while checking the above: the farm has started logging real moves, and
+the ones logged from the map carry **4 head and no weight**, while the ones
+logged from the board carry the 5 head and 900 lb that were typed in.
+
+The board's form prefills head and weight from the animal records and lets
+them be corrected. The map's move takes the derived figures and offers no way
+to change them — and there are four animals on file against five head
+actually running, so every map-logged move understates the mob.
+
+With no weight it also produces no feed figure at all, which is half the
+reason to size a strip.
+
+Smallest honest fix is to carry head and weight onto the one-page move above,
+prefilled and editable, as the board already does. Adding the fifth animal to
+Herd → Animals fixes the count at its source and is worth doing either way.
 
 ## Carried over from earlier sessions
 

@@ -326,3 +326,50 @@
   accent-color: #5c6248;
   flex: none;
 }
+
+/* ── Monitoring ──────────────────────────────────────────────────────── */
+
+.mon-desc {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 8px 0 0;
+  max-width: 68ch;
+}
+
+.mon-rec {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.mon-rec__head { margin: 0 0 3px; font-size: 14px; }
+
+.mon-link {
+  font: inherit;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--hairline);
+  padding: 0;
+  cursor: pointer;
+}
+.mon-link:hover { border-color: var(--ink-faint); }
+.mon-link:focus-visible { outline: 2px solid var(--herd-green); outline-offset: 2px; }
+
+.mon-shots { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 8px; }
+
+.mon-shot {
+  width: 120px;
+  height: 90px;
+  object-fit: cover;
+  border: 1px solid var(--hairline);
+  background: var(--paper-tint);
+  display: block;
+}
+
+/* A photo whose signed link has not come back yet. Holds the space so the
+   record does not jump when it arrives. */
+.mon-shot--pending {
+  background: repeating-linear-gradient(
+    135deg, var(--paper), var(--paper) 6px, var(--paper-tint) 6px, var(--paper-tint) 12px
+  );
+}

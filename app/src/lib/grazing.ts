@@ -1330,6 +1330,154 @@ export async function fetchInfrastructure(farmId: string): Promise<Infrastructur
   }));
 }
 
+// ─── monitoring, key areas and photo points ────────────────────────────
+
+export async function fetchKeyAreas(farmId: string): Promise<KeyArea[]> {
+  const { data, error } = await herdSchema()
+    .from("key_areas")
+    .select("id, paddock_id, name, latitude, longitude, photo_azimuth_deg, description, active")
+    .eq("farm_id", farmId)
+    .is("deleted_at", null)
+    .order("name");
+  if (error) throw new Error(`herd.key_areas: ${error.message}`);
+
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    paddockId: r.paddock_id as string,
+    name: r.name as string,
+    latitude: num(r.latitude),
+    longitude: num(r.longitude),
+    photoAzimuthDeg: num(r.photo_azimuth_deg),
+    description: (r.description as string) ?? null,
+    active: Boolean(r.active),
+  }));
+}
+
+export interface KeyAreaDraft {
+  paddockId: string;
+  name: string;
+  latitude: number | null;
+  longitude: number | null;
+  /** Same spot, same direction, or the photo series is just pictures of
+   * grass. */
+  photoAzimuthDeg: number | null;
+  description: string;
+}
+
+export async function createKeyArea(farmId: string, draft: KeyAreaDraft): Promise<string> {
+  const { data, error } = await herdSchema()
+    .from("key_areas")
+    .insert({
+      farm_id: farmId,
+      paddock_id: draft.paddockId,
+      name: draft.name.trim(),
+      latitude: draft.latitude,
+      longitude: draft.longitude,
+      photo_azimuth_deg: draft.photoAzimuthDeg,
+      description: draft.description.trim() || null,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return (data as { id: string }).id;
+}
+
+export async function fetchMonitoringRecords(farmId: string): Promise<MonitoringRecord[]> {
+  const { data, error } = await herdSchema()
+    .from("monitoring_records")
+    .select(
+      "id, key_area_id, plan_id, observed_on, protocol, residual_height_in, ground_cover_pct, litter_pct, bare_ground_pct, species_composition, key_plant_vigor, erosion_observations, compaction_observations, observer, notes, latitude, longitude",
+    )
+    .eq("farm_id", farmId)
+    .is("deleted_at", null)
+    .order("observed_on", { ascending: false });
+  if (error) throw new Error(`herd.monitoring_records: ${error.message}`);
+
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    keyAreaId: r.key_area_id as string,
+    planId: (r.plan_id as string) ?? null,
+    observedOn: r.observed_on as string,
+    protocol: (r.protocol as string) ?? null,
+    residualHeightIn: num(r.residual_height_in),
+    groundCoverPct: num(r.ground_cover_pct),
+    litterPct: num(r.litter_pct),
+    bareGroundPct: num(r.bare_ground_pct),
+    speciesComposition: (r.species_composition as string) ?? null,
+    keyPlantVigor: (r.key_plant_vigor as string) ?? null,
+    erosionObservations: (r.erosion_observations as string) ?? null,
+    compactionObservations: (r.compaction_observations as string) ?? null,
+    observer: (r.observer as string) ?? null,
+    notes: (r.notes as string) ?? null,
+    latitude: num(r.latitude),
+    longitude: num(r.longitude),
+  }));
+}
+
+export interface MonitoringDraft {
+  keyAreaId: string;
+  planId: string | null;
+  observedOn: string;
+  protocol: string;
+  residualHeightIn: number | null;
+  groundCoverPct: number | null;
+  litterPct: number | null;
+  bareGroundPct: number | null;
+  speciesComposition: string;
+  keyPlantVigor: string;
+  erosionObservations: string;
+  compactionObservations: string;
+  observer: string;
+  notes: string;
+}
+
+export async function recordMonitoring(farmId: string, draft: MonitoringDraft): Promise<string> {
+  const { data, error } = await herdSchema()
+    .from("monitoring_records")
+    .insert({
+      farm_id: farmId,
+      key_area_id: draft.keyAreaId,
+      plan_id: draft.planId,
+      observed_on: draft.observedOn,
+      protocol: draft.protocol.trim() || null,
+      residual_height_in: draft.residualHeightIn,
+      ground_cover_pct: draft.groundCoverPct,
+      litter_pct: draft.litterPct,
+      bare_ground_pct: draft.bareGroundPct,
+      species_composition: draft.speciesComposition.trim() || null,
+      key_plant_vigor: draft.keyPlantVigor.trim() || null,
+      erosion_observations: draft.erosionObservations.trim() || null,
+      compaction_observations: draft.compactionObservations.trim() || null,
+      observer: draft.observer.trim() || null,
+      notes: draft.notes.trim(),
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return (data as { id: string }).id;
+}
+
+export async function fetchGrazingPhotos(farmId: string): Promise<GrazingPhoto[]> {
+  const { data, error } = await herdSchema()
+    .from("grazing_photos")
+    .select("id, grazing_event_id, monitoring_record_id, storage_path, caption, taken_at, latitude, longitude")
+    .eq("farm_id", farmId)
+    .is("deleted_at", null)
+    .order("taken_at", { ascending: false });
+  if (error) throw new Error(`herd.grazing_photos: ${error.message}`);
+
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    grazingEventId: (r.grazing_event_id as string) ?? null,
+    monitoringRecordId: (r.monitoring_record_id as string) ?? null,
+    storagePath: r.storage_path as string,
+    caption: (r.caption as string) ?? null,
+    takenAt: (r.taken_at as string) ?? null,
+    latitude: num(r.latitude),
+    longitude: num(r.longitude),
+  }));
+}
+
 // ─── supply and demand ─────────────────────────────────────────────────
 
 export async function fetchForageAvailability(farmId: string): Promise<ForageAvailability[]> {

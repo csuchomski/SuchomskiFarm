@@ -10,7 +10,7 @@ under Herd:
 |---|---|
 | **Grazing** | The board, and logging a move as a strip |
 | **Rotation** | The season as rounds, and hay off a unit |
-| **Pasture map** | The units drawn, with the fences that make them |
+| **Pasture map** | The units drawn — and where the wire goes today |
 | **Forage balance** | Supply against demand, by unit and period |
 | **Monitoring** | Key areas, what was seen there, and the photo series |
 | **Plan** | Every threshold the rest of the module compares against |
@@ -771,6 +771,29 @@ half-planes; no geometry library, and it is checked by area.
 
 GeoJSON arrives from `jsonb` as `unknown` and is parsed defensively rather
 than cast, so a malformed boundary costs one paddock and not the page.
+
+**The map also logs the move**, which is the reason to open it rather than
+the board. On the board the wire is a percentage; here it is a line across
+the shape of your ground, at the place you are looking at. The record is
+identical either way — `swept_from` and `swept_to` — but *"there, by the
+corner"* is how somebody standing at a gate actually decides, and a slider
+cannot ask that question.
+
+Selecting a unit sets the wire to a day's width rather than jumping it to
+wherever the selecting tap landed, which would be startling. After that a tap
+or a drag anywhere in the unit moves it. One handler covers both: a tap is a
+drag of length zero.
+
+The finger becomes a fraction by the bounding rect rather than
+`getScreenCTM` — the viewBox fills the element exactly, since the height is
+computed from the farm's own proportions, so there is no letterboxing to
+account for. A tap outside the boundary clamps to the nearest sensible place
+instead of failing, because most taps at a gate are a little off. And the
+wire only ever advances: a tap behind the back fence is refused rather than
+recorded, the same rule `log_grazing_move` enforces in the database.
+
+`touch-action: none` goes on the SVG **only while a unit is selected**, or
+the page could not be scrolled on a phone.
 
 ### Step 5: the balance never converts pounds to AUM
 

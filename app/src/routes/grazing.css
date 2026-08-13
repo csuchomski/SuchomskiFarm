@@ -475,3 +475,42 @@
   .rec-table { white-space: normal; overflow-x: visible; display: table; }
   a { text-decoration: none; color: inherit; }
 }
+
+/* ── Placing the wire on the map ─────────────────────────────────────── */
+
+.pm-prompt {
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  border-left: 2px solid var(--herd-green);
+  padding: 5px 0 5px 10px;
+  margin: 14px 0 0;
+  max-width: 68ch;
+}
+
+.pm-svg--moving .pm-unit-hit { cursor: pointer; }
+.pm-svg--moving .pm-unit-hit:hover { stroke: var(--ink); stroke-width: 2; }
+
+/* The ground about to be opened. Outlined rather than solid so the rest wash
+   underneath still reads — you are choosing against it. */
+.pm-proposed {
+  fill: var(--herd-green);
+  fill-opacity: .28;
+  stroke: var(--herd-green);
+  stroke-width: 1;
+}
+
+.pm-wire {
+  stroke: var(--ink);
+  stroke-width: 2.5;
+}
+
+/* A line is hard to grab with a thumb; a circle on it is not. */
+.pm-wire-grip {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.pm-key--proposed { background: #b9cbab; border-color: var(--herd-green); }
+
+.pm-move { margin-top: 14px; }

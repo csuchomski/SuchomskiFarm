@@ -40,6 +40,8 @@ export const allGroups: NavGroup[] = [
       { label: "Pasture map", to: "/grazing/map" },
       { label: "Forage balance", to: "/grazing/balance" },
       { label: "Monitoring", to: "/grazing/monitoring" },
+      { label: "Plan", to: "/grazing/plan" },
+      { label: "Decisions", to: "/grazing/decisions" },
       { label: "Depreciation", to: "/depreciation" },
       { label: "Health" },
     ],

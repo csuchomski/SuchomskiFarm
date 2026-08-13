@@ -1237,6 +1237,64 @@ export interface ForageAssumptions {
   intakePctBodyweight: number;
 }
 
+/** Which of the three figures came from the farm's own records, and which
+ * are still the app's stated fallback. The UI names them, so a forecast is
+ * never mistaken for one built on measurements. */
+export interface AssumptionSources {
+  standing: "measured" | "planned" | "default";
+  utilization: "plan" | "default";
+  intake: "plan" | "default";
+}
+
+/**
+ * The three figures the strip readout divides by, taken from the farm's own
+ * records wherever they exist.
+ *
+ * Before the plan editor these were constants in the page with a comment
+ * saying they belonged in the plan. They now come from it: intake from the
+ * plan's default, utilization from the paddock's target, and standing forage
+ * from the most recent availability record covering today for that unit.
+ *
+ * **The fallbacks stay, and are labelled.** The alternative — showing nothing
+ * until a plan is written — would take away a working tool on the first day
+ * somebody opens the app, and the honest middle is to compute the forecast
+ * and say plainly which figures are the farm's and which are the app's.
+ */
+export function assumptionsFor(input: {
+  paddockId: string;
+  plan: GrazingPlan | null;
+  targets: PlanPaddockTarget[];
+  availability: ForageAvailability[];
+  todayIso: string;
+  fallback: ForageAssumptions;
+}): { assumptions: ForageAssumptions; sources: AssumptionSources } {
+  const { paddockId, plan, targets, availability, todayIso, fallback } = input;
+  const day = todayIso.slice(0, 10);
+
+  const target = targets.find((t) => t.paddockId === paddockId) ?? null;
+
+  // Prefer a window that covers today; failing that, the most recent one that
+  // has already started. A figure measured for June says nothing useful about
+  // October, but it beats a constant.
+  const mine = availability
+    .filter((a) => a.paddockId === paddockId && a.lbDmPerAcre !== null && a.periodStart <= day)
+    .sort((a, b) => b.periodStart.localeCompare(a.periodStart));
+  const covering = mine.find((a) => a.periodEnd >= day) ?? mine[0] ?? null;
+
+  return {
+    assumptions: {
+      standingLbDmPerAcre: covering?.lbDmPerAcre ?? fallback.standingLbDmPerAcre,
+      utilizationPct: target?.targetUtilizationPct ?? fallback.utilizationPct,
+      intakePctBodyweight: plan?.defaultDmiPctBw ?? fallback.intakePctBodyweight,
+    },
+    sources: {
+      standing: covering === null ? "default" : covering.isPlanned ? "planned" : "measured",
+      utilization: target?.targetUtilizationPct === undefined || target?.targetUtilizationPct === null ? "default" : "plan",
+      intake: plan?.defaultDmiPctBw == null ? "default" : "plan",
+    },
+  };
+}
+
 /**
  * What a strip of this width would be — the arithmetic behind sizing the
  * wire before the mob is let in.
@@ -1328,6 +1386,253 @@ export async function fetchInfrastructure(farmId: string): Promise<Infrastructur
     active: Boolean(r.active),
     notes: (r.notes as string) ?? null,
   }));
+}
+
+// ─── the plan ──────────────────────────────────────────────────────────
+
+export async function fetchPlans(farmId: string): Promise<GrazingPlan[]> {
+  const { data, error } = await herdSchema()
+    .from("grazing_plans")
+    .select(
+      "id, name, period_start, period_end, contract_number, tract_number, field_ids, long_term_goals, immediate_objectives, benchmark_stocking_rate_aum_per_acre, monitoring_cadence_kind, monitoring_cadence_value, default_dmi_pct_bw, active, notes",
+    )
+    .eq("farm_id", farmId)
+    .is("deleted_at", null)
+    .order("period_start", { ascending: false });
+  if (error) throw new Error(`herd.grazing_plans: ${error.message}`);
+
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    name: r.name as string,
+    periodStart: (r.period_start as string) ?? null,
+    periodEnd: (r.period_end as string) ?? null,
+    contractNumber: (r.contract_number as string) ?? null,
+    tractNumber: (r.tract_number as string) ?? null,
+    fieldIds: (r.field_ids as string) ?? null,
+    longTermGoals: (r.long_term_goals as string) ?? null,
+    immediateObjectives: (r.immediate_objectives as string) ?? null,
+    benchmarkStockingRateAumPerAcre: num(r.benchmark_stocking_rate_aum_per_acre),
+    monitoringCadenceKind: r.monitoring_cadence_kind as MonitoringCadenceKind,
+    monitoringCadenceValue: num(r.monitoring_cadence_value),
+    defaultDmiPctBw: num(r.default_dmi_pct_bw),
+    active: Boolean(r.active),
+    notes: (r.notes as string) ?? null,
+  }));
+}
+
+export interface PlanDraft {
+  /** Null starts a new plan, which supersedes the one in force. See 042 —
+   * the swap happens inside one transaction so there is never a moment with
+   * two active plans or none. */
+  planId: string | null;
+  name: string;
+  periodStart: string | null;
+  periodEnd: string | null;
+  contractNumber: string;
+  tractNumber: string;
+  fieldIds: string;
+  longTermGoals: string;
+  immediateObjectives: string;
+  benchmarkStockingRateAumPerAcre: number | null;
+  monitoringCadenceKind: MonitoringCadenceKind;
+  monitoringCadenceValue: number | null;
+  defaultDmiPctBw: number | null;
+}
+
+const orNull = (s: string) => (s.trim() === "" ? null : s.trim());
+
+export async function savePlan(farmId: string, draft: PlanDraft): Promise<string> {
+  const { data, error } = await herdSchema().rpc("save_grazing_plan", {
+    p_farm_id: farmId,
+    p_plan_id: draft.planId,
+    p_name: draft.name,
+    p_period_start: draft.periodStart,
+    p_period_end: draft.periodEnd,
+    p_contract_number: orNull(draft.contractNumber),
+    p_tract_number: orNull(draft.tractNumber),
+    p_field_ids: orNull(draft.fieldIds),
+    p_long_term_goals: orNull(draft.longTermGoals),
+    p_immediate_objectives: orNull(draft.immediateObjectives),
+    p_benchmark_stocking_rate_aum_per_acre: draft.benchmarkStockingRateAumPerAcre,
+    p_monitoring_cadence_kind: draft.monitoringCadenceKind,
+    p_monitoring_cadence_value: draft.monitoringCadenceValue,
+    p_default_dmi_pct_bw: draft.defaultDmiPctBw,
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+export interface TargetDraft {
+  planId: string;
+  paddockId: string;
+  targetEntryHeightIn: number | null;
+  targetResidualHeightIn: number | null;
+  /** Two figures, never one: thirty days in June and thirty in September are
+   * not the same rest, and a single number is the assumption that gets
+   * paddocks hurt. */
+  minRecoveryDaysGrowing: number | null;
+  minRecoveryDaysDormant: number | null;
+  targetUtilizationPct: number | null;
+  plannedGrazingNotes: string;
+  plannedDefermentNotes: string;
+  sensitiveAreaStrategy: string;
+  notes: string;
+}
+
+export async function savePaddockTarget(farmId: string, draft: TargetDraft): Promise<string> {
+  const { data, error } = await herdSchema().rpc("save_paddock_target", {
+    p_farm_id: farmId,
+    p_plan_id: draft.planId,
+    p_paddock_id: draft.paddockId,
+    p_target_entry_height_in: draft.targetEntryHeightIn,
+    p_target_residual_height_in: draft.targetResidualHeightIn,
+    p_min_recovery_days_growing: draft.minRecoveryDaysGrowing,
+    p_min_recovery_days_dormant: draft.minRecoveryDaysDormant,
+    p_target_utilization_pct: draft.targetUtilizationPct,
+    p_planned_grazing_notes: orNull(draft.plannedGrazingNotes),
+    p_planned_deferment_notes: orNull(draft.plannedDefermentNotes),
+    p_sensitive_area_strategy: orNull(draft.sensitiveAreaStrategy),
+    p_notes: orNull(draft.notes),
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+export async function fetchResourceConcerns(planId: string): Promise<PlanResourceConcern[]> {
+  const { data, error } = await herdSchema()
+    .from("plan_resource_concerns")
+    .select("id, plan_id, category, concern, notes")
+    .eq("plan_id", planId)
+    .is("deleted_at", null)
+    .order("category");
+  if (error) throw new Error(`herd.plan_resource_concerns: ${error.message}`);
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    planId: r.plan_id as string,
+    category: r.category as ResourceCategory,
+    concern: r.concern as string,
+    notes: (r.notes as string) ?? null,
+  }));
+}
+
+export async function addResourceConcern(
+  farmId: string,
+  planId: string,
+  category: ResourceCategory,
+  concern: string,
+  notes: string,
+): Promise<string> {
+  const { data, error } = await herdSchema()
+    .from("plan_resource_concerns")
+    .insert({ farm_id: farmId, plan_id: planId, category, concern: concern.trim(), notes: notes.trim() || null })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return (data as { id: string }).id;
+}
+
+export async function fetchContingencyPlans(planId: string): Promise<ContingencyPlan[]> {
+  const { data, error } = await herdSchema()
+    .from("contingency_plans")
+    .select("id, plan_id, trigger_type, trigger_threshold, planned_response, holding_area_id, notes")
+    .eq("plan_id", planId)
+    .is("deleted_at", null)
+    .order("trigger_type");
+  if (error) throw new Error(`herd.contingency_plans: ${error.message}`);
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    planId: r.plan_id as string,
+    triggerType: r.trigger_type as ContingencyTrigger,
+    triggerThreshold: (r.trigger_threshold as string) ?? null,
+    plannedResponse: (r.planned_response as string) ?? null,
+    holdingAreaId: (r.holding_area_id as string) ?? null,
+    notes: (r.notes as string) ?? null,
+  }));
+}
+
+export interface ContingencyDraft {
+  planId: string;
+  triggerType: ContingencyTrigger;
+  /** What actually trips it, in the farm's own terms. A trigger with no
+   * threshold is a worry rather than a plan. */
+  triggerThreshold: string;
+  plannedResponse: string;
+  holdingAreaId: string | null;
+  notes: string;
+}
+
+export async function addContingency(farmId: string, draft: ContingencyDraft): Promise<string> {
+  const { data, error } = await herdSchema()
+    .from("contingency_plans")
+    .insert({
+      farm_id: farmId,
+      plan_id: draft.planId,
+      trigger_type: draft.triggerType,
+      trigger_threshold: orNull(draft.triggerThreshold),
+      planned_response: orNull(draft.plannedResponse),
+      holding_area_id: draft.holdingAreaId,
+      notes: draft.notes.trim() || null,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return (data as { id: string }).id;
+}
+
+export async function fetchManagementDecisions(farmId: string): Promise<ManagementDecision[]> {
+  const { data, error } = await herdSchema()
+    .from("management_decisions")
+    .select(
+      "id, plan_id, decided_on, observation, trigger_description, decision, contingency_plan_id, monitoring_record_id, grazing_event_id, outcome_followup, followed_up_on",
+    )
+    .eq("farm_id", farmId)
+    .is("deleted_at", null)
+    .order("decided_on", { ascending: false });
+  if (error) throw new Error(`herd.management_decisions: ${error.message}`);
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    planId: (r.plan_id as string) ?? null,
+    decidedOn: r.decided_on as string,
+    observation: (r.observation as string) ?? null,
+    triggerDescription: (r.trigger_description as string) ?? null,
+    decision: (r.decision as string) ?? null,
+    contingencyPlanId: (r.contingency_plan_id as string) ?? null,
+    monitoringRecordId: (r.monitoring_record_id as string) ?? null,
+    grazingEventId: (r.grazing_event_id as string) ?? null,
+    outcomeFollowup: (r.outcome_followup as string) ?? null,
+    followedUpOn: (r.followed_up_on as string) ?? null,
+  }));
+}
+
+export interface DecisionDraft {
+  planId: string | null;
+  decidedOn: string;
+  observation: string;
+  triggerDescription: string;
+  decision: string;
+  contingencyPlanId: string | null;
+  outcomeFollowup: string;
+  followedUpOn: string | null;
+}
+
+export async function recordDecision(farmId: string, draft: DecisionDraft): Promise<string> {
+  const { data, error } = await herdSchema()
+    .from("management_decisions")
+    .insert({
+      farm_id: farmId,
+      plan_id: draft.planId,
+      decided_on: draft.decidedOn,
+      observation: orNull(draft.observation),
+      trigger_description: orNull(draft.triggerDescription),
+      decision: orNull(draft.decision),
+      contingency_plan_id: draft.contingencyPlanId,
+      outcome_followup: orNull(draft.outcomeFollowup),
+      followed_up_on: draft.followedUpOn,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return (data as { id: string }).id;
 }
 
 // ─── monitoring, key areas and photo points ────────────────────────────

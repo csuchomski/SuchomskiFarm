@@ -373,3 +373,17 @@
     135deg, var(--paper), var(--paper) 6px, var(--paper-tint) 6px, var(--paper-tint) 12px
   );
 }
+
+/* ── Decisions ───────────────────────────────────────────────────────── */
+
+.dec-line {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 6px 0 0;
+  max-width: 72ch;
+}
+
+.dec-line .eyebrow { margin-right: 6px; }
+
+/* The act is the point of the entry, so it carries the weight. */
+.dec-line--act { color: var(--ink); }

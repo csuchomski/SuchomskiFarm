@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import type {
+  ForageAvailability,
   ForageRemoval,
   MoveDraft,
   GrazingEvent,
@@ -100,6 +101,7 @@ const members: GrazingGroupMember[] = [
 const weights = new Map<string, number>();
 const targets: PlanPaddockTarget[] = [];
 const removals: ForageRemoval[] = [];
+const availability: ForageAvailability[] = [];
 let hasPlan = false;
 
 const moved = vi.fn(async (_farmId: string, _draft: MoveDraft) => "new-event");
@@ -115,9 +117,21 @@ vi.mock("../lib/grazing", async (importOriginal) => {
     fetchGrazingGroups: vi.fn(async () => [mob]),
     fetchGrazingEvents: vi.fn(async () => events),
     fetchForageRemovals: vi.fn(async () => removals),
+    fetchForageAvailability: vi.fn(async () => availability),
     fetchGroupMembers: vi.fn(async () => members),
     fetchLatestWeights: vi.fn(async () => weights),
-    fetchActivePlan: vi.fn(async () => (hasPlan ? { id: "plan" } : null)),
+    fetchActivePlan: vi.fn(async () =>
+      hasPlan
+        ? {
+            id: "plan", name: "2026", periodStart: null, periodEnd: null,
+            contractNumber: null, tractNumber: null, fieldIds: null,
+            longTermGoals: null, immediateObjectives: null,
+            benchmarkStockingRateAumPerAcre: null,
+            monitoringCadenceKind: "every_rotation", monitoringCadenceValue: null,
+            defaultDmiPctBw: 2.5, active: true, notes: null,
+          }
+        : null,
+    ),
     fetchPlanPaddockTargets: vi.fn(async () => targets),
     logMove: moved,
     endGrazing: ended,
@@ -135,6 +149,7 @@ afterEach(() => {
   events.length = 0;
   targets.length = 0;
   removals.length = 0;
+  availability.length = 0;
   weights.clear();
   hasPlan = false;
   moved.mockClear();
@@ -411,5 +426,56 @@ describe("logging a move", () => {
     hasPlan = true;
     await mount();
     expect(document.body.textContent).not.toMatch(/complian|meets 528/i);
+  });
+});
+
+describe("the strip readout takes its figures from the plan", () => {
+  it("says plainly when a figure is the app's own", async () => {
+    events.push(event({ id: "a", paddockId: "p1", enteredAt: "2026-07-01T12:00:00.000Z", exitedAt: "2026-08-01T12:00:00.000Z" }));
+    await mount();
+    fireEvent.click(screen.getByText("Log a move"));
+    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p2" } });
+    // All three: no plan, no target, no availability record.
+    expect(screen.getAllByText(/this app's figure/)).toHaveLength(3);
+  });
+
+  it("uses the plan's intake and the paddock's utilization once they exist", async () => {
+    hasPlan = true;
+    targets.push({
+      id: "t1", planId: "plan", paddockId: "p2",
+      targetEntryHeightIn: null, targetResidualHeightIn: null,
+      minRecoveryDaysGrowing: null, minRecoveryDaysDormant: null,
+      targetUtilizationPct: 40, plannedGrazingNotes: null,
+      plannedDefermentNotes: null, sensitiveAreaStrategy: null, notes: null,
+    });
+    availability.push({
+      id: "av1", planId: null, paddockId: "p2",
+      periodStart: "2026-08-01", periodEnd: "2026-08-31", periodLabel: "August",
+      lbDmPerAcre: 1800, aum: null, speciesMix: null, qualityNote: null,
+      isPlanned: false, basis: "clipping", notes: null,
+    });
+    await mount();
+    fireEvent.click(screen.getByText("Log a move"));
+    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p2" } });
+
+    expect(screen.getByText(/1,800 lb DM\/acre/)).toBeTruthy();
+    expect(screen.getAllByText(/measured on this unit/)).toHaveLength(1);
+    expect(screen.getByText(/40% utilization/)).toBeTruthy();
+    // Utilization from the paddock's target, intake from the plan's default.
+    expect(screen.getAllByText(/from your plan/)).toHaveLength(2);
+    expect(screen.queryByText(/this app's figure/)).toBeNull();
+  });
+
+  it("marks a projection as one rather than letting it read as measured", async () => {
+    availability.push({
+      id: "av1", planId: null, paddockId: "p2",
+      periodStart: "2026-08-01", periodEnd: "2026-08-31", periodLabel: "August",
+      lbDmPerAcre: 1800, aum: null, speciesMix: null, qualityNote: null,
+      isPlanned: true, basis: "extension_table", notes: null,
+    });
+    await mount();
+    fireEvent.click(screen.getByText("Log a move"));
+    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p2" } });
+    expect(screen.getByText(/your projection/)).toBeTruthy();
   });
 });

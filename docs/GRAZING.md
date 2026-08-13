@@ -280,11 +280,56 @@ Two things from the brief's own "before you run this", both still open:
      as-is.
    - failing that, **two known points** on the image — a fence corner, a gate
      — with latitude and longitude, which is enough to fill the bounding box.
-   - **acreage per unit** from the plan, and how many units the cross-fences
-     are meant to make.
+   - **acreage per unit** from the plan.
    - for the seven water points: **existing or planned**, whether they are
      tanks off a pipeline or something else, and whether each really does
      serve both sides of the fence it sits on.
+   - **names or numbers for the five paddocks**, as the farm actually calls
+     them. `paddocks.name` is unique per farm and is what every other screen
+     will label a move with, so it should be the name used at the gate rather
+     than one this file invented.
+
+## The farm, as known so far
+
+Recorded as the owner gives it, because seed data should be real:
+
+| | |
+|---|---|
+| Management units | **Five paddocks**, which can be split further as needed |
+| Water | **Seven points along the interior fence** |
+| Livestock | **Five head** |
+| Field | One field on County Hwy NN; perimeter fenced, interior fences at 410 / 372 / 417 ft with a 401 ft segment joining them |
+
+Still missing: acreage per unit, coordinates, paddock names, plan targets.
+
+### Splitting a paddock: two different things
+
+"Can be split further as needed" has two shapes in this schema, and which one
+is right depends on the rest clock rather than on the wire:
+
+- **A split that persists and earns its own rest** — a paddock permanently
+  halved with poly-wire for the season — is **its own `paddocks` row**, with
+  `unit_type = 'temporary'`. It accumulates rest days of its own, gets its own
+  targets, and appears on the board as a unit.
+- **A strip within a single grazing** — a wire moved across a paddock over
+  three days — is **one grazing event** on the parent paddock, optionally
+  carrying `boundary_override` to record the shape actually grazed.
+
+Getting this wrong is not cosmetic. Model a moving wire as five paddocks and
+each shows a full rest period it never had; model a season-long division as
+one paddock and the rest clock is wrong for both halves.
+
+### Five head, four animals
+
+The herd has **four** animals on file — Martha, Abigail, Patience, Vera — and
+the farm runs five. `grazing_groups` derives head count from its members, so
+a group built from the animal records would say four.
+
+Two honest ways out, and it is worth picking before the first move is logged:
+add the fifth animal to Herd → Animals so the group derives correctly, or set
+`head_count_manual` on the group and accept that the figure is stated rather
+than derived. The first is better if the fifth animal is a keeper; the second
+is right for something passing through.
 
 ## Settled: online only, for now
 

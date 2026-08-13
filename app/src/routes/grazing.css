@@ -102,3 +102,65 @@
     flex: 1 1 100%;
   }
 }
+
+/* ── the wire ───────────────────────────────────────────────────────
+   Placing it is the daily job, so it gets the room and the emphasis. */
+
+.grz-wire {
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  padding: 14px 16px;
+  margin: 0 0 14px;
+}
+
+.grz-wire__head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 10px; flex-wrap: wrap; margin-bottom: 10px;
+}
+
+.grz-wire__pos { font-size: 14px; font-variant-numeric: tabular-nums; }
+
+/* The unit's sweep: taken, about to be opened, still standing. */
+.grz-sweep {
+  display: flex; height: 16px;
+  border: 1px solid var(--hairline);
+  background: var(--paper-tint);
+}
+.grz-sweep__done { background: var(--ink-faint); }
+.grz-sweep__strip { background: var(--herd-green); }
+
+.grz-wire__range { width: 100%; margin: 10px 0 4px; accent-color: #5c6248; }
+.grz-wire__range:focus-visible { outline: 2px solid var(--herd-green); outline-offset: 3px; }
+
+.grz-strip-stats {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px; padding: 10px 0 4px;
+}
+.grz-strip-stats__v { font-size: 21px; font-variant-numeric: tabular-nums; }
+
+.grz-wire__presets { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; }
+
+.grz-preset {
+  font: 500 11px/1 "IBM Plex Sans", sans-serif;
+  letter-spacing: .06em; text-transform: uppercase;
+  padding: 9px 11px; border: 1px solid var(--hairline);
+  background: transparent; color: var(--ink-muted); cursor: pointer;
+}
+.grz-preset:hover { border-color: var(--ink-faint); color: var(--ink); }
+.grz-preset:focus-visible { outline: 2px solid var(--herd-green); outline-offset: 2px; }
+
+.grz-assume {
+  font-size: 12px; color: var(--ink-faint);
+  margin: 10px 0 0; max-width: 68ch;
+}
+
+/* Bands of a unit's ground on the board, oldest rest to newest. */
+.grz-bands {
+  display: flex; height: 8px; margin-top: 6px;
+  border: 1px solid var(--hairline);
+}
+.grz-bands span { display: block; height: 100%; }
+
+@media (max-width: 860px) {
+  .grz-strip-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

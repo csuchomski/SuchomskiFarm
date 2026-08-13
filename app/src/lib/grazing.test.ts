@@ -31,6 +31,8 @@ const paddock = (over: Partial<Paddock> & { id: string; name: string }): Paddock
   acresMeasured: 1.91,
   acresGrazable: 1.91,
   unitType: "permanent",
+  sweepHeadingDeg: null,
+  sweepLengthFt: null,
   seedingDate: null,
   fenceType: null,
   ecologicalSite: null,
@@ -60,7 +62,9 @@ const event = (over: Partial<GrazingEvent> & { id: string; paddockId: string }):
   notes: null,
   latitude: null,
   longitude: null,
-  boundaryOverride: null,
+  sweptFrom: null,
+  sweptTo: null,
+  grazedShape: null,
   ...over,
 });
 

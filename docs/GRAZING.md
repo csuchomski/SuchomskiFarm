@@ -3,11 +3,71 @@
 An eight-step module, built one reviewable step at a time. This file is the
 running record of what was decided and what is still open.
 
-**Steps 1 and 2 are done.** Migrations 036 (schema), 037 (this farm's seed)
-and 038 (the move functions) are run. Herd → Grazing shows the paddock board
-and logs a move.
+**Steps 1 and 2 are done, and step 2 has been rebuilt for strip grazing.**
+Migrations 036–039 are run. Herd → Grazing shows the paddock board and logs a
+move as a *strip*: where the wire went along the unit's fixed sweep.
 
 Step 3 — the rotation timeline and hay entry — is next and not started.
+
+## The strip-grazing redesign
+
+The farm strip-grazes: a wire moved daily, sometimes twice, cutting a fresh
+strip out of one of the five semi-permanent units. Widths follow the forage,
+so they differ every time, and next pass the wire lands nowhere near where it
+landed last pass.
+
+**The model built in 036/038 could not hold that.** It treats a paddock as a
+place with a rest clock — right for five fixed units, wrong for a strip. A
+strip exists for a day, never recurs, and has no rest of its own. Making each
+one a paddock row would mean two hundred rows a season, each grazed once,
+each with a meaningless rest figure, and no way to compare passes.
+
+### What made it tractable
+
+A fact about the farm, not about software: **each unit is swept in one fixed
+direction.** P1 east to west, P2 west to east, P3 east to west, P4 west to
+east, P5 south to north — a serpentine that leaves the mob where the next
+unit begins.
+
+With a fixed heading the wire is a single number, and everything follows:
+
+- **Capture is one scalar**, not a drawn polygon. A slider, or two taps.
+- **The strip's acres are a fraction of the unit's**, so this works today
+  with no coordinates and no map. Geometry is welcome when the KML arrives —
+  it makes the map drawable — but it is no longer load-bearing.
+- **Rest is a one-dimensional interval query.** Strips from different passes
+  overlap however they like, and it does not matter, because the question is
+  asked of a *position* rather than of a unit.
+
+An earlier sketch proposed a 2-D grid over the farm for this. The fixed
+sweep makes that unnecessary — the grid was over-engineered for what the farm
+actually does.
+
+### Decisions worth knowing
+
+**Readiness is measured from the start of the sweep, not the last strip.**
+With a fixed heading the mob re-enters where it entered last time, so the
+ground that governs readiness is the ground grazed *first* — rested longest.
+Measuring from the last strip would hold a unit back for weeks after it was
+fit to graze. `readinessDays` does this; the board shows it.
+
+**A unit's ground is bands, not a number.** Boundaries come from where wires
+have actually been, so nothing is bucketed onto an arbitrary grid, and a unit
+part-grazed shows as part-grazed.
+
+**A move into the same unit is now normal.** 038 refused it. Under strip
+grazing it is the daily job, so it is refused only when the strip fails to
+advance — which is the case that means a number was mistyped.
+
+**Sizing the strip is the feature.** Acres, feed in hours, density and width
+in feet update as the wire moves, with "half a day" and "a day" as one-tap
+presets computed from the plan's own figures. Feed reads in hours because a
+strip can be half a day.
+
+**The forage assumptions are stated on screen and belong in the plan.** Until
+the plan editor exists they are constants in `Grazing.tsx` with a comment
+saying so, shown beside every figure they produce so a forecast is never
+mistaken for a measurement.
 
 ## What it is for
 

@@ -40,6 +40,13 @@ export interface Paddock {
   acresMeasured: number | null;
   acresGrazable: number | null;
   unitType: PaddockUnitType;
+  /** Compass bearing the mob advances toward: 0 N, 90 E, 180 S, 270 W. Null
+   * for a unit that isn't strip-grazed — it is then taken whole. */
+  sweepHeadingDeg: number | null;
+  /** How far across the unit along that heading. Optional: the arithmetic
+   * runs on fractions and acres without it, and it exists only so the app
+   * can say "the wire is 120 feet in". */
+  sweepLengthFt: number | null;
   seedingDate: string | null;
   fenceType: string | null;
   /** Optional inventory: useful, not named by the 2025 standard, and kept
@@ -384,9 +391,15 @@ export interface GrazingEvent {
   notes: string | null;
   latitude: number | null;
   longitude: number | null;
-  /** A virtual-fence unit is a different shape each time it is grazed. This
-   * is that grazing's actual boundary, without redefining the paddock. */
-  boundaryOverride: unknown | null;
+  /** Where along the unit's sweep this strip ran, as fractions. Null on both
+   * means the whole unit was taken at once — still a legitimate move, and
+   * what every event written before strip grazing is. */
+  sweptFrom: number | null;
+  sweptTo: number | null;
+  /** The ground actually grazed, when it is known. For a strip the shape is
+   * derivable from the unit boundary, the heading and the fractions, so this
+   * stays empty until there is a boundary to derive it from. */
+  grazedShape: unknown | null;
 }
 
 // ─── monitoring ────────────────────────────────────────────────────────
@@ -491,7 +504,7 @@ export async function fetchPaddocks(farmId: string): Promise<Paddock[]> {
   const { data, error } = await herdSchema()
     .from("paddocks")
     .select(
-      "id, name, code, acres_measured, acres_grazable, unit_type, seeding_date, fence_type, ecological_site, soil_map_unit, noxious_species, noxious_extent, sensitive_riparian, sensitive_wetland, sensitive_habitat, sensitive_karst, sensitive_high_erosion, heavy_use_notes, boundary, active, notes",
+      "id, name, code, acres_measured, acres_grazable, unit_type, sweep_heading_deg, sweep_length_ft, seeding_date, fence_type, ecological_site, soil_map_unit, noxious_species, noxious_extent, sensitive_riparian, sensitive_wetland, sensitive_habitat, sensitive_karst, sensitive_high_erosion, heavy_use_notes, boundary, active, notes",
     )
     .eq("farm_id", farmId)
     .is("deleted_at", null)
@@ -505,6 +518,8 @@ export async function fetchPaddocks(farmId: string): Promise<Paddock[]> {
     acresMeasured: num(r.acres_measured),
     acresGrazable: num(r.acres_grazable),
     unitType: r.unit_type as PaddockUnitType,
+    sweepHeadingDeg: num(r.sweep_heading_deg),
+    sweepLengthFt: num(r.sweep_length_ft),
     seedingDate: (r.seeding_date as string) ?? null,
     fenceType: (r.fence_type as string) ?? null,
     ecologicalSite: (r.ecological_site as string) ?? null,
@@ -550,7 +565,7 @@ export async function fetchGrazingEvents(farmId: string): Promise<GrazingEvent[]
   const { data, error } = await herdSchema()
     .from("grazing_events")
     .select(
-      "id, paddock_id, group_id, entered_at, exited_at, head_count, avg_weight_lb, forage_height_in_entry, residual_height_in_exit, utilization_pct, soil_moisture, supplemental_feed, weather_notes, notes, latitude, longitude, boundary_override",
+      "id, paddock_id, group_id, entered_at, exited_at, head_count, avg_weight_lb, forage_height_in_entry, residual_height_in_exit, utilization_pct, soil_moisture, supplemental_feed, weather_notes, notes, latitude, longitude, swept_from, swept_to, grazed_shape",
     )
     .eq("farm_id", farmId)
     .is("deleted_at", null)
@@ -574,7 +589,9 @@ export async function fetchGrazingEvents(farmId: string): Promise<GrazingEvent[]
     notes: (r.notes as string) ?? null,
     latitude: num(r.latitude),
     longitude: num(r.longitude),
-    boundaryOverride: r.boundary_override ?? null,
+    sweptFrom: num(r.swept_from),
+    sweptTo: num(r.swept_to),
+    grazedShape: r.grazed_shape ?? null,
   }));
 }
 
@@ -888,6 +905,10 @@ export interface MoveDraft {
   /** These describe the paddock being *left*, not the one being entered. */
   residualHeightInExit: number | null;
   utilizationPct: number | null;
+  /** Where the wire went, as fractions along the unit's sweep. Null on both
+   * for a unit taken whole. */
+  sweptFrom: number | null;
+  sweptTo: number | null;
 }
 
 /**
@@ -913,6 +934,8 @@ export async function logMove(farmId: string, draft: MoveDraft): Promise<string>
     p_longitude: draft.longitude,
     p_residual_height_in_exit: draft.residualHeightInExit,
     p_utilization_pct: draft.utilizationPct,
+    p_swept_from: draft.sweptFrom,
+    p_swept_to: draft.sweptTo,
   });
   if (error) throw new Error(error.message);
   return data as string;
@@ -949,4 +972,250 @@ export function prefillFrom(
     avgWeightLb: avgWeightLb ?? last?.avgWeightLb ?? null,
     forageHeightInEntry: null,
   };
+}
+
+// ─── strips ────────────────────────────────────────────────────────────
+//
+// A unit swept in one fixed direction turns the wire into a single number:
+// how far along the sweep it sits. A strip is the interval between the last
+// wire and this one, and everything below is arithmetic on those intervals.
+//
+// Two consequences worth keeping in view. The strip's acres are a *fraction*
+// of the unit's acres, so all of this works with no coordinates and no map.
+// And "when was this ground last grazed" is a one-dimensional interval
+// query, so strips from different passes may overlap however they like —
+// which is the case the old paddock-with-a-rest-clock model could not hold.
+
+/** Which way the mob advances, in words, for a heading in degrees. */
+export function sweepInWords(headingDeg: number | null): string | null {
+  if (headingDeg === null) return null;
+  const from = (headingDeg + 180) % 360;
+  const name = (d: number) => {
+    const compass = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
+    return compass[Math.round(((d % 360) + 360) % 360 / 45) % 8];
+  };
+  return `${name(from)} to ${name(headingDeg)}`;
+}
+
+/** Is this unit strip-grazed, or taken whole? */
+export const isSwept = (p: Paddock): boolean => p.sweepHeadingDeg !== null;
+
+/** The acres a strip covers — a fraction of the unit's grazable acres. Null
+ * when either the fractions or the acres are unknown, rather than guessed. */
+export function stripAcres(event: GrazingEvent, paddock: Paddock): number | null {
+  const acres = paddock.acresGrazable ?? paddock.acresMeasured;
+  if (acres === null) return null;
+  if (event.sweptFrom === null || event.sweptTo === null) return acres; // whole unit
+  return (event.sweptTo - event.sweptFrom) * acres;
+}
+
+/** Feet along the sweep, when the unit's length is on file. */
+export function stripWidthFt(event: GrazingEvent, paddock: Paddock): number | null {
+  if (paddock.sweepLengthFt === null || event.sweptFrom === null || event.sweptTo === null) return null;
+  return (event.sweptTo - event.sweptFrom) * paddock.sweepLengthFt;
+}
+
+/**
+ * The strips of the pass currently under way in a unit, oldest first.
+ *
+ * A pass is a run of strips that advance without going back. When the wire
+ * returns to the start, that is a new pass — so the run is found by walking
+ * backwards from the newest strip while each one begins where the last
+ * ended, and stopping at the break.
+ */
+export function currentPass(paddockId: string, events: GrazingEvent[]): GrazingEvent[] {
+  const strips = events
+    .filter((e) => e.paddockId === paddockId && e.sweptFrom !== null)
+    .sort((a, b) => a.enteredAt.localeCompare(b.enteredAt));
+  if (strips.length === 0) return [];
+
+  const run: GrazingEvent[] = [strips[strips.length - 1]];
+  for (let i = strips.length - 2; i >= 0; i--) {
+    // Tolerance because a wire is placed by eye and recorded to two places.
+    if (strips[i].sweptTo! <= run[0].sweptFrom! + 0.001) run.unshift(strips[i]);
+    else break;
+  }
+  return run;
+}
+
+/** How much of the unit the current pass has taken, 0–1. */
+export function sweptSoFar(paddockId: string, events: GrazingEvent[]): number {
+  const pass = currentPass(paddockId, events);
+  return pass.length === 0 ? 0 : Math.max(...pass.map((e) => e.sweptTo ?? 0));
+}
+
+/**
+ * When a position along the sweep was last grazed.
+ *
+ * The whole point of the redesign: ask the ground, not the unit. Intervals
+ * from different passes overlap freely and it does not matter, because the
+ * question is answered per position. Null means never.
+ */
+export function lastGrazedAt(
+  paddockId: string,
+  position: number,
+  events: GrazingEvent[],
+): string | null {
+  let latest: string | null = null;
+  for (const e of events) {
+    if (e.paddockId !== paddockId) continue;
+    const covers =
+      e.sweptFrom === null || e.sweptTo === null
+        ? true // a whole-unit grazing covers every position
+        : position >= e.sweptFrom && position <= e.sweptTo;
+    if (!covers) continue;
+    const when = e.exitedAt ?? e.enteredAt;
+    if (latest === null || when > latest) latest = when;
+  }
+  return latest;
+}
+
+export interface SweepBand {
+  from: number;
+  to: number;
+  /** Null when this stretch has never been grazed. */
+  lastGrazed: string | null;
+  restDays: number | null;
+  /** True while the mob is standing on it. */
+  occupied: boolean;
+}
+
+/**
+ * The unit's ground, cut into bands at every wire position that has ever
+ * been used in it, each band carrying its own rest.
+ *
+ * Bands rather than a fixed grid: the only places rest can change are where
+ * a wire has been, so the boundaries come from the data instead of from an
+ * arbitrary cell size. A unit grazed whole is one band.
+ */
+export function sweepBands(
+  paddockId: string,
+  events: GrazingEvent[],
+  nowIso: string,
+): SweepBand[] {
+  const mine = events.filter((e) => e.paddockId === paddockId);
+  if (mine.length === 0) return [{ from: 0, to: 1, lastGrazed: null, restDays: null, occupied: false }];
+
+  const cuts = new Set<number>([0, 1]);
+  for (const e of mine) {
+    if (e.sweptFrom !== null) cuts.add(e.sweptFrom);
+    if (e.sweptTo !== null) cuts.add(e.sweptTo);
+  }
+  const edges = [...cuts].sort((a, b) => a - b);
+
+  const bands: SweepBand[] = [];
+  for (let i = 0; i < edges.length - 1; i++) {
+    const from = edges[i];
+    const to = edges[i + 1];
+    if (to - from < 0.0005) continue;
+    const mid = (from + to) / 2;
+
+    const lastGrazed = lastGrazedAt(paddockId, mid, mine);
+    const occupied = mine.some(
+      (e) =>
+        e.exitedAt === null &&
+        (e.sweptFrom === null || (mid >= e.sweptFrom && mid <= (e.sweptTo ?? 1))),
+    );
+
+    bands.push({
+      from,
+      to,
+      lastGrazed,
+      restDays: lastGrazed === null ? null : daysBetween(lastGrazed, nowIso),
+      occupied,
+    });
+  }
+  return bands;
+}
+
+/**
+ * How ready a unit is for the next pass.
+ *
+ * Not the days since it was last touched. With a fixed sweep the mob
+ * re-enters where it entered last time, so the ground that decides
+ * readiness is the ground at the *start* of the sweep — grazed first last
+ * pass, and rested longest since. Measuring from the last strip instead
+ * would hold a unit back for weeks after it was already fit to graze.
+ */
+export function readinessDays(
+  paddockId: string,
+  events: GrazingEvent[],
+  nowIso: string,
+): number | null {
+  const at = lastGrazedAt(paddockId, 0.02, events);
+  return at === null ? null : daysBetween(at, nowIso);
+}
+
+export interface StripPlan {
+  acres: number;
+  /** At the plan's assumptions. Hours, because strips can be half a day. */
+  hoursOfFeed: number | null;
+  lbPerAcre: number | null;
+  widthFt: number | null;
+}
+
+export interface ForageAssumptions {
+  standingLbDmPerAcre: number;
+  utilizationPct: number;
+  intakePctBodyweight: number;
+}
+
+/**
+ * What a strip of this width would be — the arithmetic behind sizing the
+ * wire before the mob is let in.
+ *
+ * Every input is the farm's: standing forage, utilization and intake come
+ * from the plan, head and weight from the animal records. Nothing here is a
+ * constant of this app's choosing, and the result is a forecast rather than
+ * a measurement.
+ */
+export function planStrip(input: {
+  paddock: Paddock;
+  from: number;
+  to: number;
+  headCount: number | null;
+  avgWeightLb: number | null;
+  assumptions: ForageAssumptions;
+}): StripPlan | null {
+  const { paddock, from, to, headCount, avgWeightLb, assumptions } = input;
+  const unitAcres = paddock.acresGrazable ?? paddock.acresMeasured;
+  if (unitAcres === null || to <= from) return null;
+
+  const acres = (to - from) * unitAcres;
+  const usablePerAcre = assumptions.standingLbDmPerAcre * (assumptions.utilizationPct / 100);
+  const dailyIntake =
+    headCount === null || avgWeightLb === null
+      ? null
+      : headCount * avgWeightLb * (assumptions.intakePctBodyweight / 100);
+
+  return {
+    acres,
+    hoursOfFeed: dailyIntake === null || dailyIntake <= 0 ? null : (acres * usablePerAcre * 24) / dailyIntake,
+    lbPerAcre: headCount === null || avgWeightLb === null ? null : (headCount * avgWeightLb) / acres,
+    widthFt: paddock.sweepLengthFt === null ? null : (to - from) * paddock.sweepLengthFt,
+  };
+}
+
+/**
+ * The width that would hold them for a given number of hours — the question
+ * asked backwards, which is how the wire actually gets placed.
+ */
+export function widthForHours(input: {
+  paddock: Paddock;
+  hours: number;
+  headCount: number | null;
+  avgWeightLb: number | null;
+  assumptions: ForageAssumptions;
+}): number | null {
+  const { paddock, hours, headCount, avgWeightLb, assumptions } = input;
+  const unitAcres = paddock.acresGrazable ?? paddock.acresMeasured;
+  if (unitAcres === null || unitAcres <= 0) return null;
+  if (headCount === null || avgWeightLb === null) return null;
+
+  const usablePerAcre = assumptions.standingLbDmPerAcre * (assumptions.utilizationPct / 100);
+  if (usablePerAcre <= 0) return null;
+
+  const dailyIntake = headCount * avgWeightLb * (assumptions.intakePctBodyweight / 100);
+  const acres = (dailyIntake * (hours / 24)) / usablePerAcre;
+  return Math.min(1, acres / unitAcres);
 }

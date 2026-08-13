@@ -241,14 +241,103 @@ be right.
 
 ### Pasture moves
 
-A record of which group was on which pasture, and when. Nothing in the schema
-covers it — no pasture, paddock or grazing table exists — so this is new
-tables rather than a page over something already modelled.
+**Built.** It became the whole CPS 528 grazing module — migrations 036–042,
+nine screens under Herd. See `docs/GRAZING.md`. Left here rather than deleted
+because the entry is where the trail starts.
 
-Detail promised. Worth asking for when it comes: whether a move is recorded
-against a group or each animal, whether rest days between grazings need to be
-computed, and whether it should tie to the withdrawal tracking that already
-exists for treated animals.
+## Requested 2026-08-13, after seeing the shipped move flow
+
+### Redo logging a move: one page, and a back line you can set
+
+The ask, close to verbatim:
+
+> I want logging a move to be redone so everything is on one page. I want to
+> be able to tell you my starting point (the back line) and then set the new
+> line every day (the line placed the move before then becomes the back
+> line). There may be times that I cut hay and skip a section of a paddock or
+> a paddock entirely in which case I'd need to be able to set a new back line
+> again so include that functionality. Using the map, the amount of pasture
+> should automatically be calculated.
+
+Raised against the prototype at
+`https://claude.ai/code/artifact/0ec1a04d-55b0-4d82-89b9-a5569ab4c177`, which
+already showed this: map and readout side by side on one screen, the wire
+dragged on the drawing, and the back fence as its own drawn line.
+
+**Why it did not get built that way.** The prototype was drawn before any
+geometry existed — no KML yet — so step 2 shipped the wire as a percentage on
+the board, which was the only thing that could work at the time. Its own idea
+03 said "the map screen, brought forward… it becomes the primary way to log a
+move rather than a nice extra", and when the KML did arrive (040) the map was
+built as step 4 beside the board instead of replacing it. Idea 05, "the back
+fence deserves its own record", was never built at all. The build order got
+followed and the prototype got treated as an illustration.
+
+#### What is actually missing
+
+**`swept_from` is derived, never settable.** Today the app reads it off the
+previous open event's `swept_to`. That is right for the ordinary case and
+has no answer for the ones raised here — starting a pass part-way in, skipping
+a section, or coming back after hay. The column already exists and takes any
+value; it is the UI and `log_grazing_move` that assume continuity. The
+function refuses `p_swept_from` behind the last `swept_to`, which is the
+right default and must become overridable rather than absolute.
+
+**Skipped ground needs no new model, and that is worth knowing.** Rest is
+already asked of a *position*, not a unit, so ground the wire jumped over is
+simply ground with no covering interval this pass and dates from whenever it
+was last covered. Nothing to add. The only new thing is being able to say the
+jump happened.
+
+**A partial hay cutting has nowhere to go.** `forage_removals` is whole-unit:
+paddock, date, yield. "I cut the east third" cannot be recorded, and it is
+one of the two cases named in the ask. This wants `swept_from`/`swept_to` on
+`forage_removals` too, at which point `lastDefoliatedAt` stops treating a
+cutting as covering every position and starts treating it as an interval like
+any other — a genuine simplification, since the special case disappears.
+
+#### The acreage is wrong today, and not slightly
+
+This is the part of the ask that is a correctness fix rather than a
+convenience. `stripAcres` computes `(to - from) × unit acres`, which assumes a
+unit's area is spread evenly along its sweep. That is exact for a rectangle
+and wrong for anything else. Measured against the drawn boundaries from 040:
+
+| Unit | first 10% | middle 10% | last 10% |
+|---|---|---|---|
+| Paddock 1 | −24% | +10% | −14% |
+| Paddock 2 | −5% | +0.5% | +0.5% |
+| Paddock 3 | +0.5% | +0.5% | −5% |
+| Paddock 4 | −16% | **+30%** | **−94%** |
+| Paddock 5 | +18% | 0% | −18% |
+
+Paddock 4's last tenth is 0.014 acres of ground being reported as 0.225 — it
+tapers to a corner, and the arithmetic cannot see that. Paddocks 2 and 3 are
+near enough rectangles to be fine, which is why nothing looked wrong.
+
+It propagates: hours of feed, lb/acre density and the forage balance all
+divide by that acreage, so a strip that holds them ninety minutes can read as
+a day.
+
+**The fix is already written.** `sweepSlice` returns the real polygon and the
+shoelace area of it is the honest figure; `pasture-map.test.ts` already
+computes exactly that to check the slicing. It needs lifting out of the test
+into `lib/`, and `stripAcres` needs to use it whenever a boundary exists and
+fall back to the fraction only when one does not.
+
+#### Shape of the work
+
+One page replacing two. The board's move form and the map's wire placement
+are the same act done twice, and the readout — acres, feed, density, width —
+is identical on both. Keep the gate readings (forage height, residual out,
+soil) on the same page rather than losing them; they were the reason the
+board's form existed.
+
+Worth settling first: whether setting a back line is its own recorded act
+with its own date, or just a field on the next move. The prototype argued the
+former — "one line per move… it makes the rest map honest" — and the ask does
+not say. It matters, because a back line moved on Tuesday for hay and a move
+logged on Friday are two different days of rest for the ground between them.
 
 ## Carried over from earlier sessions
 

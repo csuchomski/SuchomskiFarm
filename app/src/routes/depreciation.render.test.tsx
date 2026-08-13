@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import type { RealAnimal } from "../lib/herd";
 import type { Valuation } from "../lib/depreciation";
@@ -79,7 +79,23 @@ vi.mock("../lib/milkings", async (importOriginal) => ({
   fetchProductionRecords: vi.fn(async () => []),
 }));
 
+/**
+ * The page reads today's date, and a carrying value falls by about a dollar a
+ * day — so a test asserting a figure is asserting a figure *on a date*. The
+ * clock is pinned to the day migration 035 was rehearsed, which is what makes
+ * "the app agrees with what the SQL wrote" a claim that keeps meaning the
+ * same thing tomorrow.
+ *
+ * Only Date is faked. Faking timers wholesale stalls `waitFor`, which never
+ * advances and hangs the test.
+ */
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-08-10T12:00:00Z"));
+});
+
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   valuations.length = 0;
   marked.mockClear();
@@ -138,7 +154,7 @@ describe("Herd depreciation", () => {
     const patienceRow = rows.find((r) => r.textContent?.includes("Patience"))!;
     const veraRow = rows.find((r) => r.textContent?.includes("Vera"))!;
     // Same figure the SQL roll wrote in the migration rehearsal.
-    expect(patienceRow.textContent).toContain("$1,424");
+    expect(patienceRow.textContent).toContain("$1,424.58");
     expect(veraRow.textContent).toContain("$2,200.00");
   });
 

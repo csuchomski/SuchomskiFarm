@@ -83,7 +83,88 @@ Worth knowing before building:
 ## Requested 2026-08-10
 
 Six asks, recorded as given. Five are built — see "Closed 2026-08-10" below.
-What is left open is the tax half of depreciation, and pasture moves.
+What is left open is the tax half of depreciation, beef depreciation, and
+pasture moves.
+
+### Beef depreciation, from a management perspective
+
+The other side of the herd. The dairy model shipped deliberately excluding
+beef cows — every assumption in it is a dairy figure — and the page says so
+rather than leaving a silent gap. This is the ask to give the beef side its
+own.
+
+The shape of the arithmetic is the same:
+
+```
+(replacement cost of a bred heifer − cull value) ÷ productive lifetime
+```
+
+**Four things make it a different model, not the same one with new numbers:**
+
+1. **The lifetime is much longer.** A beef cow commonly stays for 5–6 calves,
+   often 8–10 years, against 3.5 lactations on the dairy side. Running the
+   beef herd through the dairy default would roughly double her annual charge.
+   This alone is why it needs its own assumptions rather than sharing.
+
+2. **The per-unit denominator isn't hundredweight of milk.** Beef sells a
+   weaned calf, so the figures that change decisions are per cow exposed, per
+   weaned calf, and per hundredweight of weaned calf. The dairy page's $/cwt
+   column has no meaning here and should not be reused with a different label.
+
+3. **Weaning percentage belongs in the denominator, and is the thing most
+   likely to be left out.** A cow that doesn't wean a calf still depreciates,
+   so cost per weaned calf is the annual charge divided by the weaning rate —
+   at 90%, a $200 charge is $222 a weaned calf. This is the beef analogue of
+   the dairy sensitivity to yield, and it moves the number by more than most
+   people expect.
+
+4. **Raised replacements aren't priced, they're developed.** A raised beef
+   heifer's replacement cost is what it cost to carry her from weaning to her
+   first calf, not what a bred heifer sells for. Same arithmetic, different
+   input, and the farm has to say which one it means — the two can differ by
+   several hundred dollars and the answer changes whether raising or buying
+   looks better, which is one of the decisions this figure exists to inform.
+
+A refinement worth naming rather than building first: a cow that **dies** has
+no salvage, so a rigorous version nets expected death loss out of the cull
+value rather than assuming every cow leaves through the sale barn.
+
+#### What the code already does
+
+More than half of it. `carryingValueCents` and `enteredProduction` in
+`lib/depreciation.ts` are already beef-ready: her clock starts at the earlier
+of her first freshening and her first calving, and a beef cow has calvings
+and no lactations, so the decline curve and the cull-value floor need no
+change at all.
+
+What's missing is narrow:
+
+- A second set of assumptions. The current settings keys — `replacement_cost_
+  cents`, `cull_value_cents`, `productive_lifetime_lactations` — are
+  unsuffixed and implicitly dairy. The schema already has the pattern to
+  follow in `gestation_days_beef` / `gestation_days_dairy`, so this is a
+  migration that *moves* the existing values to a suffixed key as well as
+  adding the beef ones, not one that only adds.
+- Lifting `purpose in ('dairy','dual')` in `herd.mark_herd_values` and
+  `isHerdInventory`, so the roll picks the assumptions by her purpose instead
+  of skipping her.
+- A page, or a second section on the existing one. Worth deciding rather than
+  defaulting: the two herds share an arithmetic and share no denominator.
+
+#### What would sharpen it, when the data arrives
+
+- `herd.disposition_sale_details` carries `live_weight_lb`,
+  `price_per_cwt_cents` and `net_cents` — realised cull values. Empty today,
+  but once cows start leaving, the assumed cull value can be replaced by what
+  they actually brought, which is the single biggest improvement available.
+- `herd.weights` has a `weight_type` and no rows. Weaning weights are what a
+  per-hundredweight-of-calf figure needs.
+- `herd.calving_outcomes` (2 rows) gives calves born and how they turned out,
+  which is the numerator of a weaning rate that could be measured rather than
+  assumed.
+
+Scale, for context when this is built: two beef females on file, Martha and
+Abigail.
 
 ### Depreciation per cow — the tax half
 

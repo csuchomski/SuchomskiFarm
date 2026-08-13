@@ -355,6 +355,68 @@ it when it happens. **The back line is a field on the next move, not a
 separately dated act.** The move already carries the date, and that date is
 the only one that means anything.
 
+#### The morning, as described
+
+Given the same day, and the thing to build against:
+
+> When I go out in the morning, I'm going to move the cows. I want to track
+> the height of the pasture grass where I'm moving them to, you'll already
+> have the weight of all the cows and how much we're anticipating they eat
+> each day. Given that information, I'll drag the wire line forward and see
+> live acres, days of feed, and lb/acre. This will help me decide how much to
+> give them plus log my move. I want the UX to be seemless, efficient, and
+> easy. the back line will be the wire line i moved forward yesterday. I
+> don't need to pick the paddock, it should already know. Once I'm done with
+> a paddock, I should be able to move to the next paddock and the backline
+> should automatically move to the start of that paddock with the wire line
+> defaulting away from the backline so I can see it and drag it. If I cut
+> hay, i want that recorded so I know when it was and how much rest there's
+> been. given that I might have cut a paddock for hay, i want the option to
+> skip paddocks.
+
+Read as a checklist, most of it is arrangement rather than new machinery:
+
+- **Opens on the current paddock, no picking.** The mob's open event already
+  says where they are; the page should start there. Picking a unit becomes
+  the exception — "next paddock" or "skip" — not the first step.
+- **The back line is yesterday's wire**, already true in the data and already
+  what `swept_from` derives. What changes is that it becomes visible and
+  overridable rather than invisible and fixed.
+- **The wire defaults away from the back line.** A concrete requirement worth
+  keeping: at the start of a unit the two coincide, and a wire sitting on the
+  back line cannot be seen or grabbed. It needs to open at a day's width —
+  which is also the useful default — so there is something to drag.
+- **Days of feed, not hours.** The readout currently says `36h` under a day
+  and a half. The word used is days; `formatFeed` should follow.
+- **Head and weight without asking.** Per-animal weights live in
+  `herd.weights`, which is still empty, and intake comes from the plan. Both
+  need to exist before this reads as effortless rather than blank — see the
+  head-count defect below.
+
+#### Grass height is the one genuinely new thing
+
+"Track the height of the pasture grass where I'm moving them to" is a
+measurement the module already has a column for —
+`grazing_events.forage_height_in_entry` — but it is currently *recorded and
+never used*. The ask is for it to **drive** the figures: height taken at the
+gate this morning is what should set standing forage for today's strip.
+
+That needs a conversion the app does not have and must not invent: **pounds
+of dry matter per acre-inch**. It varies with sward, season and density, it
+is exactly the kind of agronomic number this module has refused to hardcode
+everywhere else, and it belongs in the plan beside `default_dmi_pct_bw`.
+
+Worth asking rather than assuming: whether the reading is a plate-meter
+figure, a stick, or an eye; and whether the farm already has a lb/acre-inch
+figure it trusts, or wants one from Extension. Until it has one, the honest
+behaviour is what the readout does today — fall back to the availability
+record and say the figure is not theirs.
+
+Note also the ordering this implies. Height is taken **before** the move, of
+the ground about to be opened, so on the one page it belongs above the wire,
+feeding it — not in an "everything below is optional" section after it, which
+is where the board's form puts it.
+
 #### The database already does this — checked, not assumed
 
 Both skips were tested against the live farm inside a rolled-back

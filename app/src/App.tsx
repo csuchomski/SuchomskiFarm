@@ -15,6 +15,7 @@ import DepreciationPage from "./routes/Depreciation";
 import GrazingPage from "./routes/Grazing";
 import RotationPage from "./routes/Rotation";
 import PastureMapPage from "./routes/PastureMap";
+import ForageBalancePage from "./routes/ForageBalance";
 import CalvingsPage from "./routes/Calvings";
 import StoreCustomers from "./routes/StoreCustomers";
 import StoreCustomerDetail from "./routes/StoreCustomerDetail";
@@ -65,6 +66,7 @@ export default function App() {
                 <Route path="/grazing" element={<GrazingPage />} />
                 <Route path="/grazing/rotation" element={<RotationPage />} />
                 <Route path="/grazing/map" element={<PastureMapPage />} />
+                <Route path="/grazing/balance" element={<ForageBalancePage />} />
                 <Route path="/store/products" element={<StoreProducts />} />
                 <Route path="/store/orders" element={<StoreOrders />} />
                 <Route path="/store/customers" element={<StoreCustomers />} />

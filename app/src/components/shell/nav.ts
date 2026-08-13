@@ -38,6 +38,7 @@ export const allGroups: NavGroup[] = [
       { label: "Grazing", to: "/grazing" },
       { label: "Rotation", to: "/grazing/rotation" },
       { label: "Pasture map", to: "/grazing/map" },
+      { label: "Forage balance", to: "/grazing/balance" },
       { label: "Depreciation", to: "/depreciation" },
       { label: "Health" },
     ],

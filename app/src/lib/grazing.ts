@@ -1330,6 +1330,147 @@ export async function fetchInfrastructure(farmId: string): Promise<Infrastructur
   }));
 }
 
+// ─── supply and demand ─────────────────────────────────────────────────
+
+export async function fetchForageAvailability(farmId: string): Promise<ForageAvailability[]> {
+  const { data, error } = await herdSchema()
+    .from("forage_availability")
+    .select(
+      "id, plan_id, paddock_id, period_start, period_end, period_label, lb_dm_per_acre, aum, species_mix, quality_note, is_planned, basis, notes",
+    )
+    .eq("farm_id", farmId)
+    .is("deleted_at", null)
+    .order("period_start");
+  if (error) throw new Error(`herd.forage_availability: ${error.message}`);
+
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    planId: (r.plan_id as string) ?? null,
+    paddockId: r.paddock_id as string,
+    periodStart: r.period_start as string,
+    periodEnd: r.period_end as string,
+    periodLabel: (r.period_label as string) ?? null,
+    lbDmPerAcre: num(r.lb_dm_per_acre),
+    aum: num(r.aum),
+    speciesMix: (r.species_mix as string) ?? null,
+    qualityNote: (r.quality_note as string) ?? null,
+    isPlanned: Boolean(r.is_planned),
+    basis: (r.basis as AvailabilityBasis) ?? null,
+    notes: (r.notes as string) ?? null,
+  }));
+}
+
+export async function fetchForageDemand(farmId: string): Promise<ForageDemand[]> {
+  const { data, error } = await herdSchema()
+    .from("forage_demand")
+    .select(
+      "id, plan_id, paddock_id, group_id, kind, period_start, period_end, period_label, head_count, animal_class, avg_weight_lb, dmi_pct_bw, demand_lb_dm, demand_aum, notes",
+    )
+    .eq("farm_id", farmId)
+    .is("deleted_at", null)
+    .order("period_start");
+  if (error) throw new Error(`herd.forage_demand: ${error.message}`);
+
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    planId: (r.plan_id as string) ?? null,
+    paddockId: (r.paddock_id as string) ?? null,
+    groupId: (r.group_id as string) ?? null,
+    kind: r.kind as DemandKind,
+    periodStart: r.period_start as string,
+    periodEnd: r.period_end as string,
+    periodLabel: (r.period_label as string) ?? null,
+    headCount: num(r.head_count),
+    animalClass: (r.animal_class as string) ?? null,
+    avgWeightLb: num(r.avg_weight_lb),
+    dmiPctBw: num(r.dmi_pct_bw),
+    demandLbDm: num(r.demand_lb_dm),
+    demandAum: num(r.demand_aum),
+    notes: (r.notes as string) ?? null,
+  }));
+}
+
+export interface AvailabilityDraft {
+  paddockId: string;
+  periodStart: string;
+  periodEnd: string;
+  periodLabel: string;
+  lbDmPerAcre: number | null;
+  aum: number | null;
+  speciesMix: string;
+  qualityNote: string;
+  /** A projection shown as a measurement is a lie a reviewer will catch, so
+   * this is asked for rather than assumed. */
+  isPlanned: boolean;
+  basis: AvailabilityBasis | null;
+  notes: string;
+}
+
+export async function recordAvailability(farmId: string, draft: AvailabilityDraft): Promise<string> {
+  const { data, error } = await herdSchema()
+    .from("forage_availability")
+    .insert({
+      farm_id: farmId,
+      paddock_id: draft.paddockId,
+      period_start: draft.periodStart,
+      period_end: draft.periodEnd,
+      period_label: draft.periodLabel.trim() || null,
+      lb_dm_per_acre: draft.lbDmPerAcre,
+      aum: draft.aum,
+      species_mix: draft.speciesMix.trim() || null,
+      quality_note: draft.qualityNote.trim() || null,
+      is_planned: draft.isPlanned,
+      basis: draft.basis,
+      notes: draft.notes.trim(),
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return (data as { id: string }).id;
+}
+
+export interface DemandDraft {
+  /** Null means against the whole farm — the honest shape for wildlife. */
+  paddockId: string | null;
+  groupId: string | null;
+  kind: DemandKind;
+  periodStart: string;
+  periodEnd: string;
+  periodLabel: string;
+  headCount: number | null;
+  animalClass: string;
+  avgWeightLb: number | null;
+  dmiPctBw: number | null;
+  demandLbDm: number | null;
+  demandAum: number | null;
+  notes: string;
+}
+
+export async function recordDemand(farmId: string, draft: DemandDraft): Promise<string> {
+  const { data, error } = await herdSchema()
+    .from("forage_demand")
+    .insert({
+      farm_id: farmId,
+      paddock_id: draft.paddockId,
+      group_id: draft.groupId,
+      kind: draft.kind,
+      period_start: draft.periodStart,
+      period_end: draft.periodEnd,
+      period_label: draft.periodLabel.trim() || null,
+      head_count: draft.headCount,
+      animal_class: draft.animalClass.trim() || null,
+      avg_weight_lb: draft.avgWeightLb,
+      dmi_pct_bw: draft.dmiPctBw,
+      demand_lb_dm: draft.demandLbDm,
+      demand_aum: draft.demandAum,
+      notes: draft.notes.trim(),
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return (data as { id: string }).id;
+}
+
 // ─── hay off the units ─────────────────────────────────────────────────
 
 export async function fetchForageRemovals(farmId: string): Promise<ForageRemoval[]> {

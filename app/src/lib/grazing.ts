@@ -1,4 +1,5 @@
 import { herdSchema } from "./supabase";
+import { asPolygonRing, frameFor, sliceAcres, toLocal } from "./pasture-map";
 
 /**
  * Grazing management — the types and reads. Migration 036.
@@ -47,6 +48,9 @@ export interface Paddock {
    * runs on fractions and acres without it, and it exists only so the app
    * can say "the wire is 120 feet in". */
   sweepLengthFt: number | null;
+  /** Where this unit falls in the round, 1 first, wrapping. Null means it is
+   * not part of the rotation. */
+  rotationOrder: number | null;
   seedingDate: string | null;
   fenceType: string | null;
   /** Optional inventory: useful, not named by the 2025 standard, and kept
@@ -203,6 +207,10 @@ export interface GrazingPlan {
    * into demand. A default any demand row may override — a number somebody
    * should be able to argue with, not a constant this app asserts. */
   defaultDmiPctBw: number | null;
+  /** Pounds of dry matter per acre-inch of standing sward, for turning a
+   * height reading into forage. The farm's own figure — this app must never
+   * supply one. */
+  lbDmPerAcreInch: number | null;
   active: boolean;
   notes: string | null;
 }
@@ -504,7 +512,7 @@ export async function fetchPaddocks(farmId: string): Promise<Paddock[]> {
   const { data, error } = await herdSchema()
     .from("paddocks")
     .select(
-      "id, name, code, acres_measured, acres_grazable, unit_type, sweep_heading_deg, sweep_length_ft, seeding_date, fence_type, ecological_site, soil_map_unit, noxious_species, noxious_extent, sensitive_riparian, sensitive_wetland, sensitive_habitat, sensitive_karst, sensitive_high_erosion, heavy_use_notes, boundary, active, notes",
+      "id, name, code, acres_measured, acres_grazable, unit_type, sweep_heading_deg, sweep_length_ft, rotation_order, seeding_date, fence_type, ecological_site, soil_map_unit, noxious_species, noxious_extent, sensitive_riparian, sensitive_wetland, sensitive_habitat, sensitive_karst, sensitive_high_erosion, heavy_use_notes, boundary, active, notes",
     )
     .eq("farm_id", farmId)
     .is("deleted_at", null)
@@ -520,6 +528,7 @@ export async function fetchPaddocks(farmId: string): Promise<Paddock[]> {
     unitType: r.unit_type as PaddockUnitType,
     sweepHeadingDeg: num(r.sweep_heading_deg),
     sweepLengthFt: num(r.sweep_length_ft),
+    rotationOrder: num(r.rotation_order),
     seedingDate: (r.seeding_date as string) ?? null,
     fenceType: (r.fence_type as string) ?? null,
     ecologicalSite: (r.ecological_site as string) ?? null,
@@ -630,7 +639,7 @@ export async function fetchActivePlan(farmId: string): Promise<GrazingPlan | nul
   const { data, error } = await herdSchema()
     .from("grazing_plans")
     .select(
-      "id, name, period_start, period_end, contract_number, tract_number, field_ids, long_term_goals, immediate_objectives, benchmark_stocking_rate_aum_per_acre, monitoring_cadence_kind, monitoring_cadence_value, default_dmi_pct_bw, active, notes",
+      "id, name, period_start, period_end, contract_number, tract_number, field_ids, long_term_goals, immediate_objectives, benchmark_stocking_rate_aum_per_acre, monitoring_cadence_kind, monitoring_cadence_value, default_dmi_pct_bw, lb_dm_per_acre_inch, active, notes",
     )
     .eq("farm_id", farmId)
     .eq("active", true)
@@ -654,6 +663,7 @@ export async function fetchActivePlan(farmId: string): Promise<GrazingPlan | nul
     monitoringCadenceKind: r.monitoring_cadence_kind as MonitoringCadenceKind,
     monitoringCadenceValue: num(r.monitoring_cadence_value),
     defaultDmiPctBw: num(r.default_dmi_pct_bw),
+    lbDmPerAcreInch: num(r.lb_dm_per_acre_inch),
     active: Boolean(r.active),
     notes: (r.notes as string) ?? null,
   };
@@ -1028,13 +1038,55 @@ export function sweepInWords(headingDeg: number | null): string | null {
 /** Is this unit strip-grazed, or taken whole? */
 export const isSwept = (p: Paddock): boolean => p.sweepHeadingDeg !== null;
 
-/** The acres a strip covers — a fraction of the unit's grazable acres. Null
- * when either the fractions or the acres are unknown, rather than guessed. */
+/**
+ * The acres a strip covers.
+ *
+ * **Measured off the drawn boundary wherever there is one.** The obvious
+ * shortcut — `(to − from) × unit acres` — assumes a unit's area is spread
+ * evenly along its sweep. That is exact for a rectangle and wrong for
+ * anything else: against this farm's own boundaries it was out by up to 24%
+ * on Paddock 1, and by 94% on the last tenth of Paddock 4, which tapers to a
+ * corner the arithmetic cannot see. Paddocks 2 and 3 are near enough
+ * rectangles that nothing ever looked wrong.
+ *
+ * It is not only the acreage that was wrong. Hours of feed, stock density and
+ * the forage balance all divide by this, so a strip that would hold them
+ * ninety minutes could read as a day.
+ *
+ * The fraction remains the fallback for a unit with no boundary — no worse
+ * than what it always did, and still better than nothing.
+ */
 export function stripAcres(event: GrazingEvent, paddock: Paddock): number | null {
   const acres = paddock.acresGrazable ?? paddock.acresMeasured;
-  if (acres === null) return null;
   if (event.sweptFrom === null || event.sweptTo === null) return acres; // whole unit
-  return (event.sweptTo - event.sweptFrom) * acres;
+
+  const drawn = drawnSliceAcres(paddock, event.sweptFrom, event.sweptTo);
+  if (drawn !== null) return drawn;
+
+  return acres === null ? null : (event.sweptTo - event.sweptFrom) * acres;
+}
+
+/**
+ * The acreage of a slice of a unit, from its boundary. Null when there is no
+ * usable boundary or no sweep heading to cut along.
+ *
+ * Lives here rather than in `pasture-map` so the strip arithmetic does not
+ * have to know about projections; the map module owns the geometry and this
+ * owns what it means.
+ */
+export function drawnSliceAcres(
+  paddock: Paddock,
+  from: number,
+  to: number,
+): number | null {
+  if (paddock.sweepHeadingDeg === null || to <= from) return null;
+  const ring = asPolygonRing(paddock.boundary);
+  if (ring === null) return null;
+
+  const frame = frameFor(ring);
+  if (frame === null) return null;
+
+  return sliceAcres(ring.map((p) => toLocal(frame, p)), paddock.sweepHeadingDeg, from, to);
 }
 
 /** Feet along the sweep, when the unit's length is on file. */
@@ -1241,7 +1293,7 @@ export interface ForageAssumptions {
  * are still the app's stated fallback. The UI names them, so a forecast is
  * never mistaken for one built on measurements. */
 export interface AssumptionSources {
-  standing: "measured" | "planned" | "default";
+  standing: "height" | "measured" | "planned" | "default";
   utilization: "plan" | "default";
   intake: "plan" | "default";
 }
@@ -1267,8 +1319,12 @@ export function assumptionsFor(input: {
   availability: ForageAvailability[];
   todayIso: string;
   fallback: ForageAssumptions;
+  /** Sward height measured at the gate this morning, in inches. Beats
+   * everything else when the plan carries a pounds-per-acre-inch figure —
+   * a reading taken today is worth more than one recorded for the month. */
+  swardHeightIn?: number | null;
 }): { assumptions: ForageAssumptions; sources: AssumptionSources } {
-  const { paddockId, plan, targets, availability, todayIso, fallback } = input;
+  const { paddockId, plan, targets, availability, todayIso, fallback, swardHeightIn = null } = input;
   const day = todayIso.slice(0, 10);
 
   const target = targets.find((t) => t.paddockId === paddockId) ?? null;
@@ -1281,14 +1337,29 @@ export function assumptionsFor(input: {
     .sort((a, b) => b.periodStart.localeCompare(a.periodStart));
   const covering = mine.find((a) => a.periodEnd >= day) ?? mine[0] ?? null;
 
+  // This morning's height, converted by the plan's own figure. Both halves
+  // have to be there: a height with no conversion is just a number, and a
+  // conversion with no height has nothing to convert.
+  const fromHeight =
+    swardHeightIn !== null && swardHeightIn > 0 && plan?.lbDmPerAcreInch != null
+      ? swardHeightIn * plan.lbDmPerAcreInch
+      : null;
+
   return {
     assumptions: {
-      standingLbDmPerAcre: covering?.lbDmPerAcre ?? fallback.standingLbDmPerAcre,
+      standingLbDmPerAcre: fromHeight ?? covering?.lbDmPerAcre ?? fallback.standingLbDmPerAcre,
       utilizationPct: target?.targetUtilizationPct ?? fallback.utilizationPct,
       intakePctBodyweight: plan?.defaultDmiPctBw ?? fallback.intakePctBodyweight,
     },
     sources: {
-      standing: covering === null ? "default" : covering.isPlanned ? "planned" : "measured",
+      standing:
+        fromHeight !== null
+          ? "height"
+          : covering === null
+            ? "default"
+            : covering.isPlanned
+              ? "planned"
+              : "measured",
       utilization: target?.targetUtilizationPct === undefined || target?.targetUtilizationPct === null ? "default" : "plan",
       intake: plan?.defaultDmiPctBw == null ? "default" : "plan",
     },
@@ -1388,13 +1459,97 @@ export async function fetchInfrastructure(farmId: string): Promise<Infrastructur
   }));
 }
 
+// ─── weights ───────────────────────────────────────────────────────────
+
+export interface Weighing {
+  id: string;
+  animalId: string;
+  date: string;
+  weightLb: number;
+  weightType: string;
+  notes: string | null;
+}
+
+export async function fetchWeighings(farmId: string, animalId?: string): Promise<Weighing[]> {
+  let q = herdSchema()
+    .from("weights")
+    .select("id, animal_id, date, weight_lb, weight_type, notes")
+    .eq("farm_id", farmId)
+    .is("deleted_at", null);
+  if (animalId !== undefined) q = q.eq("animal_id", animalId);
+
+  const { data, error } = await q.order("date", { ascending: false });
+  if (error) throw new Error(`herd.weights: ${error.message}`);
+
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    animalId: r.animal_id as string,
+    date: r.date as string,
+    weightLb: Number(r.weight_lb),
+    weightType: r.weight_type as string,
+    notes: (r.notes as string) ?? null,
+  }));
+}
+
+/**
+ * Record a weighing.
+ *
+ * An RPC (043) because weighing the same animal twice on one day should
+ * correct the figure rather than leave two rows for the day with no way to
+ * tell which is meant — and that is an upsert against no unique index.
+ */
+export async function recordWeight(input: {
+  farmId: string;
+  animalId: string;
+  weightLb: number;
+  date?: string;
+  weightType?: string;
+  notes?: string;
+}): Promise<string> {
+  const { data, error } = await herdSchema().rpc("record_weight", {
+    p_farm_id: input.farmId,
+    p_animal_id: input.animalId,
+    p_weight_lb: input.weightLb,
+    p_date: input.date ?? new Date().toISOString().slice(0, 10),
+    p_weight_type: input.weightType ?? "adhoc",
+    p_notes: input.notes ?? "",
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+/**
+ * What the mob weighs, all told.
+ *
+ * The figure behind stocking density and daily intake, and one nobody could
+ * see before. It is a **sum of real weights**, not head × an average, so a
+ * mob of mixed sizes reports what it actually is — which is why the weight
+ * had to be per animal rather than one figure on the group.
+ *
+ * `missing` is not a footnote. A total that quietly counts three of five
+ * animals is worse than no total, so the caller can say how many are in it.
+ */
+export function mobWeight(
+  members: GrazingGroupMember[],
+  groupId: string,
+  latestWeightLb: Map<string, number>,
+): { totalLb: number | null; weighed: number; missing: number } {
+  const open = members.filter((m) => m.groupId === groupId && m.leftOn === null);
+  const known = open.map((m) => latestWeightLb.get(m.animalId)).filter((w): w is number => w !== undefined);
+  return {
+    totalLb: known.length === 0 ? null : known.reduce((a, b) => a + b, 0),
+    weighed: known.length,
+    missing: open.length - known.length,
+  };
+}
+
 // ─── the plan ──────────────────────────────────────────────────────────
 
 export async function fetchPlans(farmId: string): Promise<GrazingPlan[]> {
   const { data, error } = await herdSchema()
     .from("grazing_plans")
     .select(
-      "id, name, period_start, period_end, contract_number, tract_number, field_ids, long_term_goals, immediate_objectives, benchmark_stocking_rate_aum_per_acre, monitoring_cadence_kind, monitoring_cadence_value, default_dmi_pct_bw, active, notes",
+      "id, name, period_start, period_end, contract_number, tract_number, field_ids, long_term_goals, immediate_objectives, benchmark_stocking_rate_aum_per_acre, monitoring_cadence_kind, monitoring_cadence_value, default_dmi_pct_bw, lb_dm_per_acre_inch, active, notes",
     )
     .eq("farm_id", farmId)
     .is("deleted_at", null)
@@ -1415,6 +1570,7 @@ export async function fetchPlans(farmId: string): Promise<GrazingPlan[]> {
     monitoringCadenceKind: r.monitoring_cadence_kind as MonitoringCadenceKind,
     monitoringCadenceValue: num(r.monitoring_cadence_value),
     defaultDmiPctBw: num(r.default_dmi_pct_bw),
+    lbDmPerAcreInch: num(r.lb_dm_per_acre_inch),
     active: Boolean(r.active),
     notes: (r.notes as string) ?? null,
   }));
@@ -1437,6 +1593,7 @@ export interface PlanDraft {
   monitoringCadenceKind: MonitoringCadenceKind;
   monitoringCadenceValue: number | null;
   defaultDmiPctBw: number | null;
+  lbDmPerAcreInch: number | null;
 }
 
 const orNull = (s: string) => (s.trim() === "" ? null : s.trim());
@@ -1457,6 +1614,7 @@ export async function savePlan(farmId: string, draft: PlanDraft): Promise<string
     p_monitoring_cadence_kind: draft.monitoringCadenceKind,
     p_monitoring_cadence_value: draft.monitoringCadenceValue,
     p_default_dmi_pct_bw: draft.defaultDmiPctBw,
+    p_lb_dm_per_acre_inch: draft.lbDmPerAcreInch,
   });
   if (error) throw new Error(error.message);
   return data as string;
@@ -1981,6 +2139,98 @@ export async function recordRemoval(farmId: string, draft: RemovalDraft): Promis
     .single();
   if (error) throw new Error(error.message);
   return (data as { id: string }).id;
+}
+
+// ─── where the mob is, and where the wire goes next ────────────────────
+//
+// The morning question, answered without asking anything: they are here, the
+// back line is where yesterday's wire ended, and the next unit is the one
+// after this in the round. Everything the one-page move opens with.
+
+export interface Standing {
+  /** The unit they are in now. Null when they are off pasture. */
+  paddock: Paddock | null;
+  open: GrazingEvent | null;
+  /** Where the back line sits in that unit, 0–1. Yesterday's wire. */
+  backLine: number;
+  /** The unit after this one in the round, wrapping. Null when no rotation
+   * order is recorded. */
+  next: Paddock | null;
+}
+
+/** The units in the order the mob walks them. Units with no order sit after
+ * the ones that have one, by name, so nothing disappears from a picker. */
+export function inRotation(paddocks: Paddock[]): Paddock[] {
+  return paddocks
+    .filter((p) => p.active)
+    .sort((a, b) => {
+      if (a.rotationOrder !== null && b.rotationOrder !== null) return a.rotationOrder - b.rotationOrder;
+      if (a.rotationOrder !== null) return -1;
+      if (b.rotationOrder !== null) return 1;
+      return a.name.localeCompare(b.name);
+    });
+}
+
+/**
+ * The unit after this one in the round, wrapping past the last back to the
+ * first. Null when this unit is not in the rotation, or is the only one.
+ */
+export function nextInRotation(paddock: Paddock, paddocks: Paddock[]): Paddock | null {
+  const ring = inRotation(paddocks).filter((p) => p.rotationOrder !== null);
+  if (ring.length < 2) return null;
+  const i = ring.findIndex((p) => p.id === paddock.id);
+  return i === -1 ? null : ring[(i + 1) % ring.length];
+}
+
+/**
+ * Where the mob stands, so the page can open on it rather than ask.
+ *
+ * The back line is the crux. Ordinarily it is where yesterday's wire ended —
+ * `swept_to` on the open event — which is what makes "the back line is the
+ * wire I moved forward yesterday" true without anybody setting it. Moving to
+ * a fresh unit puts it at the start of that unit, which is what "the backline
+ * should automatically move to the start of that paddock" means.
+ */
+export function standingOf(input: {
+  groupId: string;
+  paddocks: Paddock[];
+  events: GrazingEvent[];
+}): Standing {
+  const { groupId, paddocks, events } = input;
+  const open = whereIs(groupId, events);
+  const paddock = open === null ? null : (paddocks.find((p) => p.id === open.paddockId) ?? null);
+
+  return {
+    paddock,
+    open,
+    backLine: open?.sweptTo ?? 0,
+    next: paddock === null ? null : nextInRotation(paddock, paddocks),
+  };
+}
+
+/**
+ * Where to put the wire when a screen opens.
+ *
+ * **Never on the back line.** At the start of a unit the two coincide, and a
+ * wire sitting on the back line cannot be seen or dragged — so there would be
+ * nothing to grab and nothing to show. A day's width is both the visible
+ * default and the one that is usually right; when there is no weight on file
+ * to size a day, a nominal opening keeps the wire grabbable.
+ */
+export function openingWire(input: {
+  paddock: Paddock;
+  backLine: number;
+  headCount: number | null;
+  avgWeightLb: number | null;
+  assumptions: ForageAssumptions;
+  /** Used only when a day cannot be sized. Small enough to be obviously a
+   * placeholder, wide enough to get a thumb on. */
+  nominal?: number;
+}): number {
+  const { paddock, backLine, headCount, avgWeightLb, assumptions, nominal = 0.08 } = input;
+  const day = widthForHours({ paddock, hours: 24, headCount, avgWeightLb, assumptions });
+  const width = day !== null && day > 0.005 ? day : nominal;
+  return Math.min(1, Math.max(backLine + 0.005, backLine + width));
 }
 
 // ─── the rotation, as rounds ───────────────────────────────────────────

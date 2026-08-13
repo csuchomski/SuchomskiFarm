@@ -38,7 +38,7 @@ const paddock = (n: number): Paddock => {
     acresGrazable: REAL_ACRES[name],
     unitType: "permanent",
     sweepHeadingDeg: REAL_SWEEP[name].headingDeg,
-    sweepLengthFt: REAL_SWEEP[name].lengthFt,
+    sweepLengthFt: REAL_SWEEP[name].lengthFt, rotationOrder: null,
     seedingDate: null,
     fenceType: null,
     ecologicalSite: null,
@@ -171,9 +171,7 @@ describe("the drawing", () => {
     await mount();
     const text = svg().textContent ?? "";
     for (const code of ["P1", "P2", "P3", "P4", "P5"]) expect(text).toContain(code);
-    // 2.255 stored; toFixed gives 2.25 because 2.255 has no exact binary
-    // form. Half a hundredth of an acre, and not worth a rounding shim.
-    expect(text).toContain("2.25 ac"); // the south band
+    expect(text).toContain("2.26 ac"); // the south band
     expect(text).toContain("1.38 ac"); // the east lobe
   });
 
@@ -252,7 +250,7 @@ describe("when the geometry is missing or broken", () => {
 describe("the lists under the map", () => {
   it("gives each unit its sweep in words and its length", async () => {
     await mount();
-    expect(screen.getByText(/swept east to west · 533 ft along the sweep/)).toBeTruthy();
+    expect(screen.getByText(/swept east to west · 535 ft along the sweep/)).toBeTruthy();
     expect(screen.getByText(/swept south to north · 405 ft along the sweep/)).toBeTruthy();
   });
 

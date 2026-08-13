@@ -35,6 +35,8 @@ export const allGroups: NavGroup[] = [
       { label: "Breeds", to: "/breeds" },
       // First thing you want in a pasture, so it sits above the reference
       // pages rather than at the bottom of the group.
+      // The daily act, so it sits above the board it used to live on.
+      { label: "Move", to: "/grazing/move" },
       { label: "Grazing", to: "/grazing" },
       { label: "Rotation", to: "/grazing/rotation" },
       { label: "Pasture map", to: "/grazing/map" },

@@ -249,6 +249,10 @@ because the entry is where the trail starts.
 
 ### Redo logging a move: one page, and a back line you can set
 
+**Built 2026-08-13** as Herd → Move, along with the four answers below.
+Migrations 043 and 044 are run. See "Move: the morning, on one page" in
+`docs/GRAZING.md`. Kept here because the reasoning is the trail.
+
 The ask, close to verbatim:
 
 > I want logging a move to be redone so everything is on one page. I want to
@@ -498,11 +502,12 @@ should take it off the board's list and say why.
 *section* to cut it is the case that needs `swept_from`/`swept_to` on
 `forage_removals`.
 
-### An updated KML is waiting, not loaded
+### An updated KML is waiting, not loaded — **loaded 2026-08-13, migration 044**
 
-`docs/suchomski-farm-2026-08-13b.kml`, sent the same day, to be used when
-this work resumes. **Deliberately not loaded** — 040's boundaries are still
-what the app is running on.
+`docs/suchomski-farm-2026-08-13b.kml`, sent the same day. Loaded with the
+acreage fix in one pass, as argued below. The five units re-cut to 2.021,
+1.932, 1.972, 2.261 and 1.381 acres — 9.568 in total, which is the perimeter
+exactly.
 
 What changed, so nobody has to work it out later: **only the perimeter**. All
 four interior fence paths are byte-identical. Eight of the twelve perimeter
@@ -535,6 +540,35 @@ reason to size a strip.
 Smallest honest fix is to carry head and weight onto the one-page move above,
 prefilled and editable, as the board already does. Adding the fifth animal to
 Herd → Animals fixes the count at its source and is worth doing either way.
+
+**Half fixed 2026-08-13.** Weight is no longer derived from a guess: each
+animal carries dated weighings, and the mob's total is the sum of the
+members' latest, shown in the page's own header. **Still open:** the head
+count. There are four animals on file against five running, so every derived
+figure is a fifth light until the fifth animal is added. Move has no override
+for head count — it reads the roll — which is the right shape, but it makes
+the missing animal the thing to fix.
+
+## Opened 2026-08-13, building Move
+
+- **The fifth animal.** Four on file, five running. Everything derived from
+  the roll — head count, mob weight, days of feed, stock density — is a fifth
+  light until it is added. This is the single highest-value entry on the list
+  and it is a data-entry job, not a build.
+- **Deferring a unit shut up for hay.** Skipping Paddock 4 works, but its rest
+  keeps climbing afterwards and the board sorts it to the top as the best next
+  choice — the exact opposite of the intent. `plan_schedule_periods.kind`
+  already has `'deferment'` and `plan_paddock_targets.planned_deferment_notes`
+  already exists; neither is used.
+- **A partial hay cutting has nowhere to go.** `forage_removals` records the
+  unit, not which part of it, so cutting a section leaves the rest of the unit
+  looking cut. Wants `swept_from`/`swept_to` on the removal.
+- **`.grz-field` inputs are 40 px.** The house rule is a 44 px target and the
+  new screens hold it, but the older grazing forms do not. A one-line change
+  whenever those screens are next touched.
+- **`stripAcres`'s fallback is still the old fraction.** Correct now wherever
+  a boundary exists, which is everywhere on this farm. Worth knowing it is
+  there before a unit is added without one.
 
 ## Carried over from earlier sessions
 

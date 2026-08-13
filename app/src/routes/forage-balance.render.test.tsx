@@ -33,7 +33,7 @@ vi.mock("../lib/auth", () => ({
 const paddock = (n: number, acres: number): Paddock => ({
   id: `p${n}`, name: `Paddock ${n}`, code: `P${n}`,
   acresMeasured: acres, acresGrazable: acres,
-  unitType: "permanent", sweepHeadingDeg: 270, sweepLengthFt: 424,
+  unitType: "permanent", sweepHeadingDeg: 270, sweepLengthFt: 424, rotationOrder: null,
   seedingDate: null, fenceType: null, ecologicalSite: null, soilMapUnit: null,
   noxiousSpecies: null, noxiousExtent: null,
   sensitive: { riparian: false, wetland: false, habitat: false, karst: false, highErosion: false },

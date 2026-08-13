@@ -867,3 +867,77 @@ formula — so a pasted note could execute on open. A leading apostrophe fixes
 it and is stripped on display. The BOM is not decoration either: without it
 Excel on Windows reads UTF-8 as the local code page and every ° and ″ in a
 monitoring record turns to mojibake.
+
+## Move: the morning, on one page
+
+The board and the map both logged a move, one with a percentage slider and
+one with a tap on a drawing. Same record either way — `swept_from` and
+`swept_to` — so the farm had to remember which screen it had chosen. **Herd →
+Move** is the one place now. Nothing is picked that does not have to be: the
+mob, the paddock and the back line all come out of the open grazing event,
+because the back line is simply where yesterday's wire ended.
+
+Grass height sits **above** the wire, because it feeds it. A reading there,
+times the plan's `lb_dm_per_acre_inch` (300 for this farm), outranks whatever
+the availability table last said — a number taken on the ground this morning
+beats one typed in April. Without a reading it falls back, and the assumptions
+line always says which source it used.
+
+### The back line is settable, and always was
+
+Ordinarily it looks after itself. But a unit cut for hay, or a section left
+standing, needs it moved — the farm's own example: running the mob through
+Paddock 3, deciding to cut Paddock 4, and wanting the back line set to the
+start of Paddock 5.
+
+`log_grazing_move` has allowed this from the beginning; it only ever refused
+going *backwards* over ground already taken. Both skips were verified against
+the live database before any UI was written. So this was a UI-only change —
+the app had been deriving a value the database was happy to be told.
+
+### Weight is per animal, and added up
+
+`herd.record_weight` writes a dated row, upserting on (animal, date) so a
+correction on the day replaces rather than duplicates. The animal record grows
+a Weight section; the mob's total is the **sum of the members' latest
+weights**, never a head count times an average, and the page says how many are
+unweighed rather than quietly totalling some of them.
+
+`weight_type` defaults to `adhoc` — the check constraint allows
+birth/weaning/yearling/sale/processing_live/adhoc, and `scale` is not among
+them.
+
+### The acreage bug the redraw exposed
+
+`stripAcres` used to take the strip's acres as its fraction of the sweep times
+the unit's acres. That assumes area spreads evenly along the sweep, which is
+true of a rectangle and of nothing else. Measured against the real boundaries:
+
+| Unit | Worst error |
+|---|---|
+| Paddock 1 | 24% |
+| Paddock 4, last tenth | **94%** — it tapers to a corner |
+| Paddocks 2, 3 | small; they are near-rectangular |
+
+Which is why nothing looked wrong. It fed hours of feed, stock density and the
+forage balance. It now measures off the drawn boundary via `drawnSliceAcres`
+and falls back to the fraction only when there is no boundary or no sweep.
+
+### A capped drawing has to have its gutters taken off
+
+The farm is a tall shape, so a drawing sized by its own proportions ran 1,355
+px down a 1,280 px screen and took the acres with it — you dragged the wire
+and the number you were dragging it *for* was off the bottom. The map is
+capped now, which means it is letterboxed, which means a touch is no longer a
+plain ratio of the box.
+
+`viewBoxPoint` takes the gutters off. Nothing about this looks wrong when it
+is missed; the wire just lands somewhere other than the finger. Font sizes and
+the grab handle are in viewBox units too, so the page measures the drawing and
+publishes `--pm-unit` — viewBox units per screen pixel — for the stylesheet to
+divide back out. Without it the paddock names came out at nine pixels on a
+desktop and twenty-seven on a tablet.
+
+Above 1,000 px the drawing and the readings sit side by side. That is not
+decoration: the whole premise is dragging the wire and watching the acres
+change, and on a phone `56vh` keeps both in view for the same reason.

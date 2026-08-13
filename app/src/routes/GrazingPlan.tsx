@@ -95,6 +95,7 @@ export default function GrazingPlan() {
   const [cadenceKind, setCadenceKind] = useState<MonitoringCadenceKind>("every_rotation");
   const [cadenceValue, setCadenceValue] = useState("");
   const [dmi, setDmi] = useState("");
+  const [swardLb, setSwardLb] = useState("");
 
   const [concernCategory, setConcernCategory] = useState<ResourceCategory>("soil");
   const [concernText, setConcernText] = useState("");
@@ -158,6 +159,7 @@ export default function GrazingPlan() {
     setCadenceKind(fresh || !p ? "every_rotation" : p.monitoringCadenceKind);
     setCadenceValue(fresh || !p || p.monitoringCadenceValue === null ? "" : String(p.monitoringCadenceValue));
     setDmi(fresh || !p || p.defaultDmiPctBw === null ? "" : String(p.defaultDmiPctBw));
+    setSwardLb(fresh || !p || p.lbDmPerAcreInch === null ? "" : String(p.lbDmPerAcreInch));
     setEditing(true);
   };
 
@@ -189,6 +191,7 @@ export default function GrazingPlan() {
         monitoringCadenceKind: cadenceKind,
         monitoringCadenceValue: num(cadenceValue),
         defaultDmiPctBw: num(dmi),
+        lbDmPerAcreInch: num(swardLb),
       });
       setEditing(false);
       return startingNew
@@ -323,6 +326,13 @@ export default function GrazingPlan() {
                 <label className="grz-field">
                   <span className="eyebrow">Intake, % of bw</span>
                   <input value={dmi} onChange={(e) => setDmi(e.target.value)} inputMode="decimal" aria-label="Intake, % of bw" />
+                </label>
+                <label className="grz-field">
+                  {/* What turns this morning's height reading into forage. It
+                      varies with sward, season and density, so it is the
+                      farm's to set and never this app's. */}
+                  <span className="eyebrow">lb DM per acre-inch</span>
+                  <input value={swardLb} onChange={(e) => setSwardLb(e.target.value)} inputMode="decimal" aria-label="lb DM per acre-inch" />
                 </label>
                 <label className="grz-field">
                   <span className="eyebrow">Benchmark AUM/acre</span>

@@ -110,7 +110,7 @@ describe("what the log is for", () => {
       contractNumber: null, tractNumber: null, fieldIds: null,
       longTermGoals: null, immediateObjectives: null, benchmarkStockingRateAumPerAcre: null,
       monitoringCadenceKind: "every_rotation", monitoringCadenceValue: null,
-      defaultDmiPctBw: 3, active: true, notes: null,
+      defaultDmiPctBw: 3, lbDmPerAcreInch: 300, active: true, notes: null,
     };
     decisions.push(decision({ contingencyPlanId: "x1" }));
     await mount();

@@ -33,7 +33,7 @@ const paddock = (over: Partial<Paddock> & { id: string; name: string }): Paddock
   acresGrazable: 1.91,
   unitType: "permanent",
   sweepHeadingDeg: null,
-  sweepLengthFt: null,
+  sweepLengthFt: null, rotationOrder: null,
   seedingDate: null,
   fenceType: null,
   ecologicalSite: null,

@@ -76,10 +76,13 @@ in feet update as the wire moves, with "half a day" and "a day" as one-tap
 presets computed from the plan's own figures. Feed reads in hours because a
 strip can be half a day.
 
-**The forage assumptions are stated on screen and belong in the plan.** Until
-the plan editor exists they are constants in `Grazing.tsx` with a comment
-saying so, shown beside every figure they produce so a forecast is never
-mistaken for a measurement.
+**The forage assumptions come from the plan.** *(Step 7 closed this; they
+were constants in `Grazing.tsx` until then, with a comment saying they
+belonged in the plan.)* Intake from the plan's default, utilization from the
+paddock's target, standing forage from the availability record covering
+today. The readout names the source of each figure inline, and anything still
+falling back is labelled "this app's figure" — so a forecast is never
+mistaken for a measurement, and nobody has to guess which numbers are theirs.
 
 ## What it is for
 

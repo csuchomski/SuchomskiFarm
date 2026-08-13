@@ -3,8 +3,10 @@ import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, GridRow, Pill } from "../components/ui";
 import { useWorkspace } from "../lib/workspace";
 import {
+  assumptionsFor,
   boardRows,
   endGrazing,
+  fetchForageAvailability,
   fetchForageRemovals,
   fetchGrazingEvents,
   fetchGrazingGroups,
@@ -28,7 +30,9 @@ import {
   whereIs,
   widthForHours,
   type ForageAssumptions,
+  type ForageAvailability,
   type ForageRemoval,
+  type GrazingPlan,
   type BoardRow,
   type GrazingEvent,
   type GrazingGroup,
@@ -63,6 +67,8 @@ type Load =
       groups: GrazingGroup[];
       events: GrazingEvent[];
       removals: ForageRemoval[];
+      availability: ForageAvailability[];
+      plan: GrazingPlan | null;
       members: GrazingGroupMember[];
       weights: Map<string, number>;
       targets: PlanPaddockTarget[];
@@ -72,11 +78,15 @@ type Load =
 const COLS = "minmax(0, 1fr) 110px 120px 96px";
 const COLS_SM = "minmax(0, 1fr) 92px";
 
-/** Until the plan editor exists these are the figures the strip readout
- *  divides by. They belong in the plan, not here — the comment is the
- *  reminder, and every one of them is shown on screen beside the result so
- *  nobody mistakes a forecast for a measurement. */
-const ASSUMPTIONS: ForageAssumptions = {
+/** The fallback, used only where the farm's own records are silent.
+ *
+ *  These were the figures the strip readout always divided by; they now come
+ *  from the plan, the paddock's target and the availability record, and this
+ *  is what is left when none of those exists. It stays rather than showing
+ *  nothing, because taking the tool away on somebody's first day helps no
+ *  one — and the readout names which figures are the farm's and which are
+ *  these, so a forecast is never mistaken for a measurement. */
+const FALLBACK: ForageAssumptions = {
   standingLbDmPerAcre: 2400,
   utilizationPct: 50,
   intakePctBodyweight: 3,
@@ -116,17 +126,21 @@ export default function Grazing() {
       setLoad({ state: "error", message: "No farm on this business." });
       return;
     }
-    const [paddocks, groups, events, removals, members, weights, plan] = await Promise.all([
+    const [paddocks, groups, events, removals, availability, members, weights, plan] = await Promise.all([
       fetchPaddocks(farmId),
       fetchGrazingGroups(farmId),
       fetchGrazingEvents(farmId),
       fetchForageRemovals(farmId),
+      fetchForageAvailability(farmId),
       fetchGroupMembers(farmId),
       fetchLatestWeights(farmId),
       fetchActivePlan(farmId),
     ]);
     const targets = plan ? await fetchPlanPaddockTargets(plan.id) : [];
-    setLoad({ state: "ok", paddocks, groups, events, removals, members, weights, targets, hasPlan: plan !== null });
+    setLoad({
+      state: "ok", paddocks, groups, events, removals, availability, members, weights,
+      targets, plan, hasPlan: plan !== null,
+    });
   }, [farmId]);
 
   useEffect(() => {
@@ -210,6 +224,21 @@ export default function Grazing() {
   // The row they are moving into, so the form can warn before it is saved.
   const target = rows.find((r) => r.paddock.id === paddockId) ?? null;
   const early = target?.eligible && !target.eligible.met ? target.eligible : null;
+
+  // The figures the readout divides by, from the farm's records where they
+  // exist and the stated fallback where they do not.
+  const assumed =
+    load.state === "ok" && paddockId !== ""
+      ? assumptionsFor({
+          paddockId,
+          plan: load.plan,
+          targets: load.targets,
+          availability: load.availability,
+          todayIso: nowIso(),
+          fallback: FALLBACK,
+        })
+      : { assumptions: FALLBACK, sources: { standing: "default", utilization: "default", intake: "default" } as const };
+  const ASSUMPTIONS = assumed.assumptions;
 
   // ── the strip ───────────────────────────────────────────────────────
   // Where this strip starts: where the last one in the same unit ended,
@@ -411,10 +440,11 @@ export default function Grazing() {
                   </div>
 
                   <p className="grz-assume">
-                    Feed assumes {ASSUMPTIONS.standingLbDmPerAcre.toLocaleString()} lb DM/acre standing,{" "}
-                    {ASSUMPTIONS.utilizationPct}% utilization and intake at {ASSUMPTIONS.intakePctBodyweight}% of
-                    body weight. A forecast from your figures, not a measurement — and they belong in the plan
-                    once there is one.
+                    Feed assumes {ASSUMPTIONS.standingLbDmPerAcre.toLocaleString()} lb DM/acre standing{" "}
+                    <em>({sourceWord(assumed.sources.standing)})</em>, {ASSUMPTIONS.utilizationPct}% utilization{" "}
+                    <em>({sourceWord(assumed.sources.utilization)})</em> and intake at{" "}
+                    {ASSUMPTIONS.intakePctBodyweight}% of body weight{" "}
+                    <em>({sourceWord(assumed.sources.intake)})</em>. A forecast, not a measurement.
                   </p>
                 </div>
               )}
@@ -663,6 +693,17 @@ function bandFill(restDays: number | null, occupied: boolean): string {
   if (restDays >= 14) return "#b8bfa4";
   if (restDays >= 7) return "#cfd3bd";
   return "#e4e2d5";
+}
+
+/** Where a figure came from, in a word. "This app's figure" is the one worth
+ * saying plainly — it is the only one nobody chose. */
+function sourceWord(source: string): string {
+  switch (source) {
+    case "measured": return "measured on this unit";
+    case "planned": return "your projection";
+    case "plan": return "from your plan";
+    default: return "this app's figure";
+  }
 }
 
 function acresOf(paddocks: Paddock[]): number {

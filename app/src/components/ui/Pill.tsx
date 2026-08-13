@@ -6,7 +6,7 @@ export function Pill({
   variant = "outline",
 }: {
   children: ReactNode;
-  variant?: "outline" | "outline-green" | "withdrawal" | "neutral";
+  variant?: "outline" | "outline-green" | "outline-ochre" | "withdrawal" | "neutral";
 }) {
   return <span className={`pill pill--${variant}`}>{children}</span>;
 }

@@ -19,6 +19,14 @@
   color: var(--herd-green);
 }
 
+/* Outside a plan target, or a look that is due. Ochre is the module's word
+   for "the plan said otherwise" — hazard yellow stays reserved for
+   withdrawal, where it means do not sell this. */
+.pill--outline-ochre {
+  border: 1px solid var(--ochre);
+  color: var(--ochre);
+}
+
 .pill--withdrawal {
   border: 1px solid var(--ink);
   background: var(--hazard-yellow);

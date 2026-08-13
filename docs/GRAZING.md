@@ -3,8 +3,12 @@
 An eight-step module, built one reviewable step at a time. This file is the
 running record of what was decided and what is still open.
 
-**Step 1 — schema and types — is built and rehearsed, not run.** See
-"Before this can be run" below.
+**Step 1 is done.** Migrations 036 (schema) and 037 (this farm's seed) are
+run. Twenty-five tables live with RLS on every one; five paddocks at 9.55
+grazable acres, seven water points, the plan map's fences, and one mob
+holding every animal on file.
+
+Step 2 — Log a Move and the paddock board — is next and not started.
 
 ## What it is for
 
@@ -204,7 +208,7 @@ weight for 30 days, less 900 for deer, less a 6,200 lb hay cutting — 8,668.
 That is the derivation the balance screen will do, exercised against the
 real schema before any of it is written.
 
-## Before this can be run
+## Still needed, and what it blocks
 
 Two things from the brief's own "before you run this", both still open:
 

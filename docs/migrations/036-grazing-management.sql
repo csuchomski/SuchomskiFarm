@@ -1,10 +1,8 @@
 -- 036 — grazing management (NRCS CPS 528)
 --
--- STATUS: not run — rehearsed under RLS, awaiting review and the real
---         paddock list. See docs/GRAZING.md.
+-- STATUS: run 2026-08-13. Seed data is in 037.
 --
--- Step 1 of the grazing module: the tables and nothing else. No UI, no seed
--- data — the paddocks have to be the farm's real ones, not placeholders.
+-- Step 1 of the grazing module: the tables and nothing else. No UI.
 --
 -- What this is for: an EQIP contract with 528 as a scheduled practice.
 --

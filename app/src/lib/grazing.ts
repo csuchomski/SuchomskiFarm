@@ -713,25 +713,40 @@ export function whereIs(groupId: string, events: GrazingEvent[]): GrazingEvent |
 }
 
 /**
- * Days of rest a paddock has accumulated since the mob last left it.
+ * Days of rest a paddock has accumulated since it was last defoliated.
+ *
+ * "Defoliated", not "grazed", and the distinction is the whole reason
+ * `removals` is here. Forage that left on a hay wagon left the paddock just as
+ * bare as forage a cow ate. Counting rest from the last *grazing* would tell
+ * somebody a unit mown three days ago has been resting since June, which is
+ * the app confidently giving wrong advice rather than merely missing a
+ * feature.
  *
  * Null has two distinct meanings and the caller has to tell them apart, so
- * they are separated here rather than collapsed: `occupied` when something is
- * in it now, and null when it has never been grazed at all. A paddock never
- * grazed has not "rested" for the age of the record — it has no history.
+ * they are separated rather than collapsed: `occupied` when something is in it
+ * now, and `never` when nothing has ever come off it. A paddock never grazed
+ * has not "rested" for the age of the record — it has no history.
  */
 export function restDays(
   paddockId: string,
   events: GrazingEvent[],
   nowIso: string,
+  removals: ForageRemoval[] = [],
 ): { state: "occupied" } | { state: "rested"; days: number; since: string } | { state: "never" } {
   if (openEventFor(paddockId, events)) return { state: "occupied" };
 
-  const exits = events
+  const marks = events
     .filter((e) => e.paddockId === paddockId && e.exitedAt !== null)
     .map((e) => e.exitedAt!)
+    .concat(
+      // A cutting is a date, not an instant. End of day, so a unit cut and
+      // grazed on the same day reads as grazed after cutting rather than
+      // before — which is the order those two things actually happen in.
+      removals.filter((r) => r.paddockId === paddockId).map((r) => `${r.removedOn}T23:59:59.999Z`),
+    )
     .sort();
-  const last = exits[exits.length - 1];
+
+  const last = marks[marks.length - 1];
   if (!last) return { state: "never" };
 
   return { state: "rested", days: daysBetween(last, nowIso), since: last };
@@ -760,7 +775,12 @@ export interface BoardRow {
   rest: ReturnType<typeof restDays>;
   /** The mob in it now, when there is one. */
   occupant: { event: GrazingEvent; group: GrazingGroup | null; days: number } | null;
+  /** Literally the last grazing — a cutting does not go here. Rest counts a
+   * cutting; this column is about cattle, and conflating the two would make
+   * the date column unable to answer either question. */
   lastGrazed: string | null;
+  /** The most recent cutting off this unit, when there has been one. */
+  lastCut: ForageRemoval | null;
   lastResidualIn: number | null;
   eligible: ReturnType<typeof nextEligible>;
 }
@@ -778,17 +798,20 @@ export function boardRows(input: {
   groups: GrazingGroup[];
   targets: PlanPaddockTarget[];
   nowIso: string;
+  /** Hay off the units. Optional so the board still works before anything is
+   * cut, but rest is wrong without it on a farm that makes hay. */
+  removals?: ForageRemoval[];
   /** Which recovery figure applies today. The plan holds both. */
   season?: "growing" | "dormant";
 }): BoardRow[] {
-  const { paddocks, events, groups, targets, nowIso, season = "growing" } = input;
+  const { paddocks, events, groups, targets, nowIso, removals = [], season = "growing" } = input;
   const groupById = new Map(groups.map((g) => [g.id, g]));
   const targetFor = new Map(targets.map((t) => [t.paddockId, t]));
 
   const rows = paddocks
     .filter((p) => p.active)
     .map((paddock): BoardRow => {
-      const rest = restDays(paddock.id, events, nowIso);
+      const rest = restDays(paddock.id, events, nowIso, removals);
       const open = openEventFor(paddock.id, events);
       const target = targetFor.get(paddock.id);
       const recovery = target
@@ -801,6 +824,10 @@ export function boardRows(input: {
         .filter((e) => e.paddockId === paddock.id && e.exitedAt !== null)
         .sort((a, b) => (a.exitedAt! < b.exitedAt! ? 1 : -1));
 
+      const cuts = removals
+        .filter((r) => r.paddockId === paddock.id)
+        .sort((a, b) => b.removedOn.localeCompare(a.removedOn));
+
       return {
         paddock,
         rest,
@@ -808,6 +835,7 @@ export function boardRows(input: {
           ? { event: open, group: groupById.get(open.groupId) ?? null, days: occupancyDays(open, nowIso) }
           : null,
         lastGrazed: hers[0]?.exitedAt ?? open?.enteredAt ?? null,
+        lastCut: cuts[0] ?? null,
         lastResidualIn: hers[0]?.residualHeightInExit ?? null,
         eligible: nextEligible(rest, recovery ?? null),
       };
@@ -1070,10 +1098,38 @@ export function lastGrazedAt(
   return latest;
 }
 
+/**
+ * When a position was last taken down to the ground — by cattle or by a mower.
+ *
+ * A strip covers an interval. **A cutting covers the whole unit**, because
+ * nobody mows a strip: the machine goes over the lot. So a removal beats every
+ * position at once, which is why it is not simply another interval in the same
+ * list.
+ *
+ * This, not `lastGrazedAt`, is what rest should be measured from. The two are
+ * kept apart rather than merged because the board legitimately wants both —
+ * "rested 12 days" and "last grazed 3 June" are different facts about the same
+ * paddock, and a unit cut in between makes them differ by a month.
+ */
+export function lastDefoliatedAt(
+  paddockId: string,
+  position: number,
+  events: GrazingEvent[],
+  removals: ForageRemoval[] = [],
+): string | null {
+  let latest = lastGrazedAt(paddockId, position, events);
+  for (const r of removals) {
+    if (r.paddockId !== paddockId) continue;
+    const when = `${r.removedOn}T23:59:59.999Z`;
+    if (latest === null || when > latest) latest = when;
+  }
+  return latest;
+}
+
 export interface SweepBand {
   from: number;
   to: number;
-  /** Null when this stretch has never been grazed. */
+  /** Null when this stretch has never been grazed or cut. */
   lastGrazed: string | null;
   restDays: number | null;
   /** True while the mob is standing on it. */
@@ -1092,9 +1148,25 @@ export function sweepBands(
   paddockId: string,
   events: GrazingEvent[],
   nowIso: string,
+  removals: ForageRemoval[] = [],
 ): SweepBand[] {
   const mine = events.filter((e) => e.paddockId === paddockId);
-  if (mine.length === 0) return [{ from: 0, to: 1, lastGrazed: null, restDays: null, occupied: false }];
+  const cut = removals.filter((r) => r.paddockId === paddockId);
+
+  if (mine.length === 0) {
+    // A unit only ever cut is one band, evenly rested — the mower took the
+    // whole thing, so there is nothing to divide it at.
+    const at = lastDefoliatedAt(paddockId, 0.5, [], cut);
+    return [
+      {
+        from: 0,
+        to: 1,
+        lastGrazed: at,
+        restDays: at === null ? null : daysBetween(at, nowIso),
+        occupied: false,
+      },
+    ];
+  }
 
   const cuts = new Set<number>([0, 1]);
   for (const e of mine) {
@@ -1110,7 +1182,7 @@ export function sweepBands(
     if (to - from < 0.0005) continue;
     const mid = (from + to) / 2;
 
-    const lastGrazed = lastGrazedAt(paddockId, mid, mine);
+    const lastGrazed = lastDefoliatedAt(paddockId, mid, mine, cut);
     const occupied = mine.some(
       (e) =>
         e.exitedAt === null &&
@@ -1141,8 +1213,13 @@ export function readinessDays(
   paddockId: string,
   events: GrazingEvent[],
   nowIso: string,
+  removals: ForageRemoval[] = [],
 ): number | null {
-  const at = lastGrazedAt(paddockId, 0.02, events);
+  // A cutting resets this outright. The argument about measuring from the
+  // start of the sweep is an argument about where the *cattle* re-enter; a
+  // mower does not re-enter anywhere, it takes the lot, and after it has been
+  // through there is no rested end to come back to.
+  const at = lastDefoliatedAt(paddockId, 0.02, events, removals);
   return at === null ? null : daysBetween(at, nowIso);
 }
 
@@ -1218,4 +1295,248 @@ export function widthForHours(input: {
   const dailyIntake = headCount * avgWeightLb * (assumptions.intakePctBodyweight / 100);
   const acres = (dailyIntake * (hours / 24)) / usablePerAcre;
   return Math.min(1, acres / unitAcres);
+}
+
+// ─── hay off the units ─────────────────────────────────────────────────
+
+export async function fetchForageRemovals(farmId: string): Promise<ForageRemoval[]> {
+  const { data, error } = await herdSchema()
+    .from("forage_removals")
+    .select("id, paddock_id, removed_on, kind, cutting_number, yield_lb, yield_basis, notes")
+    .eq("farm_id", farmId)
+    .is("deleted_at", null)
+    .order("removed_on", { ascending: false });
+  if (error) throw new Error(`herd.forage_removals: ${error.message}`);
+
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    paddockId: r.paddock_id as string,
+    removedOn: r.removed_on as string,
+    kind: r.kind as RemovalKind,
+    cuttingNumber: num(r.cutting_number) === null ? null : Number(r.cutting_number),
+    yieldLb: num(r.yield_lb),
+    yieldBasis: (r.yield_basis as "weighed" | "estimated") ?? null,
+    notes: (r.notes as string) ?? null,
+  }));
+}
+
+export interface RemovalDraft {
+  paddockId: string;
+  removedOn: string;
+  kind: RemovalKind;
+  cuttingNumber: number | null;
+  yieldLb: number | null;
+  yieldBasis: "weighed" | "estimated" | null;
+  notes: string;
+}
+
+/**
+ * Record hay off a unit.
+ *
+ * A plain insert rather than an RPC: it is one row, and unlike a move it has
+ * no second write that has to land with it. RLS on `forage_removals` is real
+ * and was checked from an `authenticated` session, not from the SQL editor.
+ */
+export async function recordRemoval(farmId: string, draft: RemovalDraft): Promise<string> {
+  const { data, error } = await herdSchema()
+    .from("forage_removals")
+    .insert({
+      farm_id: farmId,
+      paddock_id: draft.paddockId,
+      removed_on: draft.removedOn,
+      kind: draft.kind,
+      cutting_number: draft.cuttingNumber,
+      yield_lb: draft.yieldLb,
+      yield_basis: draft.yieldBasis,
+      notes: draft.notes.trim(),
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return (data as { id: string }).id;
+}
+
+// ─── the rotation, as rounds ───────────────────────────────────────────
+//
+// A season laid out day by day is the obvious shape and the wrong one. At
+// strip-grazing resolution one stay is a fortnight of daily wire moves, and a
+// chart fine enough to show a single strip is far too wide for the phone this
+// is used on. Worse, it answers a question nobody asks: the grazier's question
+// is "how many times have we been round", not "what happened on 14 July".
+//
+// So the unit of the timeline is the **round** — one trip through the farm.
+// It falls straight out of the serpentine, it compresses a fortnight of
+// strips into one line, and the figure it puts in front of you is the one
+// that matters: how long each unit had to recover before they walked back in.
+
+/** One unbroken stay in a unit, however many wire moves it took. */
+export interface Stay {
+  paddockId: string;
+  enteredAt: string;
+  /** Null while they are still in it. */
+  exitedAt: string | null;
+  /** Wire moves that made up the stay. 1 for a unit taken whole. */
+  strips: number;
+  days: number;
+  /** Ground taken across the whole stay. Null when the unit has no acreage. */
+  acres: number | null;
+  /** What the unit had rested when they walked in. Null the first time
+   * through, which is honest — there was no previous pass to rest from. */
+  restBeforeDays: number | null;
+  events: GrazingEvent[];
+}
+
+export interface Round {
+  /** 1-based, in the order they happened. */
+  index: number;
+  startedAt: string;
+  /** Null while the round is still running. */
+  endedAt: string | null;
+  days: number;
+  stays: Stay[];
+  /** Cuttings that fell in this round's window. The first round's window runs
+   * back to the beginning of the record and the last one's runs to now, so
+   * every cutting lands in exactly one round and none is silently dropped. */
+  cuttings: ForageRemoval[];
+}
+
+/**
+ * Consecutive events in the same unit, collapsed into stays.
+ *
+ * Under strip grazing a stay is many events — one per wire move — and treating
+ * each as its own visit would report fourteen visits to a paddock the mob
+ * entered once.
+ *
+ * Same unit is not enough on its own: they have to be **contiguous in time**
+ * as well. `log_grazing_move` closes the open event at the very instant it
+ * opens the next, so strips within one stay share a boundary exactly. A unit
+ * grazed in June and again in August is two visits with two rests, and
+ * merging those on the strength of the paddock id alone would erase the rest
+ * between them — which is the figure the whole page exists to show.
+ */
+/** Slack on that boundary. The move function makes it exact; this absorbs a
+ * hand-edited timestamp without swallowing a genuine return, which is always
+ * days away rather than minutes. */
+const STAY_JOIN_MS = 60 * 60 * 1000;
+export function staysFrom(input: {
+  events: GrazingEvent[];
+  paddocks: Paddock[];
+  removals?: ForageRemoval[];
+  nowIso: string;
+}): Stay[] {
+  const { events, paddocks, removals = [], nowIso } = input;
+  const byId = new Map(paddocks.map((p) => [p.id, p]));
+  const ordered = [...events].sort((a, b) => a.enteredAt.localeCompare(b.enteredAt));
+
+  const stays: Stay[] = [];
+  for (const e of ordered) {
+    const open = stays[stays.length - 1];
+    const prev = open?.events[open.events.length - 1];
+    const joins =
+      open !== undefined &&
+      open.paddockId === e.paddockId &&
+      prev?.exitedAt != null &&
+      new Date(e.enteredAt).getTime() - new Date(prev.exitedAt).getTime() <= STAY_JOIN_MS;
+
+    if (joins) open.events.push(e);
+    else stays.push({
+      paddockId: e.paddockId,
+      enteredAt: e.enteredAt,
+      exitedAt: null,
+      strips: 0,
+      days: 0,
+      acres: null,
+      restBeforeDays: null,
+      events: [e],
+    });
+  }
+
+  return stays.map((s) => {
+    const paddock = byId.get(s.paddockId) ?? null;
+    const last = s.events[s.events.length - 1];
+    const exitedAt = last.exitedAt;
+
+    // Rest before entry: what the ground at the start of the sweep had
+    // accumulated, judged only on what was known by then. Events and cuttings
+    // after this entry are irrelevant to it and must not leak in — and the
+    // stay's own events are excluded by id rather than by date, because an
+    // open one has no exit to compare and would otherwise report itself as
+    // the previous grazing and a rest of zero.
+    const mine = new Set(s.events.map((e) => e.id));
+    const before = events.filter((e) => !mine.has(e.id) && (e.exitedAt ?? e.enteredAt) <= s.enteredAt);
+    const cutBefore = removals.filter((r) => `${r.removedOn}T23:59:59.999Z` <= s.enteredAt);
+    const priorAt = lastDefoliatedAt(s.paddockId, 0.02, before, cutBefore);
+
+    const acres = paddock
+      ? s.events.reduce<number | null>((sum, e) => {
+          const a = stripAcres(e, paddock);
+          return sum === null || a === null ? null : sum + a;
+        }, 0)
+      : null;
+
+    return {
+      ...s,
+      exitedAt,
+      strips: s.events.length,
+      days: daysBetween(s.enteredAt, exitedAt ?? nowIso),
+      acres,
+      restBeforeDays: priorAt === null ? null : daysBetween(priorAt, s.enteredAt),
+    };
+  });
+}
+
+/**
+ * The stays grouped into trips through the farm.
+ *
+ * A round ends when the mob walks into a unit it has already been in this
+ * round. That definition needs no notion of the "correct" order, so it holds
+ * when a unit is skipped for wet ground or taken out of turn — which is what
+ * actually happens, and what a hardcoded serpentine would get wrong.
+ */
+export function rotationRounds(input: {
+  events: GrazingEvent[];
+  paddocks: Paddock[];
+  removals?: ForageRemoval[];
+  nowIso: string;
+}): Round[] {
+  const { removals = [], nowIso } = input;
+  const stays = staysFrom(input);
+  if (stays.length === 0) return [];
+
+  const grouped: Stay[][] = [];
+  let current: Stay[] = [];
+  let seen = new Set<string>();
+  for (const s of stays) {
+    if (seen.has(s.paddockId)) {
+      grouped.push(current);
+      current = [];
+      seen = new Set();
+    }
+    current.push(s);
+    seen.add(s.paddockId);
+  }
+  if (current.length > 0) grouped.push(current);
+
+  return grouped.map((group, i) => {
+    const startedAt = group[0].enteredAt;
+    const endedAt = group[group.length - 1].exitedAt;
+    // Open at both ends where there is no neighbouring round, so no cutting
+    // falls between two windows and disappears.
+    const from = i === 0 ? "" : startedAt;
+    const to = i === grouped.length - 1 ? "9999" : grouped[i + 1][0].enteredAt;
+
+    return {
+      index: i + 1,
+      startedAt,
+      endedAt,
+      days: daysBetween(startedAt, endedAt ?? nowIso),
+      stays: group,
+      cuttings: removals
+        .filter((r) => {
+          const at = `${r.removedOn}T23:59:59.999Z`;
+          return at >= from && at < to;
+        })
+        .sort((a, b) => a.removedOn.localeCompare(b.removedOn)),
+    };
+  });
 }

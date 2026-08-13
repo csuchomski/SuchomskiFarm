@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import type {
+  ForageRemoval,
   MoveDraft,
   GrazingEvent,
   GrazingGroup,
@@ -98,6 +99,7 @@ const members: GrazingGroupMember[] = [
 ];
 const weights = new Map<string, number>();
 const targets: PlanPaddockTarget[] = [];
+const removals: ForageRemoval[] = [];
 let hasPlan = false;
 
 const moved = vi.fn(async (_farmId: string, _draft: MoveDraft) => "new-event");
@@ -112,6 +114,7 @@ vi.mock("../lib/grazing", async (importOriginal) => {
     fetchPaddocks: vi.fn(async () => paddocks),
     fetchGrazingGroups: vi.fn(async () => [mob]),
     fetchGrazingEvents: vi.fn(async () => events),
+    fetchForageRemovals: vi.fn(async () => removals),
     fetchGroupMembers: vi.fn(async () => members),
     fetchLatestWeights: vi.fn(async () => weights),
     fetchActivePlan: vi.fn(async () => (hasPlan ? { id: "plan" } : null)),
@@ -131,6 +134,7 @@ afterEach(() => {
   cleanup();
   events.length = 0;
   targets.length = 0;
+  removals.length = 0;
   weights.clear();
   hasPlan = false;
   moved.mockClear();

@@ -13,6 +13,7 @@ import AlertsPage from "./routes/Alerts";
 import BreedsPage from "./routes/Breeds";
 import DepreciationPage from "./routes/Depreciation";
 import GrazingPage from "./routes/Grazing";
+import RotationPage from "./routes/Rotation";
 import CalvingsPage from "./routes/Calvings";
 import StoreCustomers from "./routes/StoreCustomers";
 import StoreCustomerDetail from "./routes/StoreCustomerDetail";
@@ -61,6 +62,7 @@ export default function App() {
                 <Route path="/breeds" element={<BreedsPage />} />
                 <Route path="/depreciation" element={<DepreciationPage />} />
                 <Route path="/grazing" element={<GrazingPage />} />
+                <Route path="/grazing/rotation" element={<RotationPage />} />
                 <Route path="/store/products" element={<StoreProducts />} />
                 <Route path="/store/orders" element={<StoreOrders />} />
                 <Route path="/store/customers" element={<StoreCustomers />} />

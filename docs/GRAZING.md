@@ -3,11 +3,17 @@
 An eight-step module, built one reviewable step at a time. This file is the
 running record of what was decided and what is still open.
 
-**Steps 1 and 2 are done, and step 2 has been rebuilt for strip grazing.**
-Migrations 036–039 are run. Herd → Grazing shows the paddock board and logs a
-move as a *strip*: where the wire went along the unit's fixed sweep.
+**Steps 1, 2 and 3 are done**, and step 2 was rebuilt for strip grazing.
+Migrations 036–040 are run. Herd → Grazing shows the paddock board and logs a
+move as a *strip*: where the wire went along the unit's fixed sweep. Herd →
+Rotation shows the season as rounds and takes hay off a unit.
 
-Step 3 — the rotation timeline and hay entry — is next and not started.
+The five units carry real measured boundaries and acreage from the farm's own
+KML (040), so they are no longer a flat 1.91 acres each.
+
+Step 4 — the unit map and infrastructure layer — is next and not started. It
+is smaller than it was: the boundaries and fences now have real geometry, and
+water and gates are settled as not mapped.
 
 ## The strip-grazing redesign
 
@@ -630,7 +636,7 @@ want a real test in the pasture before either party believes it.
 
 1. **Schema + types** — built, rehearsed, awaiting the paddock list.
 2. Log a Move + paddock board.
-3. Rotation timeline + hay/forage removal entry.
+3. **Rotation timeline + hay/forage removal entry** — built. See below.
 4. Unit map + infrastructure layer.
 5. Feed and forage balance.
 6. Monitoring + key areas + photo points.
@@ -638,3 +644,94 @@ want a real test in the pasture before either party believes it.
 8. Exports — annual grazing record in the standard's own section order, and
    CSV of raw events, forage records and monitoring.
 9. *(conditional)* A worksheet-shaped export, if the IR sheet prescribes one.
+
+## Step 3: the rotation as rounds, and hay
+
+*Built 2026-08-13. No migration — `forage_removals` came with 036, and RLS on
+it was checked from an `authenticated` session rather than the SQL editor.*
+
+### The timeline is not a chart of days
+
+A season laid out day by day is the obvious shape and the wrong one, for two
+reasons that both point the same way.
+
+At strip-grazing resolution **one stay is a fortnight of daily wire moves**. A
+chart fine enough to show a single strip is far wider than the phone this is
+read on: a 210-day season across 350 px is 1.7 px a day. Scrolling sideways
+through a Gantt chart on an iPhone at the gate is not a thing anybody will do
+twice.
+
+And it answers a question nobody asks. The grazier's question is not "what
+happened on 14 July" — it is **"how many times have we been round, and had
+that paddock recovered when we walked back in"**.
+
+So the unit of the timeline is the **round**: one trip through the farm. It
+falls straight out of the serpentine, it compresses a fortnight of strips into
+one line, and it puts the figure that matters — rest before re-entry — in a
+column of its own.
+
+A round ends **when the mob walks into a unit it has already had this round**.
+That definition needs no notion of the correct order, so it survives a unit
+skipped for wet ground or taken out of turn. A hardcoded serpentine would call
+that a broken rotation; this calls it a round with four units in it.
+
+### Two things a stay is, and one it is not
+
+`staysFrom` collapses consecutive events in one unit into a stay, so fourteen
+wire moves report as one visit rather than fourteen. Same unit is **not enough
+on its own** — they have to be contiguous in time as well. `log_grazing_move`
+closes the open event at the very instant it opens the next, so strips inside
+a stay share a boundary exactly; an hour of slack absorbs a hand-edited
+timestamp. A unit grazed in June and again in August is two visits with two
+rests, and merging those on the paddock id alone would erase the rest between
+them — which is the one figure the page exists to show.
+
+Rest before entry is computed from what was known *by then*: the stay's own
+events are excluded **by id, not by date**, because an open event has no exit
+and a date-only filter sweeps it into its own history and reports a rest of
+zero.
+
+### Hay: the bug this step really fixes
+
+`forage_removals` existed from the start and nothing read it. That was not a
+missing feature, it was the app **giving wrong advice with confidence**.
+
+Forage that left on a hay wagon left the paddock as bare as forage a cow ate.
+Rest measured from the last *grazing* would tell somebody a unit mown three
+days ago had been resting since June — and the board sorts by rest, so that
+unit would be sitting at the top of the list recommending itself.
+
+The fix is `lastDefoliatedAt`, which is what rest now counts from:
+
+- **A cutting covers the whole unit**, because nobody mows a strip — the
+  machine goes over the lot. So it beats every position at once and is not
+  simply another interval in the same list. On the board a cut unit's bands go
+  flat, which is the honest picture.
+- It **resets readiness outright**. The argument for measuring from the start
+  of the sweep is an argument about where the *cattle* re-enter; a mower does
+  not re-enter anywhere, so after it has been through there is no rested end
+  to come back to.
+- A cutting is stamped at end of day, so a unit cut and grazed on the same
+  date reads as grazed after cutting — the order those two things happen in.
+
+**`lastGrazedAt` is kept, not replaced.** The board legitimately wants both:
+"rested 12 days" and "last grazed 3 June" are different facts about the same
+paddock, and a cutting in between makes them differ by a month. Collapsing
+them would leave the date column unable to answer either question. The board
+now shows `cut 1 Jul` beside the acreage, because without it the rest figure
+looks wrong to anyone who remembers when the cattle were last on it.
+
+### Where hay is entered, and why not on the board
+
+On Rotation, not on the board. The board is for the daily act; a cutting is an
+occasional one, and it belongs where the record it changes lives. Yield
+carries **weighed or estimated** — a scale ticket and a guess off the back of
+the wagon are not the same evidence, and the forage balance in step 5 should
+not be forced to treat them alike.
+
+Cuttings are shown against the round they fell in, since the reason to show
+them at all is that they explain a rest figure that would otherwise look
+wrong. The first round's window runs back to the start of the record and the
+last one's runs to now, so **every cutting lands in exactly one round** and
+none is silently dropped; a farm that has cut but never turned out still sees
+its cuttings listed.

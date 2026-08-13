@@ -14,7 +14,8 @@ import type {
 /**
  * Herd → Grazing: the board, and the move.
  *
- * The farm's real shape — five units at 1.91 grazable acres, one mob.
+ * Five units and one mob, as on the farm. The flat 1.91 acres is a fixture —
+ * the real units differ, and 040 has the measured figures.
  */
 
 const business = { id: 5, name: "Suchomski Family Farm", type: "farm" };

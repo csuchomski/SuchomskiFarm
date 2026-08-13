@@ -406,9 +406,53 @@ Recorded as the owner gives it, because seed data should be real:
 | Management units | **Five paddocks**, which can be split further as needed |
 | Water | **Seven points along the interior fence** |
 | Livestock | **Five head** |
-| Field | One field on County Hwy NN; perimeter fenced, interior fences at 410 / 372 / 417 ft with a 401 ft segment joining them |
+| Field | One field on County Hwy NN; perimeter fenced, four interior fences |
 
-Still missing: acreage per unit, coordinates, paddock names, plan targets.
+Acreage and boundaries are now measured rather than estimated — see below.
+Still missing: water point and gate coordinates, plan targets.
+
+### The KML settles the boundaries
+
+*Received 2026-08-13, loaded by 040.* A Google Earth export of the perimeter
+and the four interior fences. Two things make it trustworthy rather than
+merely present:
+
+- The drawn perimeter measures **9.532 acres** against the **9.55** given from
+  memory — 0.2% apart, from an independent source.
+- The four fences divide that perimeter into **five regions that sum to the
+  whole with nothing left over**, which is what proves the division is
+  complete rather than merely plausible.
+
+| Unit | Where | Acres | Sweep | Along |
+|---|---|---|---|---|
+| Paddock 1 | North band, full width | 2.003 | east to west | 533 ft |
+| Paddock 2 | Upper middle, west of the vertical fence | 1.930 | west to east | 419 ft |
+| Paddock 3 | Lower middle, west of the vertical fence | 1.970 | east to west | 424 ft |
+| Paddock 4 | South band, full width | 2.255 | west to east | 606 ft |
+| Paddock 5 | East lobe | 1.375 | south to north | 405 ft |
+
+**The numbering was derived, then confirmed.** The five sweep headings given
+in 039 fit the drawn shape exactly one way: each unit's sweep ends on the
+corner where the next one begins, and Paddock 5 delivers the mob back to the
+east end of Paddock 1, so the serpentine closes on itself with no dead legs.
+Any other assignment leaves a handoff crossing a fence at a point with no
+gate. That is strong evidence but not proof — gates are not in the KML — so
+it was put to the farmer and confirmed against the ground before loading.
+
+**Why the flat 1.91 was worse than it looked.** A strip's acreage is a
+fraction of its unit's acreage, so a single figure for all five understated
+the 2.255-acre south band by 15% and overstated the 1.375-acre east lobe by
+39% on every strip the app has ever sized. The units differ by 64% end to
+end.
+
+It also fills `sweep_length_ft`, which had been blank: a day's strip is a wire
+moved about 21 ft on the east lobe and about 8 ft on the south band, because
+one is cut along its short axis and the other across its long one.
+
+**What the file still lacks** is the seven water points and the gates — no
+`Point` placemarks at all. Their rows exist and stay without geometry. "Along
+the interior fence" is not a location, and inventing one would draw a tank on
+the map that nobody has stood next to.
 
 ### Splitting a paddock: two different things
 
@@ -420,8 +464,10 @@ is right depends on the rest clock rather than on the wire:
   `unit_type = 'temporary'`. It accumulates rest days of its own, gets its own
   targets, and appears on the board as a unit.
 - **A strip within a single grazing** — a wire moved across a paddock over
-  three days — is **one grazing event** on the parent paddock, optionally
-  carrying `boundary_override` to record the shape actually grazed.
+  three days — is **one grazing event** on the parent paddock, carrying
+  `swept_from`/`swept_to` and optionally `grazed_shape`. (039 renamed
+  `boundary_override` to `grazed_shape`, since under strip grazing a
+  per-grazing shape is the norm rather than an override of anything.)
 
 Getting this wrong is not cosmetic. Model a moving wire as five paddocks and
 each shows a full rest period it never had; model a season-long division as

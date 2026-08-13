@@ -20,8 +20,9 @@ import {
 
 /**
  * The board is arithmetic over the move log, so this is where it is right or
- * wrong. The farm's own shape: five units at 1.91 grazable acres, one mob of
- * five head.
+ * wrong. Five units and one mob of five head, as on the farm; the flat 1.91
+ * acres is a fixture rather than the real figures, which differ per unit
+ * since 040 measured them off the KML.
  */
 
 const NOW = "2026-08-13T12:00:00.000Z";

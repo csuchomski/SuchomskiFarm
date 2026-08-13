@@ -133,10 +133,10 @@ export interface Infrastructure {
 /**
  * The basemap: a georeferenced static image, not a tile service.
  *
- * Chosen deliberately. The farm already has an aerial from its EQIP plan, one
- * image caches whole, and it renders in a pasture with no signal — which is
- * the condition the map is needed in. A tile service trades that away for
- * zoom the map does not need.
+ * Chosen because this is the map the plan refers to. A tile service shows
+ * whatever the imagery is today; the EQIP plan map shows the field as it was
+ * when the plan was written, with its own fence lines and gates drawn on it —
+ * and that is the map a conservationist already has on file.
  */
 export interface MapOverlay {
   id: string;

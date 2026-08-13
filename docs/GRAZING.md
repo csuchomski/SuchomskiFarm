@@ -146,10 +146,14 @@ both and tells them apart by colour; without the column a planned gate reads
 on the map as a gate that is there.
 
 **The basemap is a georeferenced static image, not a tile service.** Decided
-2026-08-12. The farm already has an aerial from its EQIP plan; one image
-caches whole and renders in a pasture with no signal, which is the condition
-the map is needed in. A tile service trades that away for zoom the map does
-not need. `map_overlays` holds the image with a WGS84 bounding box and its
+2026-08-12. The original reasoning leaned on it working without signal, and
+that reason lapsed when the offline question was settled — but the decision
+survives on a better one: **this is the map the plan refers to.** A tile
+service shows whatever the imagery is today; the EQIP plan map shows the
+field as it was when the plan was written, with the plan's own fence lines
+and gates drawn on it. When a conservationist reviews the annual record, the
+map in it should be the one they already have on file. A live basemap would
+also be a running dependency bought for zoom this map does not need. `map_overlays` holds the image with a WGS84 bounding box and its
 pixel size — enough to place a boundary on a north-up aerial — with
 `rotation_deg` for one that isn't north-up and `control_points` for one a box
 cannot place at all. The source credit and imagery date travel with it,

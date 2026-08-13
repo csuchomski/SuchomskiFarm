@@ -417,6 +417,47 @@ the ground about to be opened, so on the one page it belongs above the wire,
 feeding it — not in an "everything below is optional" section after it, which
 is where the board's form puts it.
 
+#### Answers, given 2026-08-13 — these are settled
+
+**1. A weight field on the animal.** Asked for so weights can be entered on
+the animal itself, and *summed across the herd* to give the total weight on
+pasture.
+
+This crosses an earlier decision in `GRAZING.md`, which chose `herd.weights`
+— dated rows — over "a single field on the animal", so that a heifer's April
+figure stays her April figure. Both wants are real, and the resolution is not
+to pick: **a weight field on the Animals form that writes a dated row to
+`herd.weights`.** It reads as one field and keeps the history, and nothing
+downstream changes.
+
+Note the summing is already how it works. `groupAvgWeightLb` averages each
+member's most recent weighing, so head × average *is* the sum of actual
+weights, and varying sizes are already handled. `herd.weights` being empty is
+the whole of the problem; there is no arithmetic to fix, only a way in.
+
+Total weight on pasture is worth showing outright, though — it is the figure
+behind stock density and nowhere on screen today.
+
+**2. Standing forage: 300 lb of dry matter per acre-inch.** The farm's
+figure, so it goes in the plan rather than the code — a new
+`grazing_plans.lb_dm_per_acre_inch` beside `default_dmi_pct_bw`, editable on
+the Plan page like everything else there. This morning's height reading ×
+300 × grazable acres is then the standing forage for today's strip, and the
+readout can finally say the figure is theirs rather than the app's.
+
+Worth stating what this does to the existing chain: it makes
+`forage_availability` the fallback rather than the source, since a height
+taken this morning beats a figure recorded for the month.
+
+**3. Rotation order: P1, P2, P3, P4, P5.** A `paddocks.rotation_order`
+carrying 1–5. It is what lets "the next paddock" and "the start of Paddock 5"
+be things the app can name, and it wraps — after P5 comes P1.
+
+**4. The one-page move — yes.** Build it as described above.
+
+**5. The acreage fix and the new KML together — yes.** One pass, so the
+figures move under the farm once.
+
 #### The database already does this — checked, not assumed
 
 Both skips were tested against the live farm inside a rolled-back

@@ -5,6 +5,7 @@ import { useWorkspace } from "../lib/workspace";
 import {
   boardRows,
   endGrazing,
+  fetchForageRemovals,
   fetchGrazingEvents,
   fetchGrazingGroups,
   fetchGroupMembers,
@@ -27,6 +28,7 @@ import {
   whereIs,
   widthForHours,
   type ForageAssumptions,
+  type ForageRemoval,
   type BoardRow,
   type GrazingEvent,
   type GrazingGroup,
@@ -60,6 +62,7 @@ type Load =
       paddocks: Paddock[];
       groups: GrazingGroup[];
       events: GrazingEvent[];
+      removals: ForageRemoval[];
       members: GrazingGroupMember[];
       weights: Map<string, number>;
       targets: PlanPaddockTarget[];
@@ -113,16 +116,17 @@ export default function Grazing() {
       setLoad({ state: "error", message: "No farm on this business." });
       return;
     }
-    const [paddocks, groups, events, members, weights, plan] = await Promise.all([
+    const [paddocks, groups, events, removals, members, weights, plan] = await Promise.all([
       fetchPaddocks(farmId),
       fetchGrazingGroups(farmId),
       fetchGrazingEvents(farmId),
+      fetchForageRemovals(farmId),
       fetchGroupMembers(farmId),
       fetchLatestWeights(farmId),
       fetchActivePlan(farmId),
     ]);
     const targets = plan ? await fetchPlanPaddockTargets(plan.id) : [];
-    setLoad({ state: "ok", paddocks, groups, events, members, weights, targets, hasPlan: plan !== null });
+    setLoad({ state: "ok", paddocks, groups, events, removals, members, weights, targets, hasPlan: plan !== null });
   }, [farmId]);
 
   useEffect(() => {
@@ -139,6 +143,7 @@ export default function Grazing() {
       events: load.events,
       groups: load.groups,
       targets: load.targets,
+      removals: load.removals,
       nowIso: nowIso(),
     });
   }, [load]);
@@ -542,6 +547,9 @@ export default function Grazing() {
                     load.state === "ok" && isSwept(r.paddock)
                       ? sweepNote(r.paddock.id, load.events)
                       : null,
+                    // Without this the rest figure looks wrong to anyone who
+                    // remembers cattle were last on it in June.
+                    r.lastCut ? `cut ${shortDate(r.lastCut.removedOn)}` : null,
                   ]
                     .filter(Boolean)
                     .join(" · ")}
@@ -550,12 +558,12 @@ export default function Grazing() {
                     never one rest figure, and this is the shape a single
                     number could not carry. */}
                 {load.state === "ok" && isSwept(r.paddock) && (
-                  <SweepBar paddockId={r.paddock.id} events={load.events} />
+                  <SweepBar paddockId={r.paddock.id} events={load.events} removals={load.removals} />
                 )}
               </span>
               <span style={{ minWidth: 0 }}>
                 <span className="mono" style={{ fontSize: 15 }}>
-                  {load.state === "ok" ? restLabelFor(r, load.events) : restLabel(r)}
+                  {load.state === "ok" ? restLabelFor(r, load.events, load.removals) : restLabel(r)}
                 </span>
                 {r.eligible && (
                   <>
@@ -604,13 +612,13 @@ export default function Grazing() {
  * *start* of the sweep — grazed first, rested longest. Measuring from the
  * last strip would hold a unit back for weeks after it was fit to graze.
  */
-function restLabelFor(r: BoardRow, events: GrazingEvent[]): string {
+function restLabelFor(r: BoardRow, events: GrazingEvent[], removals: ForageRemoval[]): string {
   // While they are standing in it, that is the fact worth showing. Readiness
   // is a question about the *next* pass and only becomes the useful figure
   // once this one is over.
   if (r.occupant) return "occupied";
   if (!isSwept(r.paddock)) return restLabel(r);
-  const days = readinessDays(r.paddock.id, events, nowIso());
+  const days = readinessDays(r.paddock.id, events, nowIso(), removals);
   if (days === null) return "never grazed";
   return `${days} day${days === 1 ? "" : "s"}`;
 }
@@ -625,8 +633,16 @@ function sweepNote(paddockId: string, events: GrazingEvent[]): string | null {
 
 /** Bands of the unit's ground, shaded by rest. Boundaries come from where
  * wires have actually been, so nothing is bucketed onto an arbitrary grid. */
-function SweepBar({ paddockId, events }: { paddockId: string; events: GrazingEvent[] }) {
-  const bands = sweepBands(paddockId, events, nowIso());
+function SweepBar({
+  paddockId,
+  events,
+  removals,
+}: {
+  paddockId: string;
+  events: GrazingEvent[];
+  removals: ForageRemoval[];
+}) {
+  const bands = sweepBands(paddockId, events, nowIso(), removals);
   return (
     <span className="grz-bands" aria-hidden="true">
       {bands.map((b) => (

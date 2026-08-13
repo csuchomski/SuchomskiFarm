@@ -70,9 +70,23 @@ export interface PaddockForage {
   notes: string | null;
 }
 
+/**
+ * Which units a water source serves, and when it has water.
+ *
+ * Not a second list of water sources beside `Infrastructure`. The tank is one
+ * thing and lives there, on the map; this says which paddocks it waters. A
+ * join rather than a column on the tank, because water on a fence line serves
+ * the units on **both** sides — which is how this farm's seven points are
+ * placed. One tank, two rows.
+ *
+ * `infrastructureId` is null for a source with no point on the map: a creek,
+ * a pond, a neighbour's hydrant. Those still water a paddock and still have a
+ * season.
+ */
 export interface PaddockWaterSource {
   id: string;
   paddockId: string;
+  infrastructureId: string | null;
   sourceType: string;
   seasonalAvailability: string | null;
   notes: string | null;

@@ -141,6 +141,12 @@ records what was really grazed without redefining the paddock.
 queries — the app reads a boundary back whole and draws it. An extension
 bought for storage alone is a dependency for nothing.
 
+**Water is one thing on the map and a relationship to units.** The tank is a
+row in `infrastructure` with its geometry and practice code;
+`paddock_water_sources` says which paddocks it waters and when it has water.
+A join rather than a column, because a point on a fence line waters the units
+on both sides — which is how this farm's seven points are placed.
+
 **Infrastructure carries an existing/planned status.** An EQIP plan map draws
 both and tells them apart by colour; without the column a planned gate reads
 on the map as a gate that is there.
@@ -243,12 +249,23 @@ Two things from the brief's own "before you run this", both still open:
    That corrects an earlier guess in this file: the coloured pins are gates,
    **not** watering facilities.
 
-   **Which means no livestock water appears on this map at all** — no tank,
-   no well, no pipeline, no water gap. The 2025 standard names livestock
-   water among the infrastructure the unit map has to show, so this is worth
-   raising with the conservationist rather than leaving to be noticed at a
-   review. Either the water exists and was left off the drawing, or it is not
-   yet planned, and those want different answers.
+   **No livestock water appears on this map** — no tank, no well, no
+   pipeline, no water gap — although the 2025 standard names livestock water
+   among the infrastructure the unit map has to show.
+
+   *Answered 2026-08-13: there are **seven water points along the interior
+   fence**.* So the water exists and is simply not on this drawing. Worth
+   mentioning to the conservationist, since the map on file is missing an
+   element the standard asks it to show — but it is a drawing gap, not a
+   resource gap.
+
+   That answer changed the schema. Water on a fence line serves the units on
+   **both** sides, and `paddock_water_sources` could not say so: it listed
+   sources per paddock, independently of the map. It is now the join between
+   a paddock and the `infrastructure` row that is the tank — one tank, two
+   rows, one per unit it waters. The alternative was two tables describing
+   the same tank, which is the one-fact-in-two-places trap this project has
+   now walked into three times and caught three times.
 
    `infrastructure.status` distinguishes existing from planned, because the
    map draws both by colour and a planned gate must not read as a gate that
@@ -263,9 +280,11 @@ Two things from the brief's own "before you run this", both still open:
      as-is.
    - failing that, **two known points** on the image — a fence corner, a gate
      — with latitude and longitude, which is enough to fill the bounding box.
-   - **whether livestock water exists on this field**, and where.
    - **acreage per unit** from the plan, and how many units the cross-fences
      are meant to make.
+   - for the seven water points: **existing or planned**, whether they are
+     tanks off a pipeline or something else, and whether each really does
+     serve both sides of the fence it sits on.
 
 ## Settled: online only, for now
 

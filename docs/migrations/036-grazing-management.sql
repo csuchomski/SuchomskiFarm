@@ -138,23 +138,6 @@ create table if not exists herd.paddock_forages (
   rev integer not null default 1
 );
 
-create table if not exists herd.paddock_water_sources (
-  id         uuid primary key default gen_random_uuid(),
-  farm_id    uuid not null references herd.farms(id),
-  paddock_id uuid not null references herd.paddocks(id),
-  source_type text not null,
-  -- Seasonal availability is the point of recording water at all: a paddock
-  -- with a summer-dry creek is a different paddock in August.
-  seasonal_availability text,
-  notes      text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  created_by uuid references auth.users(id),
-  updated_by uuid references auth.users(id),
-  deleted_at timestamptz,
-  rev integer not null default 1
-);
-
 create table if not exists herd.holding_areas (
   id         uuid primary key default gen_random_uuid(),
   farm_id    uuid not null references herd.farms(id),
@@ -224,6 +207,45 @@ create table if not exists herd.infrastructure (
 
 create index if not exists infrastructure_farm_kind_idx
   on herd.infrastructure (farm_id, kind) where deleted_at is null;
+
+-- Which units a water source serves, and when it has water.
+--
+-- Deliberately *not* a second list of water sources beside `infrastructure`.
+-- The tank is one thing and lives there, on the map, with its geometry and
+-- its practice code; this table says which paddocks it waters. Two tables
+-- describing the same tank would be one fact in two places, and they would
+-- disagree the first time one was edited.
+--
+-- It is a join rather than a column on `infrastructure` because water on a
+-- fence line serves the units on **both** sides — which is exactly how this
+-- farm's seven points are placed. One tank, two rows.
+--
+-- `infrastructure_id` is nullable for a source with no point on the map: a
+-- creek, a pond, a neighbour's hydrant. Those still water a paddock and still
+-- have a season.
+create table if not exists herd.paddock_water_sources (
+  id         uuid primary key default gen_random_uuid(),
+  farm_id    uuid not null references herd.farms(id),
+  paddock_id uuid not null references herd.paddocks(id),
+  infrastructure_id uuid references herd.infrastructure(id),
+  source_type text not null,
+  -- Seasonal availability is the point of recording water at all: a paddock
+  -- with a summer-dry creek is a different paddock in August.
+  seasonal_availability text,
+  notes      text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  created_by uuid references auth.users(id),
+  updated_by uuid references auth.users(id),
+  deleted_at timestamptz,
+  rev integer not null default 1
+);
+
+-- One mapped source can water many paddocks and one paddock can have many
+-- sources, but the same pairing twice is a duplicate.
+create unique index if not exists paddock_water_sources_pair_uniq
+  on herd.paddock_water_sources (paddock_id, infrastructure_id)
+  where deleted_at is null and infrastructure_id is not null;
 
 -- ── the basemap ────────────────────────────────────────────────────────
 --

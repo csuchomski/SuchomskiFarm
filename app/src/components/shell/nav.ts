@@ -33,6 +33,9 @@ export const allGroups: NavGroup[] = [
       { label: "Breedings", to: "/breedings" },
       { label: "Calvings", to: "/calvings" },
       { label: "Breeds", to: "/breeds" },
+      // First thing you want in a pasture, so it sits above the reference
+      // pages rather than at the bottom of the group.
+      { label: "Grazing", to: "/grazing" },
       { label: "Depreciation", to: "/depreciation" },
       { label: "Health" },
     ],

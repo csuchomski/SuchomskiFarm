@@ -641,3 +641,312 @@ export async function fetchActivePlan(farmId: string): Promise<GrazingPlan | nul
     notes: (r.notes as string) ?? null,
   };
 }
+
+// ─── derived figures ───────────────────────────────────────────────────
+//
+// None of this is stored. Occupancy, rest, density and animal units are all
+// functions of the rows above, and a stored copy would go stale the moment a
+// move was edited — which the brief explicitly allows.
+
+/** An animal unit is 1,000 lb of live weight. Null when the event never
+ * recorded head or weight, because zero would read as "no cattle here". */
+export function animalUnits(headCount: number | null, avgWeightLb: number | null): number | null {
+  if (headCount === null || avgWeightLb === null) return null;
+  return (headCount * avgWeightLb) / 1000;
+}
+
+/** Whole days between two instants, floored — a mob that arrived yesterday
+ * afternoon and left this morning was there "0 days", which is honest for a
+ * flash graze. */
+export function daysBetween(fromIso: string, toIso: string): number {
+  return Math.floor((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 86400000);
+}
+
+/** How long they have been, or were, in the paddock. */
+export function occupancyDays(event: GrazingEvent, nowIso: string): number {
+  return daysBetween(event.enteredAt, event.exitedAt ?? nowIso);
+}
+
+/** Head × days. The figure that actually drives forage removed, and the one
+ * a stocking rate is built from. */
+export function animalDays(event: GrazingEvent, nowIso: string): number | null {
+  if (event.headCount === null) return null;
+  return event.headCount * occupancyDays(event, nowIso);
+}
+
+/** Pounds of live weight per grazable acre — instantaneous stocking density,
+ * not a stocking rate. Null when weight or acres are unknown rather than
+ * guessed: this is the number people compare between farms. */
+export function stockingDensityLbPerAcre(event: GrazingEvent, paddock: Paddock): number | null {
+  const acres = paddock.acresGrazable ?? paddock.acresMeasured;
+  if (acres === null || acres <= 0) return null;
+  if (event.headCount === null || event.avgWeightLb === null) return null;
+  return (event.headCount * event.avgWeightLb) / acres;
+}
+
+/** The mob in a paddock right now, if any. */
+export function openEventFor(paddockId: string, events: GrazingEvent[]): GrazingEvent | null {
+  return events.find((e) => e.paddockId === paddockId && e.exitedAt === null) ?? null;
+}
+
+/** Where a mob is right now, if anywhere. Null is a real answer — they may be
+ * off pasture altogether. */
+export function whereIs(groupId: string, events: GrazingEvent[]): GrazingEvent | null {
+  return events.find((e) => e.groupId === groupId && e.exitedAt === null) ?? null;
+}
+
+/**
+ * Days of rest a paddock has accumulated since the mob last left it.
+ *
+ * Null has two distinct meanings and the caller has to tell them apart, so
+ * they are separated here rather than collapsed: `occupied` when something is
+ * in it now, and null when it has never been grazed at all. A paddock never
+ * grazed has not "rested" for the age of the record — it has no history.
+ */
+export function restDays(
+  paddockId: string,
+  events: GrazingEvent[],
+  nowIso: string,
+): { state: "occupied" } | { state: "rested"; days: number; since: string } | { state: "never" } {
+  if (openEventFor(paddockId, events)) return { state: "occupied" };
+
+  const exits = events
+    .filter((e) => e.paddockId === paddockId && e.exitedAt !== null)
+    .map((e) => e.exitedAt!)
+    .sort();
+  const last = exits[exits.length - 1];
+  if (!last) return { state: "never" };
+
+  return { state: "rested", days: daysBetween(last, nowIso), since: last };
+}
+
+/**
+ * When a paddock next comes eligible, and whether it is there yet.
+ *
+ * Null when there is no target — a plan with no recovery figure for this
+ * paddock gets silence, not a default. This app does not invent a recovery
+ * period; that is an agronomic recommendation it has no standing to make.
+ */
+export function nextEligible(
+  rest: ReturnType<typeof restDays>,
+  recoveryDays: number | null,
+): { readyOn: string; met: boolean; shortBy: number } | null {
+  if (recoveryDays === null || rest.state !== "rested") return null;
+  const ready = new Date(rest.since);
+  ready.setDate(ready.getDate() + recoveryDays);
+  const readyOn = ready.toISOString().slice(0, 10);
+  return { readyOn, met: rest.days >= recoveryDays, shortBy: Math.max(0, recoveryDays - rest.days) };
+}
+
+export interface BoardRow {
+  paddock: Paddock;
+  rest: ReturnType<typeof restDays>;
+  /** The mob in it now, when there is one. */
+  occupant: { event: GrazingEvent; group: GrazingGroup | null; days: number } | null;
+  lastGrazed: string | null;
+  lastResidualIn: number | null;
+  eligible: ReturnType<typeof nextEligible>;
+}
+
+/**
+ * The paddock board: every unit, longest-rested first, so the next paddock to
+ * graze is at the top.
+ *
+ * Occupied units sort last rather than first. They are not candidates — the
+ * question this list answers is "where do they go next".
+ */
+export function boardRows(input: {
+  paddocks: Paddock[];
+  events: GrazingEvent[];
+  groups: GrazingGroup[];
+  targets: PlanPaddockTarget[];
+  nowIso: string;
+  /** Which recovery figure applies today. The plan holds both. */
+  season?: "growing" | "dormant";
+}): BoardRow[] {
+  const { paddocks, events, groups, targets, nowIso, season = "growing" } = input;
+  const groupById = new Map(groups.map((g) => [g.id, g]));
+  const targetFor = new Map(targets.map((t) => [t.paddockId, t]));
+
+  const rows = paddocks
+    .filter((p) => p.active)
+    .map((paddock): BoardRow => {
+      const rest = restDays(paddock.id, events, nowIso);
+      const open = openEventFor(paddock.id, events);
+      const target = targetFor.get(paddock.id);
+      const recovery = target
+        ? season === "dormant"
+          ? target.minRecoveryDaysDormant
+          : target.minRecoveryDaysGrowing
+        : null;
+
+      const hers = events
+        .filter((e) => e.paddockId === paddock.id && e.exitedAt !== null)
+        .sort((a, b) => (a.exitedAt! < b.exitedAt! ? 1 : -1));
+
+      return {
+        paddock,
+        rest,
+        occupant: open
+          ? { event: open, group: groupById.get(open.groupId) ?? null, days: occupancyDays(open, nowIso) }
+          : null,
+        lastGrazed: hers[0]?.exitedAt ?? open?.enteredAt ?? null,
+        lastResidualIn: hers[0]?.residualHeightInExit ?? null,
+        eligible: nextEligible(rest, recovery ?? null),
+      };
+    });
+
+  // Longest rest first; never-grazed above occupied but below anything with a
+  // real rest figure, because "never grazed" is a candidate without a number.
+  const rank = (r: BoardRow) => (r.rest.state === "occupied" ? -2 : r.rest.state === "never" ? -1 : r.rest.days);
+  return rows.sort((a, b) => rank(b) - rank(a) || a.paddock.name.localeCompare(b.paddock.name));
+}
+
+/** Head in a group: the members, unless a figure was stated. */
+export function groupHeadCount(group: GrazingGroup, members: GrazingGroupMember[]): number | null {
+  if (group.headCountManual !== null) return group.headCountManual;
+  const open = members.filter((m) => m.groupId === group.id && m.leftOn === null);
+  return open.length > 0 ? open.length : null;
+}
+
+/**
+ * Average weight across the group, from each member's most recent weighing.
+ *
+ * Null when nobody has been weighed — the move form then leaves it blank
+ * rather than filling in a number nobody measured.
+ */
+export function groupAvgWeightLb(
+  group: GrazingGroup,
+  members: GrazingGroupMember[],
+  latestWeightLb: Map<string, number>,
+): number | null {
+  if (group.avgWeightLbManual !== null) return group.avgWeightLbManual;
+  const weights = members
+    .filter((m) => m.groupId === group.id && m.leftOn === null)
+    .map((m) => latestWeightLb.get(m.animalId))
+    .filter((w): w is number => w !== undefined);
+  if (weights.length === 0) return null;
+  return weights.reduce((a, b) => a + b, 0) / weights.length;
+}
+
+// ─── the rest of the reads, and the writes ─────────────────────────────
+
+export async function fetchGroupMembers(farmId: string): Promise<GrazingGroupMember[]> {
+  const { data, error } = await herdSchema()
+    .from("grazing_group_members")
+    .select("id, group_id, animal_id, joined_on, left_on")
+    .eq("farm_id", farmId)
+    .is("deleted_at", null);
+  if (error) throw new Error(`herd.grazing_group_members: ${error.message}`);
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    groupId: r.group_id as string,
+    animalId: r.animal_id as string,
+    joinedOn: (r.joined_on as string) ?? null,
+    leftOn: (r.left_on as string) ?? null,
+  }));
+}
+
+/**
+ * Each animal's most recent weight.
+ *
+ * From `herd.weights`, which predates this module and is where weights
+ * belong — dated rows, so a heifer's April figure stays her April figure.
+ * Empty is expected until somebody weighs something.
+ */
+export async function fetchLatestWeights(farmId: string): Promise<Map<string, number>> {
+  const { data, error } = await herdSchema()
+    .from("weights")
+    .select("animal_id, date, weight_lb")
+    .eq("farm_id", farmId)
+    .is("deleted_at", null)
+    .order("date", { ascending: false });
+  if (error) throw new Error(`herd.weights: ${error.message}`);
+
+  const latest = new Map<string, number>();
+  for (const r of (data ?? []) as { animal_id: string; weight_lb: number }[]) {
+    // Ordered newest first, so the first one seen per animal is the latest.
+    if (!latest.has(r.animal_id)) latest.set(r.animal_id, Number(r.weight_lb));
+  }
+  return latest;
+}
+
+export interface MoveDraft {
+  paddockId: string;
+  groupId: string;
+  /** ISO instant. Defaults to now in the form, and is editable — which is
+   * what makes logging from the house an hour later an accurate record
+   * rather than an approximation. */
+  at: string;
+  headCount: number | null;
+  avgWeightLb: number | null;
+  forageHeightInEntry: number | null;
+  soilMoisture: SoilMoisture | null;
+  notes: string;
+  latitude: number | null;
+  longitude: number | null;
+  /** These describe the paddock being *left*, not the one being entered. */
+  residualHeightInExit: number | null;
+  utilizationPct: number | null;
+}
+
+/**
+ * One move: they leave where they were and arrive where they are going, at
+ * the same instant.
+ *
+ * An RPC because it is two writes that have to land together — see migration
+ * 038. Doing it from here would risk a mob closed out of one paddock and in
+ * none.
+ */
+export async function logMove(farmId: string, draft: MoveDraft): Promise<string> {
+  const { data, error } = await herdSchema().rpc("log_grazing_move", {
+    p_farm_id: farmId,
+    p_group_id: draft.groupId,
+    p_paddock_id: draft.paddockId,
+    p_at: draft.at,
+    p_head_count: draft.headCount,
+    p_avg_weight_lb: draft.avgWeightLb,
+    p_forage_height_in_entry: draft.forageHeightInEntry,
+    p_soil_moisture: draft.soilMoisture,
+    p_notes: draft.notes,
+    p_latitude: draft.latitude,
+    p_longitude: draft.longitude,
+    p_residual_height_in_exit: draft.residualHeightInExit,
+    p_utilization_pct: draft.utilizationPct,
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+/** Off pasture entirely — a close with no arrival. */
+export async function endGrazing(
+  farmId: string,
+  groupId: string,
+  at: string,
+  residualHeightInExit: number | null,
+  utilizationPct: number | null,
+): Promise<void> {
+  const { error } = await herdSchema().rpc("end_grazing", {
+    p_farm_id: farmId,
+    p_group_id: groupId,
+    p_at: at,
+    p_residual_height_in_exit: residualHeightInExit,
+    p_utilization_pct: utilizationPct,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Fill in what the last move said, so the common case is one tap and a
+ * paddock. Nothing here is a measurement — it is the previous reading, and
+ * the form lets it be corrected. */
+export function prefillFrom(
+  last: GrazingEvent | null,
+  headCount: number | null,
+  avgWeightLb: number | null,
+): Pick<MoveDraft, "headCount" | "avgWeightLb" | "forageHeightInEntry"> {
+  return {
+    headCount: headCount ?? last?.headCount ?? null,
+    avgWeightLb: avgWeightLb ?? last?.avgWeightLb ?? null,
+    forageHeightInEntry: null,
+  };
+}

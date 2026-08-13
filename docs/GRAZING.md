@@ -3,12 +3,11 @@
 An eight-step module, built one reviewable step at a time. This file is the
 running record of what was decided and what is still open.
 
-**Step 1 is done.** Migrations 036 (schema) and 037 (this farm's seed) are
-run. Twenty-five tables live with RLS on every one; five paddocks at 9.55
-grazable acres, seven water points, the plan map's fences, and one mob
-holding every animal on file.
+**Steps 1 and 2 are done.** Migrations 036 (schema), 037 (this farm's seed)
+and 038 (the move functions) are run. Herd → Grazing shows the paddock board
+and logs a move.
 
-Step 2 — Log a Move and the paddock board — is next and not started.
+Step 3 — the rotation timeline and hay entry — is next and not started.
 
 ## What it is for
 
@@ -40,6 +39,49 @@ records get used to make changes.
 Each of those has its own table in migration 036, rather than everything
 being crammed into the move log. The map, the forage balance and the decision
 log are first-class.
+
+## Step 2: Log a Move and the paddock board
+
+`Herd → Grazing`. The board lists every unit longest-rested first, so the next
+paddock to graze is the top row; occupied units sort last because they are not
+candidates. The line above it says where the mob is, how long it has been
+there, and at what stocking density.
+
+### Decisions worth knowing
+
+**A move is one database call, not two.** `herd.log_grazing_move()` closes the
+open event and opens the next inside one transaction. Doing it from the app
+would put a network hop between the two writes, and a failure on the second
+leaves the mob *nowhere* — closed out of one paddock and in none. The reverse
+order cannot work either: `grazing_events_one_open_per_group` refuses the
+arrival while the departure is still open. Same reasoning as `record_breeding`.
+
+**Exit readings belong to the paddock being left.** Residual height and
+utilization describe the ground you are shutting the gate on, so the function
+takes them for the *outgoing* event. The form only asks for them when there is
+somewhere to leave, and says which paddock it means.
+
+**Taking them off pasture is its own verb.** `herd.end_grazing()` closes
+without opening, so "where are they now" can honestly answer *nowhere on
+pasture* instead of naming a paddock they are not in.
+
+**The board warns and never blocks.** A paddock short of its recovery target
+is marked in ochre — "outside plan target", never "non-compliant" — and the
+move saves anyway. The plan is the farm's own, and a farmer moving cattle at
+seven in the morning has reasons a form does not know.
+
+**Rest has three states, not a number and a null.** Occupied, rested for N
+days since a date, or never grazed. A paddock never grazed has no history; it
+has not been resting since the beginning of the record.
+
+**Nothing is prefilled that is a measurement.** Head count and average weight
+carry over — head from the mob's membership, weight from each animal's most
+recent row in `herd.weights`. Forage height never carries over: it is a
+reading taken at the gate, and a stale one is worse than a blank.
+
+**Blank rather than invented, throughout.** No weights on file means the
+weight field stays empty and stocking density reads nothing, rather than the
+page assuming a figure.
 
 ## Two rules that run through the whole module
 

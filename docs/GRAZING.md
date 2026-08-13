@@ -280,14 +280,16 @@ Two things from the brief's own "before you run this", both still open:
      as-is.
    - failing that, **two known points** on the image — a fence corner, a gate
      — with latitude and longitude, which is enough to fill the bounding box.
-   - **acreage per unit** from the plan.
+   - **acreage per unit** — see "What acreage per unit means" below.
    - for the seven water points: **existing or planned**, whether they are
      tanks off a pipeline or something else, and whether each really does
      serve both sides of the fence it sits on.
-   - **names or numbers for the five paddocks**, as the farm actually calls
-     them. `paddocks.name` is unique per farm and is what every other screen
-     will label a move with, so it should be the name used at the gate rather
-     than one this file invented.
+   - *Naming settled 2026-08-13:* the owner has no established names, so
+     **Paddock 1 through 5, numbered north to south**, codes `P1`–`P5`. The
+     plan map is drawn north-up, so the numbers read down the page and a
+     conservationist holding the map can follow the app without a key.
+     Renaming later is one edit and breaks nothing — moves reference the
+     paddock's id, not its name.
 
 ## The farm, as known so far
 
@@ -319,17 +321,79 @@ Getting this wrong is not cosmetic. Model a moving wire as five paddocks and
 each shows a full rest period it never had; model a season-long division as
 one paddock and the rest clock is wrong for both halves.
 
-### Five head, four animals
+### Head count and weight both derive from the animal records
 
-The herd has **four** animals on file — Martha, Abigail, Patience, Vera — and
-the farm runs five. `grazing_groups` derives head count from its members, so
-a group built from the animal records would say four.
+*Decided 2026-08-13.* The animal records are the source of truth for how many
+head there are. `head_count_manual` stays on `grazing_groups` as an override,
+but it is not the intended path — the fifth animal wants adding to Herd →
+Animals, and then the group is right by construction.
 
-Two honest ways out, and it is worth picking before the first move is logged:
-add the fifth animal to Herd → Animals so the group derives correctly, or set
-`head_count_manual` on the group and accept that the figure is stated rather
-than derived. The first is better if the fifth animal is a keeper; the second
-is right for something passing through.
+**Weight goes in `herd.weights`, which already exists and is empty.** Columns
+`animal_id, date, weight_lb, weight_type, contemporary_group, notes`, with
+RLS already in place. No new column, and the gain over a single field on the
+animal is that weight is *dated*: a heifer at 900 lb in April and 1,050 in
+September is two rows, and a move logged in April uses the April figure.
+
+A group's average weight is then the mean of its members' most recent
+weights, with `avg_weight_lb_manual` as the override. Both figures on a
+`grazing_event` are still snapshotted at the moment of the move, so
+back-filling a weight later never rewrites what was recorded at the gate.
+
+### Which pasture an animal is in, without a second answer
+
+*Decided 2026-08-13.* Derived, not stored: **animal → her group →
+that group's open grazing event → paddock.** `grazing_group_members` carries
+`joined_on` / `left_on`, so moving an animal between mobs is dated history
+and "where was she in July" is answerable.
+
+Adding a paddock field to the animal would give the question two answers that
+can disagree, which is the trap this schema has now avoided three times.
+
+To run animals in different pastures, run more than one group — a group of
+one is legitimate, and is the right shape for a cow held back on her own.
+With five head that will usually be one mob, and the model does not change
+when it isn't.
+
+Worth noting so nobody wires it up twice: `herd.locations` and
+`herd.animal_location_history` exist and are empty. They are a general "where
+is this animal" idea — barn, lot, pen — not grazing units. Paddocks must not
+also be written into `locations`.
+
+### What "acreage per unit" means, and why it is asked for
+
+Two numbers for each of the five paddocks:
+
+- **Measured acres** — everything inside its fences.
+- **Grazable acres** — what the cattle can actually eat off. The wooded edge,
+  a wet corner, a lane, a rock outcrop are inside the fence and are not
+  forage.
+
+Everything per-acre divides by the second one: stocking density in pounds of
+live weight per acre, forage supply in the balance, and the AUM figures on
+the annual record. A paddock carried at its measured acres reads as more
+feed than it has.
+
+From the plan map's own dimensions, the block between the 410 ft and 417 ft
+cross-fences, bounded east by the 401 ft segment, is roughly
+`((410 + 417) / 2) × 401 = 165,800 sq ft`, about **3.8 acres** — so the two
+units inside it are about 1.9 acres each. That is arithmetic off a drawing,
+offered only as a sanity check against the real figures; the three remaining
+units cannot be sized without the perimeter dimensions.
+
+### Entering water point locations
+
+*Decided 2026-08-13: not by hand, and not yet.*
+
+Typing fourteen decimal coordinates is error-prone and the errors are silent
+— a digit wrong puts a tank in the next county and nothing complains. Step 4
+builds the unit map over the georeferenced aerial, and tapping a point on
+that image is both easier and self-checking: a mis-tap is visible
+immediately.
+
+So the seven points are recorded now **without geometry** — name, kind, which
+paddocks each serves, existing or planned. `infrastructure.geometry` is
+nullable exactly so this is possible. The locations get filled in on the map
+screen when it exists, or arrive with the KML if NRCS has one.
 
 ## Settled: online only, for now
 

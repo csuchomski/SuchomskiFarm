@@ -365,6 +365,12 @@ Two things from the brief's own "before you run this", both still open:
    element the standard asks it to show — but it is a drawing gap, not a
    resource gap.
 
+   *Closed 2026-08-13: the owner does not want water or gates mapped, and the
+   app does not draw them.* The gap was raised twice and the answer is the
+   same both times, so it stops being an open item here. What the farm shows
+   a conservationist is between the farm and the conservationist; this app
+   records what it is told and asserts nothing about compliance either way.
+
    That answer changed the schema. Water on a fence line serves the units on
    **both** sides, and `paddock_water_sources` could not say so: it listed
    sources per paddock, independently of the map. It is now the join between
@@ -387,9 +393,10 @@ Two things from the brief's own "before you run this", both still open:
    - failing that, **two known points** on the image — a fence corner, a gate
      — with latitude and longitude, which is enough to fill the bounding box.
    - **acreage per unit** — see "What acreage per unit means" below.
-   - for the seven water points: **existing or planned**, whether they are
-     tanks off a pipeline or something else, and whether each really does
-     serve both sides of the fence it sits on.
+
+   *All three settled 2026-08-13: the farm produced its own KML, and 040
+   loaded real boundaries and measured acreage from it. The water-point
+   questions below lapsed with the decision not to map water.*
    - *Naming settled 2026-08-13:* the owner has no established names, so
      **Paddock 1 through 5, numbered north to south**, codes `P1`–`P5`. The
      plan map is drawn north-up, so the numbers read down the page and a
@@ -409,7 +416,8 @@ Recorded as the owner gives it, because seed data should be real:
 | Field | One field on County Hwy NN; perimeter fenced, four interior fences |
 
 Acreage and boundaries are now measured rather than estimated — see below.
-Still missing: water point and gate coordinates, plan targets.
+Still missing: plan targets. Water point and gate locations are settled as
+*not wanted* — see "Water points and gates are not being mapped".
 
 ### The KML settles the boundaries
 
@@ -449,10 +457,9 @@ It also fills `sweep_length_ft`, which had been blank: a day's strip is a wire
 moved about 21 ft on the east lobe and about 8 ft on the south band, because
 one is cut along its short axis and the other across its long one.
 
-**What the file still lacks** is the seven water points and the gates — no
-`Point` placemarks at all. Their rows exist and stay without geometry. "Along
-the interior fence" is not a location, and inventing one would draw a tank on
-the map that nobody has stood next to.
+The file carries no `Point` placemarks, so the seven water points and the
+gates have no geometry. That is now the settled end state rather than a gap —
+see below.
 
 ### Splitting a paddock: two different things
 
@@ -532,20 +539,36 @@ units inside it are about 1.9 acres each. That is arithmetic off a drawing,
 offered only as a sanity check against the real figures; the three remaining
 units cannot be sized without the perimeter dimensions.
 
-### Entering water point locations
+### Water points and gates are not being mapped
 
-*Decided 2026-08-13: not by hand, and not yet.*
+*Decided 2026-08-13, by the owner, after the KML arrived without them.*
 
-Typing fourteen decimal coordinates is error-prone and the errors are silent
-— a digit wrong puts a tank in the next county and nothing complains. Step 4
-builds the unit map over the georeferenced aerial, and tapping a point on
-that image is both easier and self-checking: a mis-tap is visible
-immediately.
+The question had been how to capture fourteen coordinates without typos —
+typing them is error-prone and the errors are silent, since a digit wrong
+puts a tank in the next county and nothing complains. The answer turned out
+to be that the farm does not want them captured at all.
 
-So the seven points are recorded now **without geometry** — name, kind, which
-paddocks each serves, existing or planned. `infrastructure.geometry` is
-nullable exactly so this is possible. The locations get filled in on the map
-screen when it exists, or arrive with the KML if NRCS has one.
+That is a reasonable call on a 9.5-acre field. Water sits along one interior
+fence line, every unit touches it, and nobody walking this farm needs a
+drawing to find a tank. Mapping water earns its keep when units are far
+apart and the question "does this paddock have water" has a non-obvious
+answer. Here it does not.
+
+**The seven rows stay, without geometry.** They record that water exists and
+that it serves both sides of the fence it sits on — which is the part that
+feeds the forage balance and the unit board. Only the coordinates are
+declined, and `infrastructure.geometry` is nullable exactly so that is
+possible.
+
+This simplifies step 4. The unit map draws boundaries and fences, both of
+which now have real geometry, and needs no point-placement affordance at
+all — no tap-to-place, no drag-to-correct, no "is this the right tank"
+confirmation. That was the fiddliest part of the screen and it is gone.
+
+Worth recording rather than leaving as a silent absence: a future reader
+finding seven water rows with null geometry should know that is a decision,
+not an unfinished import. Reversing it is cheap — the rows are there, and
+locations can be filled in later from any source.
 
 ## Settled: online only, for now
 

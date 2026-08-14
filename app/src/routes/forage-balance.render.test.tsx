@@ -91,7 +91,9 @@ afterEach(() => {
 const mount = async () => {
   const { default: ForageBalance } = await import("./ForageBalance");
   render(<MemoryRouter><ForageBalance /></MemoryRouter>);
-  await waitFor(() => expect(screen.queryByText("Loading…")).toBeNull());
+  // queryAllBy, not queryBy: pages folded into others bring their own
+  // loading state, and queryByText throws when it finds more than one.
+  await waitFor(() => expect(screen.queryAllByText("Loading…")).toHaveLength(0));
 };
 
 const june = { periodStart: "2026-06-01", periodEnd: "2026-06-30", periodLabel: "June" };

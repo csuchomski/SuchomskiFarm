@@ -41,6 +41,8 @@ import {
 import { forageBalance, gapInWords } from "../lib/balance";
 import { cadenceInWords } from "../lib/monitoring";
 import { downloadCsv, exportFilename, toCsv, type Column } from "../lib/grazing-export";
+import Monitoring from "./Monitoring";
+import Decisions from "./Decisions";
 import "./grazing.css";
 
 /**
@@ -331,7 +333,7 @@ export default function GrazingRecord() {
 
           <Section n={2} title="Management units and supporting infrastructure">
             <p className="rec-note">
-              The drawn map is on <Link to="/grazing/map">Pasture map</Link>.
+              The drawn map is on <Link to="/grazing/move">Move</Link>.
             </p>
             <table className="rec-table">
               <thead>
@@ -617,6 +619,21 @@ export default function GrazingRecord() {
           )}
         </div>
       )}
+      {/* Sections 8 and 9 above are the *document* — what the standard asks
+          for and what prints. These are where their rows get put in. Both were
+          pages of their own and neither had ever held one, which is two places
+          to find nothing instead of one place that says so.
+
+          Out of print: a form is not part of a record. */}
+      <div className="rec-entry">
+        <p className="grz-optional">
+          Everything above is the record as it prints. Below is where its last two
+          sections get written.
+        </p>
+        <Monitoring />
+        <Decisions />
+      </div>
+
     </OpsShell>
   );
 }

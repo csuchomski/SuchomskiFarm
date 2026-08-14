@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, GridRow, Pill } from "../components/ui";
 import { useWorkspace } from "../lib/workspace";
@@ -237,9 +236,6 @@ export default function ForageBalance() {
         title="Forage balance"
         actions={
           <>
-            <Link to="/grazing" className="rot-back mono">
-              ← the board
-            </Link>
             <Button onClick={() => (sheet === "supply" ? setSheet(null) : openSheet("supply"))} disabled={load.state !== "ok"}>
               {sheet === "supply" ? "Cancel" : "What's standing"}
             </Button>

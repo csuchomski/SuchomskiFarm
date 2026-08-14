@@ -65,13 +65,9 @@ export const allGroups: NavGroup[] = [
       // called Grazing said nothing.
       { label: "Paddocks", to: "/grazing" },
       { label: "Mobs", to: "/grazing/mobs" },
-      { label: "Pasture map", to: "/grazing/map" },
       { label: "Rotation", to: "/grazing/rotation" },
-      { label: "Forage balance", to: "/grazing/balance" },
-      { label: "Monitoring", to: "/grazing/monitoring" },
       { label: "Plan", to: "/grazing/plan" },
-      { label: "Decisions", to: "/grazing/decisions" },
-      { label: "Annual record", to: "/grazing/record" },
+      { label: "Record", to: "/grazing/record" },
     ],
   },
   {

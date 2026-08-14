@@ -124,7 +124,9 @@ const exportButton = (label: string) =>
 const mount = async () => {
   const { default: GrazingRecord } = await import("./GrazingRecord");
   render(<MemoryRouter><GrazingRecord /></MemoryRouter>);
-  await waitFor(() => expect(screen.queryByText("Loading…")).toBeNull());
+  // queryAllBy, not queryBy: pages folded into others bring their own
+  // loading state, and queryByText throws when it finds more than one.
+  await waitFor(() => expect(screen.queryAllByText("Loading…")).toHaveLength(0));
 };
 
 describe("the shape of the document", () => {

@@ -14,11 +14,7 @@ import BreedsPage from "./routes/Breeds";
 import DepreciationPage from "./routes/Depreciation";
 import GrazingPage from "./routes/Grazing";
 import RotationPage from "./routes/Rotation";
-import PastureMapPage from "./routes/PastureMap";
-import ForageBalancePage from "./routes/ForageBalance";
-import MonitoringPage from "./routes/Monitoring";
 import GrazingPlanPage from "./routes/GrazingPlan";
-import DecisionsPage from "./routes/Decisions";
 import GrazingRecordPage from "./routes/GrazingRecord";
 import MovePage from "./routes/Move";
 import MobsPage from "./routes/Mobs";
@@ -73,11 +69,7 @@ export default function App() {
                 <Route path="/grazing/move" element={<MovePage />} />
                 <Route path="/grazing/mobs" element={<MobsPage />} />
                 <Route path="/grazing/rotation" element={<RotationPage />} />
-                <Route path="/grazing/map" element={<PastureMapPage />} />
-                <Route path="/grazing/balance" element={<ForageBalancePage />} />
-                <Route path="/grazing/monitoring" element={<MonitoringPage />} />
                 <Route path="/grazing/plan" element={<GrazingPlanPage />} />
-                <Route path="/grazing/decisions" element={<DecisionsPage />} />
                 <Route path="/grazing/record" element={<GrazingRecordPage />} />
                 <Route path="/store/products" element={<StoreProducts />} />
                 <Route path="/store/orders" element={<StoreOrders />} />

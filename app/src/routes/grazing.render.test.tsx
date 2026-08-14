@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import type {
@@ -232,170 +232,12 @@ describe("the paddock board", () => {
   });
 });
 
-describe("logging a move", () => {
-  it("prefills head from the mob's members and leaves weight blank when nobody is weighed", async () => {
-    await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
-    expect((screen.getByLabelText("Head") as HTMLInputElement).value).toBe("4");
-    // Nothing in herd.weights, so no figure is invented.
-    expect((screen.getByLabelText("Avg weight, lb") as HTMLInputElement).value).toBe("");
-  });
-
-  it("takes the average weight from the animals once they have been weighed", async () => {
-    weights.set("a1", 1000);
-    weights.set("a2", 1200);
-    await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
-    expect((screen.getByLabelText("Avg weight, lb") as HTMLInputElement).value).toBe("1100");
-  });
-
-  it("keeps the unit they are in on the list, because the next strip is the commonest move", async () => {
-    events.push(event({ id: "c", paddockId: "p3", enteredAt: "2026-08-10T12:00:00.000Z", sweptFrom: 0, sweptTo: 0.2 }));
-    await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
-    const options = [...(screen.getByLabelText("Move to") as HTMLSelectElement).options].map((o) => o.textContent);
-    expect(options.some((o) => o?.startsWith("Paddock 3") && o.includes("next strip"))).toBe(true);
-    expect(options.some((o) => o?.startsWith("Paddock 1"))).toBe(true);
-  });
-
-  it("sends the move, and says where they went", async () => {
-    await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
-    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p2" } });
-    fireEvent.click(screen.getByRole("button", { name: /Log the move/ }));
-
-    await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
-    const draft = moved.mock.calls[0][1];
-    expect(draft.paddockId).toBe("p2");
-    expect(draft.groupId).toBe("mob");
-    expect(draft.headCount).toBe(4);
-    // A swept unit reports the strip that was opened, not just the move.
-    expect(draft.sweptFrom).toBe(0);
-    expect(draft.sweptTo).toBeGreaterThan(0);
-    await waitFor(() => expect(screen.getByText(/acres of Paddock 2 opened to Main mob\./)).toBeTruthy());
-  });
-
-  it("won't send without a destination", async () => {
-    await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
-    expect((screen.getByRole("button", { name: /Log the move/ }) as HTMLButtonElement).disabled).toBe(true);
-  });
-
-  it("asks what the paddock was left at only when there is one to leave", async () => {
-    await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
-    expect(screen.queryByLabelText("Residual out, in")).toBeNull();
-
-    cleanup();
-    events.push(event({ id: "c", paddockId: "p3", enteredAt: "2026-08-10T12:00:00.000Z" }));
-    await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
-    expect(screen.getByLabelText("Residual out, in")).toBeTruthy();
-    expect(screen.getByText(/Leaving/).textContent).toContain("Paddock 3");
-  });
-
-  it("warns when a paddock is short of its recovery target, and still allows it", async () => {
-    hasPlan = true;
-    targets.push({
-      id: "t1", planId: "plan", paddockId: "p1",
-      targetEntryHeightIn: null, targetResidualHeightIn: null,
-      minRecoveryDaysGrowing: 30, minRecoveryDaysDormant: 60,
-      targetUtilizationPct: null, plannedGrazingNotes: null,
-      plannedDefermentNotes: null, sensitiveAreaStrategy: null, notes: null,
-    });
-    events.push(
-      event({ id: "a", paddockId: "p1", enteredAt: "2026-07-20T12:00:00.000Z", exitedAt: "2026-08-01T12:00:00.000Z" }),
-    );
-    await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
-    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p1" } });
-
-    expect(screen.getByText(/18 days short of its recovery target/)).toBeTruthy();
-    expect(screen.getByText(/outside plan target/)).toBeTruthy();
-    // A warning, not a block.
-    expect((screen.getByRole("button", { name: /Log the move/ }) as HTMLButtonElement).disabled).toBe(false);
-  });
-
-  it("offers taking them off pasture only when they are on it", async () => {
-    await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
-    expect(screen.queryByRole("button", { name: "Off pasture" })).toBeNull();
-
-    cleanup();
-    events.push(event({ id: "c", paddockId: "p3", enteredAt: "2026-08-10T12:00:00.000Z" }));
-    await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
-    fireEvent.click(screen.getByRole("button", { name: "Off pasture" }));
-    await waitFor(() => expect(ended).toHaveBeenCalledTimes(1));
-  });
-
-  it("shows the strip in acres, feed and density as the wire moves", async () => {
-    await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
-    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p2" } });
-
-    // Opens at roughly a day's feed for 4 head at no recorded weight — with
-    // no weight the app cannot size it, so it falls back to a nominal width.
-    const wire = screen.getByLabelText("Wire position") as HTMLInputElement;
-    expect(wire).toBeTruthy();
-
-    fireEvent.change(wire, { target: { value: "200" } }); // 20% of the unit
-    const stats = document.querySelector(".grz-strip-stats")!;
-    // 20% of 1.91 grazable acres.
-    expect(stats.textContent).toContain("0.38");
-    // 400 ft sweep, so 20% is 80 feet of wire advance.
-    expect(stats.textContent).toContain("80′");
-  });
-
-  it("sizes a day and half a day from the plan's assumptions", async () => {
-    weights.set("a1", 1100);
-    weights.set("a2", 1100);
-    weights.set("a3", 1100);
-    weights.set("a4", 1100);
-    await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
-    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p2" } });
-
-    fireEvent.click(screen.getByRole("button", { name: "A day" }));
-    const day = Number((screen.getByLabelText("Wire position") as HTMLInputElement).value);
-
-    fireEvent.click(screen.getByRole("button", { name: "Half a day" }));
-    const half = Number((screen.getByLabelText("Wire position") as HTMLInputElement).value);
-
-    // Half a day is half the ground, give or take the slider's step.
-    expect(Math.abs(day / 2 - half)).toBeLessThanOrEqual(5);
-  });
-
-  it("opens the rest of the unit in one tap, for the last strip of a pass", async () => {
-    await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
-    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p2" } });
-    fireEvent.click(screen.getByRole("button", { name: "The rest of it" }));
-    expect((screen.getByLabelText("Wire position") as HTMLInputElement).value).toBe("1000");
-  });
-
-  it("starts the next strip where the last one ended", async () => {
-    events.push(event({ id: "c", paddockId: "p3", enteredAt: "2026-08-10T12:00:00.000Z", sweptFrom: 0, sweptTo: 0.35 }));
-    await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
-    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p3" } });
-
-    // The wire cannot go back over ground they have just taken.
-    const wire = screen.getByLabelText("Wire position") as HTMLInputElement;
-    expect(Number(wire.min)).toBe(355);
-    expect(document.querySelector(".grz-wire__pos")!.textContent).toContain("35%");
-  });
-
-  it("says which way the unit is swept", async () => {
-    await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Log a move" }));
-    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p2" } });
-    expect(screen.getByText(/swept west to east/)).toBeTruthy();
-
-    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p5" } });
-    expect(screen.getByText(/swept south to north/)).toBeTruthy();
-  });
-
+/**
+ * The move form that used to be on this page is on Herd → Move now, and its
+ * tests went with it. What is left here is what a board is for: the state of
+ * every unit, and whether one is ready.
+ */
+describe("what the board still answers on its own", () => {
   it("shows a unit's ground as bands, not one rest figure", async () => {
     events.push(
       event({ id: "a", paddockId: "p1", enteredAt: "2026-07-20T12:00:00.000Z", exitedAt: "2026-07-22T12:00:00.000Z", sweptFrom: 0, sweptTo: 0.4 }),
@@ -426,56 +268,5 @@ describe("logging a move", () => {
     hasPlan = true;
     await mount();
     expect(document.body.textContent).not.toMatch(/complian|meets 528/i);
-  });
-});
-
-describe("the strip readout takes its figures from the plan", () => {
-  it("says plainly when a figure is the app's own", async () => {
-    events.push(event({ id: "a", paddockId: "p1", enteredAt: "2026-07-01T12:00:00.000Z", exitedAt: "2026-08-01T12:00:00.000Z" }));
-    await mount();
-    fireEvent.click(screen.getByText("Log a move"));
-    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p2" } });
-    // All three: no plan, no target, no availability record.
-    expect(screen.getAllByText(/this app's figure/)).toHaveLength(3);
-  });
-
-  it("uses the plan's intake and the paddock's utilization once they exist", async () => {
-    hasPlan = true;
-    targets.push({
-      id: "t1", planId: "plan", paddockId: "p2",
-      targetEntryHeightIn: null, targetResidualHeightIn: null,
-      minRecoveryDaysGrowing: null, minRecoveryDaysDormant: null,
-      targetUtilizationPct: 40, plannedGrazingNotes: null,
-      plannedDefermentNotes: null, sensitiveAreaStrategy: null, notes: null,
-    });
-    availability.push({
-      id: "av1", planId: null, paddockId: "p2",
-      periodStart: "2026-08-01", periodEnd: "2026-08-31", periodLabel: "August",
-      lbDmPerAcre: 1800, aum: null, speciesMix: null, qualityNote: null,
-      isPlanned: false, basis: "clipping", notes: null,
-    });
-    await mount();
-    fireEvent.click(screen.getByText("Log a move"));
-    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p2" } });
-
-    expect(screen.getByText(/1,800 lb DM\/acre/)).toBeTruthy();
-    expect(screen.getAllByText(/measured on this unit/)).toHaveLength(1);
-    expect(screen.getByText(/40% utilization/)).toBeTruthy();
-    // Utilization from the paddock's target, intake from the plan's default.
-    expect(screen.getAllByText(/from your plan/)).toHaveLength(2);
-    expect(screen.queryByText(/this app's figure/)).toBeNull();
-  });
-
-  it("marks a projection as one rather than letting it read as measured", async () => {
-    availability.push({
-      id: "av1", planId: null, paddockId: "p2",
-      periodStart: "2026-08-01", periodEnd: "2026-08-31", periodLabel: "August",
-      lbDmPerAcre: 1800, aum: null, speciesMix: null, qualityNote: null,
-      isPlanned: true, basis: "extension_table", notes: null,
-    });
-    await mount();
-    fireEvent.click(screen.getByText("Log a move"));
-    fireEvent.change(screen.getByLabelText("Move to"), { target: { value: "p2" } });
-    expect(screen.getByText(/your projection/)).toBeTruthy();
   });
 });

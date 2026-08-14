@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, Pill } from "../components/ui";
 import { useWorkspace } from "../lib/workspace";
@@ -245,7 +244,6 @@ export default function Monitoring() {
         title="Monitoring"
         actions={
           <>
-            <Link to="/grazing" className="rot-back mono">← the board</Link>
             <Button onClick={() => (sheet === "area" ? setSheet(null) : openArea())} disabled={load.state !== "ok"}>
               {sheet === "area" ? "Cancel" : "Add a key area"}
             </Button>

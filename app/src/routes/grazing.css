@@ -469,7 +469,9 @@
 
 @media print {
   /* The document, not the app around it. */
-  .ops-nav, .ops-shell__nav, nav, .rec-exports, .btn, .rot-back {
+  /* `.rec-entry` holds the monitoring and decision forms that were folded
+     into this page. They are how the record gets written, not part of it. */
+  .ops-nav, .ops-shell__nav, nav, .rec-exports, .btn, .rot-back, .rec-entry {
     display: none !important;
   }
   .rec { max-width: none; }
@@ -676,4 +678,17 @@
   justify-content: flex-end;
   min-height: 44px;
   padding: 0 2px;
+}
+
+/* The scale bar caption rides the same var as the paddock labels, so it stays
+   legible while the map behind it scales. */
+.mv-figure .pm-sub { font-size: calc(11px * var(--pm-unit, 1)); }
+
+/* Where the record gets written, below the record itself. Set apart with a
+   rule heavier than a section's so it reads as a change of purpose rather
+   than another section of the document. */
+.rec-entry {
+  margin-top: 40px;
+  padding-top: 8px;
+  border-top: 3px double var(--ink-faint);
 }

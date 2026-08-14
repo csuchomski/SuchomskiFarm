@@ -59,7 +59,9 @@ afterEach(() => {
 const mount = async () => {
   const { default: Decisions } = await import("./Decisions");
   render(<MemoryRouter><Decisions /></MemoryRouter>);
-  await waitFor(() => expect(screen.queryByText("Loading…")).toBeNull());
+  // queryAllBy, not queryBy: pages folded into others bring their own
+  // loading state, and queryByText throws when it finds more than one.
+  await waitFor(() => expect(screen.queryAllByText("Loading…")).toHaveLength(0));
 };
 
 const decision = (over: Partial<ManagementDecision> = {}): ManagementDecision => ({

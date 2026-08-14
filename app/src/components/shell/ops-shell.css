@@ -131,3 +131,18 @@
     gap: 14px 16px;
   }
 }
+
+/* A page folded into another one. It gets a rule above it and a heading a
+   size down from a page title, so a section reads as a section rather than
+   as a second page that has landed in the middle of this one. */
+.page-header--section {
+  align-items: baseline;
+  margin: 34px 0 4px;
+  padding-top: 18px;
+  border-top: 1px solid var(--ink);
+}
+
+.page-header__section-title {
+  font-size: 21px;
+  margin: 0;
+}

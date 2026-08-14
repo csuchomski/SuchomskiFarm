@@ -102,7 +102,9 @@ afterEach(() => {
 const mount = async () => {
   const { default: GrazingPlanPage } = await import("./GrazingPlan");
   render(<MemoryRouter><GrazingPlanPage /></MemoryRouter>);
-  await waitFor(() => expect(screen.queryByText("Loading…")).toBeNull());
+  // queryAllBy, not queryBy: pages folded into others bring their own
+  // loading state, and queryByText throws when it finds more than one.
+  await waitFor(() => expect(screen.queryAllByText("Loading…")).toHaveLength(0));
 };
 
 describe("with no plan", () => {

@@ -1221,3 +1221,71 @@ rather than quietly reporting a light figure.
 A mob that is finished with goes to "not running"; an animal that leaves gets a
 date. Its past moves still name it, and a head count on a move from July has to
 keep making sense.
+
+## Ten pages became six
+
+The farm asked what the Pasture map and the board were adding. The audit was
+row counts, not impressions — after the module had been live a few days:
+
+| Page | Rows behind it |
+|---|---|
+| Move | 9 events, 5 weights |
+| Paddocks, Rotation | derived from the same events |
+| Pasture map | 12 infrastructure rows |
+| Plan | 1 plan, 2 targets |
+| Forage balance | **0 availability**, 1 demand — could not compute a balance |
+| Monitoring | **0 key areas, 0 records** |
+| Decisions | **0 rows** |
+
+The pages earning nothing were not the ones being questioned.
+
+### Pasture map was wholly redundant, which took looking to establish
+
+It had three things. The drawing is on Move. The unit list — acres, sweep,
+percent taken, rest — is the board. The infrastructure list is **section 2 of
+the annual record**, which has printed it all along.
+
+The one thing it had that Move did not is a **scale bar**, so that came over.
+
+A fence layer was built for Move and then removed before it shipped. The
+farm's four interior fences trace the same lines the units were cut from — the
+KML that drew the fences is the KML the paddocks came from — so drawing them
+puts a second line along every boundary already on screen. The perimeter is
+the outer edge of the same union. A layer that draws what is already drawn is
+worse than no layer.
+
+Water points were dropped on the farm's instruction. Seven are still on file
+and still print in the record's section 2; they are simply not drawn.
+
+### The board keeps its reason to exist and loses its form
+
+It is the only view that answers "which paddock next, and is it ready" across
+all five at once — rest, the sweep bar, days short of a recovery target, last
+residual. Move answers "which is next" from rotation order and cannot say that
+P2 is three days short.
+
+Its move form is gone: 222 lines that did what Move does better, and with it
+the state and arithmetic behind it. The compiler found the rest — seventeen
+now-dead bindings, which is what happens when a page stops doing two jobs.
+
+### Folding a page in without rewriting it
+
+Four pages became sections of other pages. Rather than restructure each so its
+body could be lifted out of its shell, `OpsShell` counts how deep it is. Depth
+zero renders the topbar and rail; deeper renders its children and nothing
+else, and `PageHeader` demotes its title to a section heading at depth two.
+A page stays a page and simply does not get a second rail when it is a
+section.
+
+The depth has to be a count, not a flag. A boolean "am I inside a shell" is
+true for every `PageHeader` on every page, so the first attempt demoted every
+page title in the app to a section heading — caught by a test asserting the
+board's own header, not by the type checker.
+
+Folding also put two "Loading…" nodes on one page, and
+`queryByText` throws when it finds more than one. It surfaced as a test that
+failed about one run in three. Every mount helper uses `queryAllByText` now.
+
+On the record, the two folded editors sit below the printed document behind a
+double rule, and `@media print` drops them: a form is how a record gets
+written, not part of it.

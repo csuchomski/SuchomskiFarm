@@ -94,7 +94,9 @@ afterEach(() => {
 const mount = async () => {
   const { default: Mobs } = await import("./Mobs");
   render(<MemoryRouter><Mobs /></MemoryRouter>);
-  await waitFor(() => expect(screen.queryByText("Loading…")).toBeNull());
+  // queryAllBy, not queryBy: pages folded into others bring their own
+  // loading state, and queryByText throws when it finds more than one.
+  await waitFor(() => expect(screen.queryAllByText("Loading…")).toHaveLength(0));
 };
 
 /** The farm as it actually is: five head, four AI bulls on file as pedigree. */

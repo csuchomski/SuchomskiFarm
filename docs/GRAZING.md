@@ -923,6 +923,38 @@ Which is why nothing looked wrong. It fed hours of feed, stock density and the
 forage balance. It now measures off the drawn boundary via `drawnSliceAcres`
 and falls back to the fraction only when there is no boundary or no sweep.
 
+**The first pass fixed only half of it.** `stripAcres` answers what a recorded
+strip *was*; `planStrip` answers what the one being placed *would be*. Only the
+first was corrected, and the second is the number on screen while the wire is
+being dragged — the more consequential of the two. Measured a day's width at a
+time along each unit:
+
+| Unit | Flat forecast against the drawn slice |
+|---|---|
+| Paddocks 2, 3 | ±1% through the middle |
+| Paddock 1 | +58% at the start |
+| Paddock 5 | −16% to +22%, end to end |
+| **Paddock 4, last sixteenth** | **+1,505%** |
+
+Sixteen times the feed, at the end that tapers. Both measure the boundary now,
+and they are checked against each other rather than each being checked alone —
+the two answers have to agree, because they are the same question asked before
+and after.
+
+`widthForHours` had the same assumption running backwards, and it is what
+places the "half a day" and "a day" presets. A width that feeds them for a day
+depends on **where along the sweep it starts** — the same tenth of Paddock 4 is
+a fifth of an acre at the wide end and a twentieth at the point — so it takes a
+`from` and solves geometrically. There is no closed form for the inverse of a
+polygon clip, so `sweepToForAcres` bisects: slice area only grows as the wire
+advances, which is all bisection needs, and twenty passes land inside a
+millionth of the sweep. "A day" now reads 24.0 hours from anywhere in any unit,
+and the width varies with the ground — 41 ft at the head of Paddock 4, 25 ft at
+its middle.
+
+"Half a day" is its own figure rather than half the day's width, for the same
+reason: half the ground is not half the distance.
+
 ### A capped drawing has to have its gutters taken off
 
 The farm is a tall shape, so a drawing sized by its own proportions ran 1,355

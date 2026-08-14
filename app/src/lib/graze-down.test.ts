@@ -254,14 +254,15 @@ describe("what a logged move says they ate", () => {
   });
 
   it("measures the ground it is pricing, on a unit that is not a rectangle", () => {
-    // Paddock 4's tapering end: the flat share would call this ten times the
-    // feed it is.
-    const tail = forageEatenLbDm(
-      event({ paddockId: "p4", sweptFrom: 0.95, sweptTo: 1 }), unit(4), plan(),
-    )!;
-    const head = forageEatenLbDm(
+    // Paddock 4 is a wedge, narrow at the west where its sweep starts. The
+    // same twentieth of the sweep is worth much less feed there than at the
+    // wide end, and a flat share would price both the same.
+    const narrow = forageEatenLbDm(
       event({ paddockId: "p4", sweptFrom: 0, sweptTo: 0.05 }), unit(4), plan(),
     )!;
-    expect(tail).toBeLessThan(head / 5);
+    const wide = forageEatenLbDm(
+      event({ paddockId: "p4", sweptFrom: 0.85, sweptTo: 0.9 }), unit(4), plan(),
+    )!;
+    expect(narrow).toBeLessThan(wide * 0.6);
   });
 });

@@ -171,8 +171,8 @@ describe("the drawing", () => {
     await mount();
     const text = svg().textContent ?? "";
     for (const code of ["P1", "P2", "P3", "P4", "P5"]) expect(text).toContain(code);
-    expect(text).toContain("2.26 ac"); // the south band
-    expect(text).toContain("1.38 ac"); // the east lobe
+    expect(text).toContain("2.23 ac"); // the south band
+    expect(text).toContain("1.42 ac"); // the east lobe
   });
 
   it("carries a scale bar, or it is a picture rather than a map", async () => {
@@ -251,7 +251,7 @@ describe("the lists under the map", () => {
   it("gives each unit its sweep in words and its length", async () => {
     await mount();
     expect(screen.getByText(/swept east to west · 535 ft along the sweep/)).toBeTruthy();
-    expect(screen.getByText(/swept south to north · 405 ft along the sweep/)).toBeTruthy();
+    expect(screen.getByText(/swept south to north · 416 ft along the sweep/)).toBeTruthy();
   });
 
   it("lists the fences and marks the planned ones", async () => {

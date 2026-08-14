@@ -45,18 +45,25 @@ const byFraction = (p: Paddock, from: number, to: number) =>
 
 describe("the shortcut this replaces", () => {
   it("is badly wrong where a unit tapers", () => {
-    // Paddock 4's south-east corner narrows to nothing, and the fraction
+    // Paddock 4 is a wedge. Swept west to east it starts narrow — its first
+    // tenth is barely seven parts in ten of an even share — and the fraction
     // cannot see it. This is the case that would have told somebody a strip
-    // holds the mob a day when it holds them an hour and a half.
+    // holds the mob a day when it holds them most of one.
+    //
+    // Until 046 this test used the *other* end of P4 and wanted a ratio under
+    // a tenth, because the unit then ended in a ten-foot ribbon that ran under
+    // Paddock 5 and was never paddock at all. The arithmetic was right about
+    // that shape; the shape was wrong. What is left is a real wedge, and the
+    // error it causes is smaller and still worth measuring off the boundary.
     const p4 = unit(4);
-    const drawn = drawnSliceAcres(p4, 0.9, 1)!;
-    expect(drawn / byFraction(p4, 0.9, 1)).toBeLessThan(0.1);
+    const drawn = drawnSliceAcres(p4, 0, 0.1)!;
+    expect(drawn / byFraction(p4, 0, 0.1)).toBeLessThan(0.75);
   });
 
-  it("is wrong the other way in the middle of the same unit", () => {
+  it("is wrong the other way at the wide end of the same unit", () => {
     const p4 = unit(4);
-    const drawn = drawnSliceAcres(p4, 0.45, 0.55)!;
-    expect(drawn / byFraction(p4, 0.45, 0.55)).toBeGreaterThan(1.25);
+    const drawn = drawnSliceAcres(p4, 0.8, 0.9)!;
+    expect(drawn / byFraction(p4, 0.8, 0.9)).toBeGreaterThan(1.2);
   });
 
   it("was near enough on the two units that are rectangles", () => {
@@ -180,15 +187,15 @@ describe("the forecast, on ground that is not a rectangle", () => {
   };
 
   it("measures the strip it is forecasting, rather than its share of the sweep", () => {
-    // Paddock 4's last sixteenth, where the unit tapers to a corner. A flat
-    // share calls it 0.141 acres; it is nearer a hundredth of that.
+    // Paddock 4's first sixteenth, at the narrow end of the wedge. A flat
+    // share calls it 0.139 acres; the ground gives about seven tenths of that.
     const plan = planStrip({
-      paddock: unit(4), from: 0.9375, to: 1,
+      paddock: unit(4), from: 0, to: 0.0625,
       headCount: 5, avgWeightLb: 1000, assumptions: ASSUMPTIONS,
     })!;
-    const measured = drawnSliceAcres(unit(4), 0.9375, 1)!;
+    const measured = drawnSliceAcres(unit(4), 0, 0.0625)!;
     expect(plan.acres).toBeCloseTo(measured, 6);
-    expect(plan.acres).toBeLessThan(0.02);
+    expect(plan.acres).toBeLessThan(0.0625 * (unit(4).acresGrazable ?? 0) * 0.8);
   });
 
   it("agrees with what the same strip is once it has been grazed", () => {
@@ -222,10 +229,11 @@ describe("placing the wire for a day", () => {
   });
 
   it("widens as the unit narrows, instead of holding one figure throughout", () => {
-    // Paddock 4 tapers, so the same feed is a longer reach at the far end.
-    const near = day(unit(4), 0.1)!;
-    const far = day(unit(4), 0.85)!;
-    expect(far).toBeGreaterThan(near * 1.5);
+    // Paddock 4 is a wedge, narrow at the western end it is swept from, so the
+    // same day's feed is a longer reach there than at the wide end.
+    const narrow = day(unit(4), 0)!;
+    const wide = day(unit(4), 0.7)!;
+    expect(narrow).toBeGreaterThan(wide * 1.4);
   });
 
   it("stops at the end of the unit rather than past it", () => {

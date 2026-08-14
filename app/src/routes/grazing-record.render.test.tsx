@@ -90,6 +90,9 @@ vi.mock("../lib/grazing", async (importOriginal) => {
     fetchMonitoringRecords: vi.fn(async () => records),
     fetchManagementDecisions: vi.fn(async () => decisions),
     fetchInfrastructure: vi.fn(async () => []),
+    // Monitoring is a section of this page now; its photo fetch would
+    // otherwise reach the real storage client.
+    fetchGrazingPhotos: vi.fn(async () => []),
     fetchPlanPaddockTargets: vi.fn(async () => targets),
     fetchResourceConcerns: vi.fn(async () => concerns),
     fetchContingencyPlans: vi.fn(async () => contingencies),

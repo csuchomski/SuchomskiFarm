@@ -6,9 +6,13 @@ running record of what was decided and what is still open.
 **All eight steps are built.** Migrations 036–042 are run. The module lives
 under Herd:
 
+Grazing is its own section in the rail, between Herd and Store:
+
 | Screen | What it is for |
 |---|---|
-| **Grazing** | The board, and logging a move as a strip |
+| **Move** | The morning: the wire, the graze-down, and what they ate |
+| **Paddocks** | The board — where every unit stands, and its rest |
+| **Mobs** | Who is on the grass, and what they weigh |
 | **Rotation** | The season as rounds, and hay off a unit |
 | **Pasture map** | The units drawn — and where the wire goes today |
 | **Forage balance** | Supply against demand, by unit and period |
@@ -16,6 +20,18 @@ under Herd:
 | **Plan** | Every threshold the rest of the module compares against |
 | **Decisions** | What changed, why, and what came of it |
 | **Annual record** | All of it, in the standard's own section order |
+
+**The section carries the `herd` module rather than one of its own.** Grazing
+means nothing without livestock, so no business would want one and not the
+other; a module of its own would need a `business_type_modules` row *and* a
+line in this app's fallback map, either of which could be forgotten, and
+forgetting either makes every page here unreachable. `moduleForPath` still
+returns `"herd"` for these paths, so route gating is exactly what it was, and
+a rental business still sees no Grazing at all.
+
+The board was called "Grazing", which inside a section called Grazing said
+nothing. It is **Paddocks** now, page title and all, because that is what it
+lists.
 
 Step 9 is conditional and not started: a worksheet-shaped export, only if the
 Wisconsin implementation requirements prescribe one. Nothing seen so far

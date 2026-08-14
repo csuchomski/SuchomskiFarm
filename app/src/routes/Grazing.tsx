@@ -280,7 +280,7 @@ export default function Grazing() {
             ? `${rows.length} paddock${rows.length === 1 ? "" : "s"} · ${acresOf(load.paddocks).toFixed(2)} grazable acres`
             : "Herd"
         }
-        title="Grazing"
+        title="Paddocks"
         actions={
           <Button
             variant="filled"

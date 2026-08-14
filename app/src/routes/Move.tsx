@@ -115,6 +115,7 @@ export default function Move() {
   const [dragging, setDragging] = useState(false);
   const [height, setHeight] = useState("");
   const [grazeTo, setGrazeTo] = useState("");
+  const [ateTo, setAteTo] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -207,6 +208,32 @@ export default function Move() {
     load.state === "ok" && dest
       ? grazeDownTo({ paddockId: dest.id, plan: load.plan, targets: load.targets }).inches
       : null;
+
+  /**
+   * What they actually took the strip they are standing on down to.
+   *
+   * This is about the ground behind the wire, not ahead of it, and it is the
+   * only measurement in the morning — everything else on this page is a
+   * forecast. `log_grazing_move` puts it on the event it closes, which is
+   * that strip.
+   */
+  const ateToIn = (() => {
+    const v = Number(ateTo.trim());
+    return ateTo.trim() !== "" && Number.isFinite(v) && v > 0 ? v : null;
+  })();
+
+  /** The strip they are on, which the move is about to close. */
+  const openStrip = standing?.open ?? null;
+
+  /** What that works out to as a share of the sward they went in on. Recorded
+   *  beside the height so the figure survives if the entry height is later
+   *  corrected — and left null rather than guessed when there is no entry
+   *  height to divide by. */
+  const atePct = (() => {
+    const entry = openStrip?.forageHeightInEntry ?? null;
+    if (ateToIn === null || entry === null || entry <= 0 || ateToIn >= entry) return null;
+    return Math.round(((entry - ateToIn) / entry) * 1000) / 10;
+  })();
 
   const grazeToIn = (() => {
     const v = Number(grazeTo.trim());
@@ -345,31 +372,31 @@ export default function Move() {
         notes: "",
         latitude: null,
         longitude: null,
-        residualHeightInExit: null,
-        // The percentage rather than the graze-down height, because the
-        // height belongs in `residual_height_in_exit` and that is for what
-        // was *measured* coming off, not what was aimed at. This is the
-        // figure the strip was sized on, and it survives a later correction
-        // to the entry height in a way a raw residual would not.
-        utilizationPct:
-          assumed.grazeDown.residualIn === null
-            ? null
-            : Math.round(assumed.assumptions.utilizationPct * 10) / 10,
+        // Both of these land on the strip being *closed*, not the one being
+        // opened — `log_grazing_move` sets them on the open event before it
+        // inserts the new one. So they are what the mob actually did to the
+        // ground they are standing on, never what is intended for the ground
+        // ahead. Writing a forecast here would file it against the wrong
+        // strip and call an intention a measurement twice over.
+        residualHeightInExit: ateToIn,
+        utilizationPct: atePct,
         sweptFrom: stripped ? backLine : null,
         sweptTo: stripped ? Math.max(wire, backLine + 0.005) : null,
       });
       setNote(
-        strip
+        (strip
           ? `${strip.acres.toFixed(2)} acres of ${dest.name} opened to ${group.name}` +
             (assumed.grazeDown.residualIn === null
               ? "."
               : ` — about ${Math.round(strip.lbDmOnOffer).toLocaleString()} lb of dry matter,` +
                 ` down to ${assumed.grazeDown.residualIn}″.`)
-          : `${group.name} moved to ${dest.name}.`,
+          : `${group.name} moved to ${dest.name}.`) +
+          (ateToIn === null ? "" : ` The strip they left is recorded at ${ateToIn}″.`),
       );
       goTo(null);
       setHeight("");
       setGrazeTo("");
+      setAteTo("");
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -462,6 +489,46 @@ export default function Move() {
           {/* On a phone this is one column in the order written. On a wide
               screen the stylesheet puts the drawing beside the readings, so
               the wire and the acres it is changing are in view together. */}
+          {/* ── what they actually did to the strip they are on ────────
+              First, because it is the first thing you look at: you walk out,
+              see what they left, and only then decide what to give them next.
+              It is also the one measurement on this page — everything below
+              is a forecast. */}
+          {openStrip !== null && (
+            <div className="mv-ate">
+              <label className="mv-field">
+                <span className="eyebrow">
+                  They ate {standing?.paddock?.name ?? "the last strip"} down to, inches
+                </span>
+                <input
+                  value={ateTo}
+                  onChange={(e) => setAteTo(e.target.value)}
+                  inputMode="decimal"
+                  aria-label="They ate it down to, inches"
+                  placeholder="—"
+                />
+              </label>
+              <p className="mv-height__note">
+                {ateToIn === null ? (
+                  <>
+                    Measured off the strip behind the wire. Left blank, the record keeps
+                    what the strip was sized for and nothing more.
+                  </>
+                ) : atePct === null ? (
+                  <>
+                    Recorded against that strip. No entry height was taken for it, so
+                    there is nothing to work a share of the sward out from.
+                  </>
+                ) : (
+                  <>
+                    {atePct}% of the {openStrip.forageHeightInEntry}″ they went in on
+                    {" "}— recorded against that strip, not this one.
+                  </>
+                )}
+              </p>
+            </div>
+          )}
+
           <div className="mv-layout">
 
           {/* ── the grass, before the wire, because it sets the figures ── */}

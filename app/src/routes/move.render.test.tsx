@@ -501,7 +501,7 @@ describe("the graze-down, on the page", () => {
     }
   });
 
-  it("records what the strip was sized for, as a percentage of the sward", async () => {
+  it("records the entry height against the strip being opened", async () => {
     inP3();
     weighEveryone();
     plan = withPlan();
@@ -513,19 +513,111 @@ describe("the graze-down, on the page", () => {
     await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
     const d = moved.mock.calls[0][1];
     expect(d.forageHeightInEntry).toBe(8);
-    expect(d.utilizationPct).toBe(75); // 8″ down to 2″
-    // Not the residual: that column is for what was measured coming off.
-    expect(d.residualHeightInExit).toBeNull();
   });
 
-  it("leaves the utilization alone when there is nothing to work it out from", async () => {
+  it("does not file the graze-down it is aiming at as something that happened", async () => {
+    // `log_grazing_move` puts residual and utilization on the strip it
+    // *closes*, so anything sent here lands on the ground behind the wire.
+    // A forecast sent through them would be filed against the wrong strip
+    // and called a measurement.
     inP3();
     weighEveryone();
     plan = withPlan();
     await mount();
+    fireEvent.change(screen.getByLabelText("Grass height, inches"), { target: { value: "8" } });
+    fireEvent.change(screen.getByLabelText("Graze it down to, inches"), { target: { value: "2" } });
     fireEvent.click(screen.getByText("Log the move"));
 
     await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
+    const d = moved.mock.calls[0][1];
+    expect(d.residualHeightInExit).toBeNull();
+    expect(d.utilizationPct).toBeNull();
+  });
+});
+
+describe("what they actually ate it down to", () => {
+  const inP3 = () => events.push(strip("s1", "p3", 0, 0.2, null));
+
+  /** The open strip, with a height taken when they went onto it. */
+  const wentInAt = (inches: number) => {
+    events.push({ ...strip("s1", "p3", 0, 0.2, null), forageHeightInEntry: inches });
+  };
+
+  it("asks only when there is a strip behind them to have eaten", async () => {
+    await mount();
+    expect(screen.queryByLabelText("They ate it down to, inches")).toBeNull();
+
+    cleanup();
+    inP3();
+    await mount();
+    expect(screen.getByLabelText("They ate it down to, inches")).toBeTruthy();
+  });
+
+  it("records it against the strip they are leaving", async () => {
+    wentInAt(9);
+    weighEveryone();
+    plan = withPlan();
+    await mount();
+    fireEvent.change(screen.getByLabelText("They ate it down to, inches"), { target: { value: "3" } });
+    fireEvent.click(screen.getByText("Log the move"));
+
+    await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
+    const d = moved.mock.calls[0][1];
+    expect(d.residualHeightInExit).toBe(3);
+    // 9″ in, 3″ out — two thirds of the sward, worked out from that strip's
+    // own entry height rather than this morning's.
+    expect(d.utilizationPct).toBeCloseTo(66.7, 1);
+  });
+
+  it("works the share out from the height that strip went in on, not today's", async () => {
+    wentInAt(10);
+    weighEveryone();
+    plan = withPlan();
+    await mount();
+    // A different height ahead of them must not contaminate the strip behind.
+    fireEvent.change(screen.getByLabelText("Grass height, inches"), { target: { value: "4" } });
+    fireEvent.change(screen.getByLabelText("They ate it down to, inches"), { target: { value: "5" } });
+    fireEvent.click(screen.getByText("Log the move"));
+
+    await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
+    expect(moved.mock.calls[0][1].utilizationPct).toBe(50); // 10″ → 5″
+  });
+
+  it("keeps the height but not a share when that strip has no entry height", async () => {
+    inP3();
+    weighEveryone();
+    plan = withPlan();
+    await mount();
+    fireEvent.change(screen.getByLabelText("They ate it down to, inches"), { target: { value: "3" } });
+    // Said on the page before it is said in the record.
+    expect(screen.getByText(/nothing to work a share of the sward out from/)).toBeTruthy();
+    fireEvent.click(screen.getByText("Log the move"));
+
+    await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
+    const d = moved.mock.calls[0][1];
+    expect(d.residualHeightInExit).toBe(3);
+    expect(d.utilizationPct).toBeNull();
+  });
+
+  it("refuses to call it eaten when they left more than they went in on", async () => {
+    wentInAt(6);
+    weighEveryone();
+    plan = withPlan();
+    await mount();
+    fireEvent.change(screen.getByLabelText("They ate it down to, inches"), { target: { value: "7" } });
+    fireEvent.click(screen.getByText("Log the move"));
+
+    await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
+    // The height stands — it is what was seen — but it is not a graze.
+    expect(moved.mock.calls[0][1].residualHeightInExit).toBe(7);
     expect(moved.mock.calls[0][1].utilizationPct).toBeNull();
+  });
+
+  it("shows its working before anything is logged", async () => {
+    wentInAt(8);
+    await mount();
+    fireEvent.change(screen.getByLabelText("They ate it down to, inches"), { target: { value: "2" } });
+    expect(screen.getByText(/75% of the 8″ they went in on/)).toBeTruthy();
+    expect(screen.getByText(/recorded against that strip, not this one/)).toBeTruthy();
   });
 });

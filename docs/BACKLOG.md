@@ -551,12 +551,14 @@ the missing animal the thing to fix.
 
 ## Opened 2026-08-14, building the graze-down
 
-- **Nothing asks how yesterday's strip actually came off.** The move records
-  the entry height and the percentage it was sized for, which makes the eaten
-  figure an intention rather than a measurement. The natural place to fix it
-  is the next morning's move — the farmer is standing at yesterday's strip —
-  as one number that back-fills `residual_height_in_exit` on the previous
-  event.
+- ~~Nothing asks how yesterday's strip actually came off.~~ **Built
+  2026-08-14.** One field at the top of the move, because looking at what they
+  left is the first thing you do. It writes `residual_height_in_exit` on the
+  strip being closed, with the share of the sward worked out from that strip's
+  own entry height.
+- **`default_dmi_pct_bw` is still null on the active plan**, so intake runs on
+  this app's 3% and says so. The farm has never given a figure for it; worth
+  asking rather than assuming, since it scales every feed number.
 - **A paddock's entry-height target is only a fallback.** `P5` carries 6″ and
   the rest are null. Used when no height is taken that morning, which is the
   right precedence, but it means a stale target can quietly drive a forecast.

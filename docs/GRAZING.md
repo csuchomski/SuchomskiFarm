@@ -1036,18 +1036,45 @@ ruined. It falls back to the percentage and says so.
 
 ### What was recorded, and what was measured
 
-Logging a move writes the entry height — measured that morning, so a fact —
-and the **percentage** the strip was sized for. It does not write the
-graze-down into `residual_height_in_exit`, because that column is for what was
-measured coming off, and filling it with an intention would make a plan
-indistinguishable from an observation in a season's totals.
+The first version of this wrote the strip's *intended* utilization through
+`logMove`, which was wrong twice over, and the mistake is worth keeping
+written down.
 
-`forageEatenLbDm` reads it back, preferring a measured residual over the
-percentage where one exists: one is what happened, the other what was
-intended. It appears in the events CSV as "Dry matter eaten (lb)", and it is
-blank rather than zero where the record cannot support a figure.
+`log_grazing_move` sets `residual_height_in_exit` and `utilization_pct` on the
+event it **closes**, then inserts the new one. So those two arguments are
+never about the strip being opened — they are about the ground the mob is
+standing on and is about to leave. Sending a forecast through them filed it
+against the wrong strip *and* recorded an intention as a measurement.
 
-**Still open:** nothing yet asks how yesterday's strip actually came off. The
-natural place is the next morning's move, since that is where the farmer is
-standing — one number, back-filling `residual_height_in_exit` on the previous
-event and turning an intention into a measurement.
+The test written alongside it asserted `utilizationPct === 75` and passed,
+because it checked the value handed to the function without checking where the
+function puts it. A test that pins an argument is not testing behaviour.
+
+**What goes in now, and only this:** the height the mob actually took that
+strip down to, typed on the next morning's move — which is exactly where the
+farmer is standing to see it. `utilization_pct` is worked out from *that
+strip's own* entry height, never this morning's reading of the ground ahead.
+The forecast for the new strip is not recorded anywhere, because a forecast is
+not a fact.
+
+If the residual read is at or above the height they went in on, the height is
+still recorded — it is what was seen — but no share of the sward is derived
+from it. That is not a graze.
+
+`forageEatenLbDm` prefers a measured residual over the percentage wherever one
+exists. It appears in the events CSV as "Dry matter eaten (lb)", blank rather
+than zero where the record cannot support a figure.
+
+### The farm's own numbers, which were not actually in the database
+
+Setting the graze-down default to 6″ turned up that the active plan
+("August 2026") had **no `lb_dm_per_acre_inch` at all** — the farm's stated 300
+had been built for and never stored, so every height reading was falling back
+to this app's 2,400 lb/acre standing. The 300 seen in an earlier check was a
+write made inside the verification transaction that then rolled back, which is
+a good argument for verifying against committed state rather than the tail of
+your own test.
+
+Both are set now: 300 lb an acre-inch, 6″ graze-down. `default_dmi_pct_bw` is
+still null and still falls back to 3%, labelled as this app's figure, because
+the farm has never given a number for it.

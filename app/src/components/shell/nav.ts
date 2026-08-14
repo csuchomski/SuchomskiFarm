@@ -68,6 +68,8 @@ export const allGroups: NavGroup[] = [
       { label: "Rotation", to: "/grazing/rotation" },
       { label: "Plan", to: "/grazing/plan" },
       { label: "Record", to: "/grazing/record" },
+      // The conservationist's form, filled from the moves, for a date range.
+      { label: "Payment record", to: "/grazing/payment-record" },
     ],
   },
   {

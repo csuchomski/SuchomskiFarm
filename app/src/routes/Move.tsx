@@ -54,6 +54,7 @@ import {
   type Local,
   type LonLat,
 } from "../lib/pasture-map";
+import { useMapScale } from "../lib/use-map-scale";
 import "./grazing.css";
 
 /**
@@ -163,29 +164,7 @@ export default function Move() {
     );
   }, [refresh]);
 
-  /**
-   * How many viewBox units go to a screen pixel, watched rather than
-   * assumed. The drawing has a fixed height and the farm's own proportions,
-   * so the two only agree by accident; without this the paddock names come
-   * out at nine pixels on a desktop and twenty-seven on a tablet.
-   */
-  const [unitPx, setUnitPx] = useState(1);
-  const measureSvg = useCallback((el: SVGSVGElement | null) => {
-    if (el === null) return;
-    const read = () => {
-      const box = el.getBoundingClientRect();
-      const vb = el.viewBox?.baseVal;
-      if (box.height <= 0 || !vb || vb.width <= 0 || vb.height <= 0) return;
-      const scale = Math.min(box.width / vb.width, box.height / vb.height);
-      if (scale > 0) setUnitPx(1 / scale);
-    };
-    read();
-    // jsdom has no ResizeObserver, and there is nothing to observe there.
-    if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(read);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  const [unitPx, measureSvg] = useMapScale();
 
   const group = load.state === "ok" ? (load.groups[0] ?? null) : null;
 

@@ -361,6 +361,23 @@ export function ringCentre(points: [number, number][]): [number, number] {
   return [points.reduce((s, p) => s + p[0], 0) / n, points.reduce((s, p) => s + p[1], 0) / n];
 }
 
+/**
+ * Is the point inside the ring? Ray casting; points exactly on an edge are not
+ * promised either way.
+ *
+ * Written for label placement: a nudged label has to be checked against the
+ * shape it names before it is allowed to move.
+ */
+export function ringEncloses(ring: [number, number][], x: number, y: number): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
 /** A round number of feet that fits comfortably inside the map, for a bar. */
 export function scaleBarFeet(projection: PastureProjection): { feet: number; px: number } {
   const target = projection.width * 0.25;

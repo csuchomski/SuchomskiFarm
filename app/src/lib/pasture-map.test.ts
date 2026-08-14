@@ -8,6 +8,7 @@ import {
   headingVector,
   pathFor,
   ringCentre,
+  ringEncloses,
   scaleBarFeet,
   sweepCutLine,
   sweepExtent,
@@ -16,6 +17,7 @@ import {
   type LonLat,
   type Local,
 } from "./pasture-map";
+import { REAL_BOUNDARIES } from "./__fixtures__/farm-geometry";
 
 /**
  * Drawing the farm. The real Paddock 3 from the KML is the fixture, so the
@@ -274,5 +276,32 @@ describe("the wire, drawn across the unit", () => {
 
   it("is null at the very ends, where a cut touches rather than crosses", () => {
     expect(sweepCutLine(ring.slice(0, 2), 270, 0.5)).toBeNull();
+  });
+});
+
+describe("asking whether a point is on a shape", () => {
+  // A square with a bite out of the middle of its bottom edge, so the mean of
+  // the vertices lands in the bite rather than on the shape.
+  const bitten: [number, number][] = [
+    [0, 0], [10, 0], [10, 10], [6, 10], [6, 4], [4, 4], [4, 10], [0, 10],
+  ];
+
+  it("says yes inside and no outside", () => {
+    expect(ringEncloses(bitten, 5, 2)).toBe(true);
+    expect(ringEncloses(bitten, 5, 8)).toBe(false);
+    expect(ringEncloses(bitten, -1, 5)).toBe(false);
+    expect(ringEncloses(bitten, 11, 5)).toBe(false);
+  });
+
+  it("is the check a vertex mean cannot do for itself", () => {
+    const [cx, cy] = ringCentre(bitten);
+    expect(ringEncloses(bitten, cx, cy)).toBe(false);
+  });
+
+  it("holds for a real paddock's own centre", () => {
+    const ring = asPolygonRing(REAL_BOUNDARIES["Paddock 4"])!;
+    const pts = ring.map((p): [number, number] => [p[0] * 1e5, p[1] * 1e5]);
+    const [cx, cy] = ringCentre(pts);
+    expect(ringEncloses(pts, cx, cy)).toBe(true);
   });
 });

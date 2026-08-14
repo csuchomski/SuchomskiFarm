@@ -692,3 +692,132 @@
   padding-top: 8px;
   border-top: 3px double var(--ink-faint);
 }
+
+/* ── Payment record: the conservationist's form, filled ───────────────── */
+
+.pr-range { margin-bottom: 16px; }
+
+.pr-figure { margin: 16px 0 24px; }
+
+.pr-caption {
+  font-size: 12px;
+  color: var(--ink-faint);
+  padding: 8px 2px 0;
+  max-width: 68ch;
+}
+
+/* A strip's number sits on the strip. Smaller than a paddock's code and in
+   ink rather than muted, because it is the key between the drawing and the
+   table and has to survive a photocopier. */
+.pr-strip-label {
+  font: 500 9px/1 "IBM Plex Mono", monospace;
+  fill: var(--ink);
+}
+
+.pr-unit-label { fill: var(--ink-muted); }
+
+/* The form's own table. Hairlines on every cell, because this one is read as
+   a grid rather than as a list — a reviewer runs a finger across it. */
+.pr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.pr-table th,
+.pr-table td {
+  border: 1px solid var(--hairline);
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+.pr-table thead th {
+  background: var(--paper-tint);
+  font: 500 11px/1.3 "IBM Plex Sans", sans-serif;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  text-align: left;
+}
+
+.pr-table .pr-group { text-align: center; }
+
+.pr-table tfoot td {
+  background: var(--paper-tint);
+  font-weight: 500;
+}
+
+.rec-gaps {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  margin: 14px 0 0;
+  max-width: 68ch;
+}
+
+@media (max-width: 860px) {
+  /* Eight columns will not fit a phone. It scrolls rather than shrinking to
+     unreadable — and this is a page that gets printed from a desk anyway. */
+  .pr-table { display: block; overflow-x: auto; white-space: nowrap; }
+}
+
+@media print {
+  .pr-range { display: none !important; }
+  .pr-table { font-size: 11px; }
+  .pr-figure { break-inside: avoid-page; }
+
+  /* On screen the drawing can have all the room going. On paper it competes
+     with the table, and a map on its own sheet with the rows overleaf is two
+     pages of half a record — at 720px it ran to 1.14 pages. Small enough that
+     a month of moves comes off the printer as one sheet. */
+  .pr-figure .pm-svg { max-height: 460px; }
+
+  /* If a longer range does run over, break between rows and carry the headings
+     onto the next sheet — the columns are unreadable without them. */
+  .pr-table thead { display: table-header-group; }
+  .pr-table tr { break-inside: avoid; }
+}
+
+/* The farm is a tall shape, so a full-width drawing runs past the page. Capping
+   the height alone letterboxes it instead: at 1280 the drawing came out 365px
+   wide inside a 990px box, two-thirds of the map area empty on either side.
+   Capping both and leaving width and height auto lets the box take the farm's
+   own proportions, so there is no gutter in either direction. Labels are sized
+   off the measured scale, so a strip's number is legible on a phone and on a
+   photocopy alike. */
+.pr-figure .pm-svg {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(52vh, 520px);
+  margin: 0 auto;
+}
+
+/* Where there is room to spare, spend it on the drawing — this is a page whose
+   whole job is being read off. */
+@media (min-width: 900px) {
+  .pr-figure .pm-svg { max-height: min(76vh, 720px); }
+}
+.pr-figure .pm-label { font-size: calc(13px * var(--pm-unit, 1)); }
+.pr-figure .pr-strip-label { font-size: calc(10px * var(--pm-unit, 1)); }
+.pr-figure path { vector-effect: non-scaling-stroke; }
+
+@media print {
+  .pr-range { display: none !important; }
+  .pr-table { font-size: 11px; }
+  .pr-figure { break-inside: avoid-page; }
+
+  /* On screen the drawing can have all the room going. On paper it competes
+     with the table, and a map on its own sheet with the rows overleaf is two
+     pages of half a record — at 720px it ran to 1.14 pages. Small enough that
+     a month of moves comes off the printer as one sheet.
+
+     This block sits after the sizing rules on purpose: it is no more specific
+     than they are, so ahead of them it simply lost. */
+  .pr-figure .pm-svg { max-height: 460px; }
+
+  /* If a longer range does run over, break between rows and carry the headings
+     onto the next sheet — the columns are unreadable without them. */
+  .pr-table thead { display: table-header-group; }
+  .pr-table tr { break-inside: avoid; }
+}

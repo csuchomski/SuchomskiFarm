@@ -147,6 +147,48 @@ describe("with a plan in force", () => {
     expect(savedPlan.mock.calls[0][1].planId).toBe("plan");
   });
 
+  it("carries every figure through an edit that did not touch them", async () => {
+    /**
+     * `save_grazing_plan` writes the whole row, so anything the editor fails
+     * to prefill is written back as null. These three are the figures behind
+     * every calculation in the module — intake, the height-to-forage
+     * conversion, and the graze-down — and the farm sets them once and does
+     * not expect to set them again. Losing one to a rename would be silent:
+     * the app would carry on with its own fallback and label it as such in
+     * type too small to notice.
+     */
+    plans = [plan({ defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: 6 })];
+    await mount();
+    fireEvent.click(screen.getByText("Edit"));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "2026 season, revised" } });
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() => expect(savedPlan).toHaveBeenCalledTimes(1));
+    expect(savedPlan.mock.calls[0][1]).toMatchObject({
+      defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: 6,
+      monitoringCadenceValue: 30, periodStart: "2026-04-01", periodEnd: "2026-10-31",
+    });
+  });
+
+  it("saves a different intake when one is typed", async () => {
+    plans = [plan({ defaultDmiPctBw: 3 })];
+    await mount();
+    fireEvent.click(screen.getByText("Edit"));
+    expect((screen.getByLabelText("Intake, % of bw") as HTMLInputElement).value).toBe("3");
+    fireEvent.change(screen.getByLabelText("Intake, % of bw"), { target: { value: "2.6" } });
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() => expect(savedPlan).toHaveBeenCalledTimes(1));
+    expect(savedPlan.mock.calls[0][1].defaultDmiPctBw).toBe(2.6);
+  });
+
+  it("shows the graze-down it has on file, so it is not set again each time", async () => {
+    plans = [plan({ targetResidualHeightIn: 6 })];
+    await mount();
+    fireEvent.click(screen.getByText("Edit"));
+    expect((screen.getByLabelText("Graze down to, in") as HTMLInputElement).value).toBe("6");
+  });
+
   it("warns that a new plan stands the current one down, and that nothing is lost", async () => {
     plans = [plan()];
     await mount();

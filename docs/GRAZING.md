@@ -1075,6 +1075,18 @@ write made inside the verification transaction that then rolled back, which is
 a good argument for verifying against committed state rather than the tail of
 your own test.
 
-Both are set now: 300 lb an acre-inch, 6″ graze-down. `default_dmi_pct_bw` is
-still null and still falls back to 3%, labelled as this app's figure, because
-the farm has never given a number for it.
+All three are set now: 3% intake, 300 lb an acre-inch, 6″ graze-down. The farm
+sets them once on the Plan page and every screen reads them from there; the
+Move screen shows the graze-down as its field's placeholder so it does not
+have to be typed each morning.
+
+Nothing in the code carries a default for these. 3% is the farm's figure
+stored on the plan, not a constant — the fallbacks still exist and are still
+labelled "this app's figure", and they now go unused. That distinction is the
+whole point of `AssumptionSources`: a farm that has said nothing should be
+able to see that the app is guessing on its behalf.
+
+Because `save_grazing_plan` writes the whole row, anything the plan editor
+fails to prefill would be written back as null — losing a figure to a rename,
+silently, with the app carrying on against its own fallback. A test now edits
+only the name and asserts all three survive.

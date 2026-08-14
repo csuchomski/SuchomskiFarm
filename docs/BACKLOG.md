@@ -556,9 +556,6 @@ the missing animal the thing to fix.
   left is the first thing you do. It writes `residual_height_in_exit` on the
   strip being closed, with the share of the sward worked out from that strip's
   own entry height.
-- **`default_dmi_pct_bw` is still null on the active plan**, so intake runs on
-  this app's 3% and says so. The farm has never given a figure for it; worth
-  asking rather than assuming, since it scales every feed number.
 - **A paddock's entry-height target is only a fallback.** `P5` carries 6″ and
   the rest are null. Used when no height is taken that morning, which is the
   right precedence, but it means a stale target can quietly drive a forecast.
@@ -578,9 +575,6 @@ the missing animal the thing to fix.
 - **A partial hay cutting has nowhere to go.** `forage_removals` records the
   unit, not which part of it, so cutting a section leaves the rest of the unit
   looking cut. Wants `swept_from`/`swept_to` on the removal.
-- **`.grz-field` inputs are 40 px.** The house rule is a 44 px target and the
-  new screens hold it, but the older grazing forms do not. A one-line change
-  whenever those screens are next touched.
 - **The flat fallback is still the old fraction.** Correct wherever a boundary
   exists, which is everywhere on this farm. Worth knowing it is there before a
   unit is added without one — `stripAcres`, `planStrip` and `widthForHours` all

@@ -9,6 +9,7 @@ import { OffspringEditor } from "../components/herd/OffspringEditor";
 import { GeneticsSection } from "../components/herd/GeneticsSection";
 import { MoneySection } from "../components/herd/MoneySection";
 import { ValueSection } from "../components/herd/ValueSection";
+import { WeightSection } from "../components/herd/WeightSection";
 import { isSire } from "../lib/sires";
 import { BreedEditor } from "../components/herd/BreedEditor";
 import {
@@ -306,6 +307,8 @@ export default function AnimalRecord() {
           <MoneySection animalId={animal.id} name={name} />
 
           <ValueSection animal={animal} farmId={farmId} />
+
+          <WeightSection animal={animal} farmId={farmId} />
 
           <div style={{ marginTop: 24 }}>
             <Callout>

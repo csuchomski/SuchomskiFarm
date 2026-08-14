@@ -16,6 +16,7 @@ import type {
   PlanPaddockTarget,
   PlanResourceConcern,
 } from "../lib/grazing";
+import { drawnSliceAcres } from "../lib/grazing";
 import { REAL_ACRES, REAL_BOUNDARIES, REAL_SWEEP } from "../lib/__fixtures__/farm-geometry";
 
 /**
@@ -50,7 +51,7 @@ const paddock = (n: number): Paddock => {
     acresMeasured: REAL_ACRES[name], acresGrazable: REAL_ACRES[name],
     unitType: "permanent",
     sweepHeadingDeg: REAL_SWEEP[name].headingDeg,
-    sweepLengthFt: REAL_SWEEP[name].lengthFt,
+    sweepLengthFt: REAL_SWEEP[name].lengthFt, rotationOrder: null,
     seedingDate: null, fenceType: null, ecologicalSite: null, soilMapUnit: null,
     noxiousSpecies: null, noxiousExtent: null,
     sensitive: { riparian: false, wetland: false, habitat: false, karst: false, highErosion: false },
@@ -159,7 +160,7 @@ describe("the shape of the document", () => {
       longTermGoals: "Deeper roots", immediateObjectives: "Cover the bare corner",
       benchmarkStockingRateAumPerAcre: null,
       monitoringCadenceKind: "every_n_days", monitoringCadenceValue: 30,
-      defaultDmiPctBw: 3, active: true, notes: null,
+      defaultDmiPctBw: 3, lbDmPerAcreInch: 300, active: true, notes: null,
     };
     await mount();
     const text = document.body.textContent ?? "";
@@ -170,8 +171,7 @@ describe("the shape of the document", () => {
 
   it("prints the units with their measured acreage and sweep", async () => {
     await mount();
-    // 2.255 stored; toFixed gives 2.25, since 2.255 has no exact binary form.
-    expect(screen.getByText("2.25")).toBeTruthy(); // south band
+    expect(screen.getByText("2.26")).toBeTruthy(); // south band
     expect(screen.getAllByText("east to west").length).toBe(2);
     expect(screen.getByText("south to north")).toBeTruthy();
   });
@@ -182,7 +182,7 @@ describe("the shape of the document", () => {
       contractNumber: "12345", tractNumber: "678", fieldIds: null,
       longTermGoals: null, immediateObjectives: null, benchmarkStockingRateAumPerAcre: null,
       monitoringCadenceKind: "every_rotation", monitoringCadenceValue: null,
-      defaultDmiPctBw: null, active: true, notes: null,
+      defaultDmiPctBw: null, lbDmPerAcreInch: 300, active: true, notes: null,
     };
     await mount();
     expect(screen.getByText(/contract 12345 · tract 678/)).toBeTruthy();
@@ -221,8 +221,11 @@ describe("the CSVs", () => {
     expect(filename).toBe("grazing-events-2026-08-13.csv");
     expect(csv).toMatch(/Paddock,Group,Entered/);
     expect(csv).toMatch(/Paddock 3,Main mob/);
-    // Half of 1.97 acres.
-    expect(csv).toMatch(/0\.985/);
+    // Measured off the drawn boundary, not half the unit's acreage — so it
+    // is checked against the same function the page uses rather than a
+    // number copied out of the old arithmetic.
+    const acres = drawnSliceAcres(paddocks[2], 0, 0.5)!;
+    expect(csv).toContain(acres.toFixed(3));
   });
 
   it("neutralises a note a spreadsheet would run as a formula", async () => {

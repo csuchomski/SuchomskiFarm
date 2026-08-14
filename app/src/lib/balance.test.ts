@@ -19,7 +19,7 @@ import type { ForageAvailability, ForageDemand, ForageRemoval, Paddock } from ".
 const p3: Paddock = {
   id: "p3", name: "Paddock 3", code: "P3",
   acresMeasured: 1.97, acresGrazable: 1.97,
-  unitType: "permanent", sweepHeadingDeg: 270, sweepLengthFt: 424,
+  unitType: "permanent", sweepHeadingDeg: 270, sweepLengthFt: 424, rotationOrder: null,
   seedingDate: null, fenceType: null, ecologicalSite: null, soilMapUnit: null,
   noxiousSpecies: null, noxiousExtent: null,
   sensitive: { riparian: false, wetland: false, habitat: false, karst: false, highErosion: false },

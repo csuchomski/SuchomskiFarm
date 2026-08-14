@@ -36,7 +36,7 @@ const p3: Paddock = {
   acresGrazable: 1.91,
   unitType: "permanent",
   sweepHeadingDeg: 270,
-  sweepLengthFt: 400,
+  sweepLengthFt: 400, rotationOrder: null,
   seedingDate: null,
   fenceType: null,
   ecologicalSite: null,

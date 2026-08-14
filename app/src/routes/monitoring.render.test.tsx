@@ -38,7 +38,7 @@ vi.mock("../lib/auth", () => ({
 const paddock = (n: number): Paddock => ({
   id: `p${n}`, name: `Paddock ${n}`, code: `P${n}`,
   acresMeasured: 1.97, acresGrazable: 1.97,
-  unitType: "permanent", sweepHeadingDeg: 270, sweepLengthFt: 424,
+  unitType: "permanent", sweepHeadingDeg: 270, sweepLengthFt: 424, rotationOrder: null,
   seedingDate: null, fenceType: null, ecologicalSite: null, soilMapUnit: null,
   noxiousSpecies: null, noxiousExtent: null,
   sensitive: { riparian: false, wetland: false, habitat: false, karst: false, highErosion: false },
@@ -122,7 +122,7 @@ const withPlan = (over: Partial<GrazingPlan> = {}): GrazingPlan => ({
   contractNumber: null, tractNumber: null, fieldIds: null,
   longTermGoals: null, immediateObjectives: null, benchmarkStockingRateAumPerAcre: null,
   monitoringCadenceKind: "every_n_days", monitoringCadenceValue: 30,
-  defaultDmiPctBw: 3, active: true, notes: null, ...over,
+  defaultDmiPctBw: 3, lbDmPerAcreInch: 300, active: true, notes: null, ...over,
 });
 
 describe("what the page claims", () => {

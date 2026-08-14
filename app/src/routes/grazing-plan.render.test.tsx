@@ -37,7 +37,7 @@ vi.mock("../lib/auth", () => ({
 const paddock = (n: number): Paddock => ({
   id: `p${n}`, name: `Paddock ${n}`, code: `P${n}`,
   acresMeasured: 1.97, acresGrazable: 1.97,
-  unitType: "permanent", sweepHeadingDeg: 270, sweepLengthFt: 424,
+  unitType: "permanent", sweepHeadingDeg: 270, sweepLengthFt: 424, rotationOrder: null,
   seedingDate: null, fenceType: null, ecologicalSite: null, soilMapUnit: null,
   noxiousSpecies: null, noxiousExtent: null,
   sensitive: { riparian: false, wetland: false, habitat: false, karst: false, highErosion: false },
@@ -78,7 +78,7 @@ const plan = (over: Partial<GrazingPlan> = {}): GrazingPlan => ({
   contractNumber: null, tractNumber: null, fieldIds: null,
   longTermGoals: null, immediateObjectives: null, benchmarkStockingRateAumPerAcre: null,
   monitoringCadenceKind: "every_n_days", monitoringCadenceValue: 30,
-  defaultDmiPctBw: 3, active: true, notes: null, ...over,
+  defaultDmiPctBw: 3, lbDmPerAcreInch: 300, active: true, notes: null, ...over,
 });
 
 beforeEach(() => {
@@ -118,11 +118,12 @@ describe("with no plan", () => {
     fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-04-01" } });
     fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-10-31" } });
     fireEvent.change(screen.getByLabelText("Intake, % of bw"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("lb DM per acre-inch"), { target: { value: "300" } });
     fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() => expect(savedPlan).toHaveBeenCalledTimes(1));
     expect(savedPlan.mock.calls[0][1]).toMatchObject({
-      planId: null, name: "2026 season", periodStart: "2026-04-01", defaultDmiPctBw: 3,
+      planId: null, name: "2026 season", periodStart: "2026-04-01", defaultDmiPctBw: 3, lbDmPerAcreInch: 300,
     });
   });
 

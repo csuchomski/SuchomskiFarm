@@ -289,6 +289,57 @@ export function localToLonLat(frame: Frame, p: Local): LonLat {
   return [frame.lon0 + p[0] / (METRES_PER_DEGREE * k), frame.lat0 + p[1] / METRES_PER_DEGREE];
 }
 
+const SQ_FT_PER_ACRE = 43_560;
+const SQ_M_PER_ACRE = 4046.8564224;
+
+/**
+ * The area of a ring, in acres. Shoelace, on the local projection.
+ *
+ * This is the same arithmetic 040 used to measure the farm off the KML, so a
+ * strip measured with it and a unit measured with it agree by construction.
+ */
+export function ringAcres(ring: Local[]): number {
+  if (ring.length < 3) return 0;
+  let a = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const p = ring[i];
+    const q = ring[(i + 1) % ring.length];
+    a += p[0] * q[1] - q[0] * p[1];
+  }
+  return Math.abs(a / 2) / SQ_M_PER_ACRE;
+}
+
+/**
+ * The acres a strip covers, measured off the drawn boundary.
+ *
+ * Why this exists rather than `(to − from) × unit acres`: that shortcut
+ * assumes a unit's area is spread evenly along its sweep, which is exact for
+ * a rectangle and wrong for anything else. Measured against this farm's own
+ * boundaries it was out by up to **24% on Paddock 1** and **94% on the last
+ * tenth of Paddock 4**, which tapers to a corner the arithmetic cannot see.
+ * Paddocks 2 and 3 are near enough rectangles that nothing looked wrong.
+ *
+ * It matters beyond the acreage: hours of feed, stock density and the forage
+ * balance all divide by it, so a strip that holds them ninety minutes could
+ * read as a day.
+ *
+ * Null when there is no boundary to measure — the caller then falls back to
+ * the fraction, which is the best available answer and is no worse than what
+ * it always did.
+ */
+export function sliceAcres(
+  ring: Local[],
+  headingDeg: number,
+  from: number,
+  to: number,
+): number | null {
+  const slice = sweepSlice(ring, headingDeg, from, to);
+  return slice === null ? null : ringAcres(slice);
+}
+
+/** Square feet, for a figure small enough that acres read as nothing. */
+export const acresToSqFt = (acres: number): number => acres * SQ_FT_PER_ACRE;
+
 /** An SVG path `d` for a closed ring. */
 export function pathFor(points: [number, number][]): string {
   if (points.length === 0) return "";
@@ -318,4 +369,28 @@ export function scaleBarFeet(projection: PastureProjection): { feet: number; px:
   const steps = [25, 50, 100, 200, 250, 500, 1000, 2000];
   const feet = steps.reduce((best, s) => (Math.abs(s - rough) < Math.abs(best - rough) ? s : best), steps[0]);
   return { feet, px: (feet / 3.280839895) * projection.scale };
+}
+
+/**
+ * A point on the screen, in viewBox units.
+ *
+ * `preserveAspectRatio="xMidYMid meet"` — the default — fits the drawing
+ * inside the element and centres what is left over. When the element is
+ * exactly the viewBox's proportions there is no leftover and this is a plain
+ * scale; when it is not, the gutters have to come off first or every touch
+ * lands off by the width of the letterbox. `getScreenCTM` would do the same
+ * job, but it is not implemented everywhere the tests run and this is four
+ * lines of arithmetic.
+ */
+export function viewBoxPoint(input: {
+  clientX: number; clientY: number;
+  rect: { left: number; top: number; width: number; height: number };
+  viewBoxWidth: number; viewBoxHeight: number;
+}): [number, number] | null {
+  const { clientX, clientY, rect, viewBoxWidth: vw, viewBoxHeight: vh } = input;
+  if (rect.width <= 0 || rect.height <= 0 || vw <= 0 || vh <= 0) return null;
+  const scale = Math.min(rect.width / vw, rect.height / vh);
+  const gutterX = (rect.width - vw * scale) / 2;
+  const gutterY = (rect.height - vh * scale) / 2;
+  return [(clientX - rect.left - gutterX) / scale, (clientY - rect.top - gutterY) / scale];
 }

@@ -514,3 +514,119 @@
 .pm-key--proposed { background: #b9cbab; border-color: var(--herd-green); }
 
 .pm-move { margin-top: 14px; }
+
+/* ── Move: the morning, on one page ──────────────────────────────────── */
+
+.mv-where { font-size: 15px; color: var(--ink-soft); padding: 12px 0 4px; }
+.mv-rest { color: var(--ink-muted); }
+
+/* The height reading sits above the wire because it feeds it — the figures
+   below are downstream of this number. */
+.mv-height {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 10px 0 14px;
+}
+
+.mv-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: 0 1 220px; }
+
+/* "Grass height in Paddock 3, inches" wraps on most widths, and the eyebrow's
+   tight default leading runs the second line into the box. */
+.mv-field .eyebrow { line-height: 1.45; }
+
+.mv-field input {
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 20px/1 "IBM Plex Mono", monospace;
+  padding: 0 10px;
+}
+
+.mv-field input:focus-visible { outline: 2px solid var(--herd-green); outline-offset: 1px; }
+
+.mv-height__note {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  margin: 0;
+  flex: 1 1 240px;
+  max-width: 56ch;
+}
+
+.mv-hint {
+  font-size: 13px;
+  color: var(--ink-soft);
+  border-left: 2px solid var(--herd-green);
+  padding: 5px 0 5px 10px;
+  margin: 10px 0 0;
+  max-width: 68ch;
+}
+
+/* The farm is a tall shape, so a full-width drawing runs past the bottom of
+   the screen and takes the figures with it. The whole point is to drag the
+   wire and watch the acres change, which only works if both are in view, so
+   the drawing is capped and letterboxed rather than left to its own
+   proportions. `viewBoxPoint` takes the gutters off the touch. */
+.mv-figure .pm-svg { height: min(56vh, 560px); }
+
+/* `--pm-unit` is viewBox units per screen pixel, set by the page from the
+   drawing's measured size. It undoes the map's scale so these read the same
+   on a phone as on a desktop. */
+.mv-figure .pm-label { font-size: calc(15px * var(--pm-unit, 1)); }
+.mv-figure .pm-sub { font-size: calc(11px * var(--pm-unit, 1)); }
+
+/* Same reasoning for the lines and the grab handle: a hairline is a hairline
+   and a handle is a thumb, whatever the map is scaled to. */
+.mv-figure path, .mv-figure line { vector-effect: non-scaling-stroke; }
+.mv-figure .pm-wire-grip { r: calc(11px * var(--pm-unit, 1)); vector-effect: non-scaling-stroke; }
+
+.mv-panel { margin-top: 14px; }
+
+/* Wide enough for two columns: the drawing on the left, everything that
+   reacts to it on the right. Placement is explicit rather than by source
+   order, so the phone keeps its single column with the grass height above
+   the map — where it belongs, because it sets the figures. The drawing is
+   letterboxed into a fixed height anyway, so the width it gives up here
+   was empty paper. */
+@media (min-width: 1000px) {
+  .mv-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 30rem);
+    grid-template-rows: auto auto auto 1fr;
+    column-gap: 24px;
+    align-items: start;
+  }
+
+  .mv-figure { grid-column: 1; grid-row: 1 / -1; margin-top: 0; }
+  .mv-height { grid-column: 2; grid-row: 1; padding-top: 0; }
+  .mv-hint { grid-column: 2; grid-row: 2; margin-top: 0; }
+  .mv-panel { grid-column: 2; grid-row: 3; }
+  .mv-onward { grid-column: 2; grid-row: 4; }
+
+  /* With half the width, four figures across is a squeeze. */
+  .mv-panel .grz-strip-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  /* The map has the column to itself, so it can have the height back. */
+  .mv-figure .pm-svg { height: min(74vh, 720px); }
+}
+
+/* The back line. Dashed and in ink, so it reads as a fence rather than as
+   this morning's decision — the wire is the thing being placed. */
+.mv-backline {
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-dasharray: 9 5;
+}
+
+.grz-preset--on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.mv-cut { border-top: 1px solid var(--hairline); margin-top: 14px; padding-top: 12px; }
+
+.mv-onward { display: flex; flex-wrap: wrap; gap: 6px; padding: 16px 0 0; }

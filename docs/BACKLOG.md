@@ -241,14 +241,334 @@ be right.
 
 ### Pasture moves
 
-A record of which group was on which pasture, and when. Nothing in the schema
-covers it — no pasture, paddock or grazing table exists — so this is new
-tables rather than a page over something already modelled.
+**Built.** It became the whole CPS 528 grazing module — migrations 036–042,
+nine screens under Herd. See `docs/GRAZING.md`. Left here rather than deleted
+because the entry is where the trail starts.
 
-Detail promised. Worth asking for when it comes: whether a move is recorded
-against a group or each animal, whether rest days between grazings need to be
-computed, and whether it should tie to the withdrawal tracking that already
-exists for treated animals.
+## Requested 2026-08-13, after seeing the shipped move flow
+
+### Redo logging a move: one page, and a back line you can set
+
+**Built 2026-08-13** as Herd → Move, along with the four answers below.
+Migrations 043 and 044 are run. See "Move: the morning, on one page" in
+`docs/GRAZING.md`. Kept here because the reasoning is the trail.
+
+The ask, close to verbatim:
+
+> I want logging a move to be redone so everything is on one page. I want to
+> be able to tell you my starting point (the back line) and then set the new
+> line every day (the line placed the move before then becomes the back
+> line). There may be times that I cut hay and skip a section of a paddock or
+> a paddock entirely in which case I'd need to be able to set a new back line
+> again so include that functionality. Using the map, the amount of pasture
+> should automatically be calculated.
+
+Raised against the prototype at
+`https://claude.ai/code/artifact/0ec1a04d-55b0-4d82-89b9-a5569ab4c177`, which
+already showed this: map and readout side by side on one screen, the wire
+dragged on the drawing, and the back fence as its own drawn line.
+
+**Why it did not get built that way.** The prototype was drawn before any
+geometry existed — no KML yet — so step 2 shipped the wire as a percentage on
+the board, which was the only thing that could work at the time. Its own idea
+03 said "the map screen, brought forward… it becomes the primary way to log a
+move rather than a nice extra", and when the KML did arrive (040) the map was
+built as step 4 beside the board instead of replacing it. Idea 05, "the back
+fence deserves its own record", was never built at all. The build order got
+followed and the prototype got treated as an illustration.
+
+#### What is actually missing
+
+**`swept_from` is derived, never settable.** Today the app reads it off the
+previous open event's `swept_to`. That is right for the ordinary case and
+has no answer for the ones raised here — starting a pass part-way in, skipping
+a section, or coming back after hay. The column already exists and takes any
+value; it is the UI and `log_grazing_move` that assume continuity. The
+function refuses `p_swept_from` behind the last `swept_to`, which is the
+right default and must become overridable rather than absolute.
+
+**Skipped ground needs no new model, and that is worth knowing.** Rest is
+already asked of a *position*, not a unit, so ground the wire jumped over is
+simply ground with no covering interval this pass and dates from whenever it
+was last covered. Nothing to add. The only new thing is being able to say the
+jump happened.
+
+**A partial hay cutting has nowhere to go.** `forage_removals` is whole-unit:
+paddock, date, yield. "I cut the east third" cannot be recorded, and it is
+one of the two cases named in the ask. This wants `swept_from`/`swept_to` on
+`forage_removals` too, at which point `lastDefoliatedAt` stops treating a
+cutting as covering every position and starts treating it as an interval like
+any other — a genuine simplification, since the special case disappears.
+
+#### The acreage is wrong today, and not slightly
+
+This is the part of the ask that is a correctness fix rather than a
+convenience. `stripAcres` computes `(to - from) × unit acres`, which assumes a
+unit's area is spread evenly along its sweep. That is exact for a rectangle
+and wrong for anything else. Measured against the drawn boundaries from 040:
+
+| Unit | first 10% | middle 10% | last 10% |
+|---|---|---|---|
+| Paddock 1 | −24% | +10% | −14% |
+| Paddock 2 | −5% | +0.5% | +0.5% |
+| Paddock 3 | +0.5% | +0.5% | −5% |
+| Paddock 4 | −16% | **+30%** | **−94%** |
+| Paddock 5 | +18% | 0% | −18% |
+
+Paddock 4's last tenth is 0.014 acres of ground being reported as 0.225 — it
+tapers to a corner, and the arithmetic cannot see that. Paddocks 2 and 3 are
+near enough rectangles to be fine, which is why nothing looked wrong.
+
+It propagates: hours of feed, lb/acre density and the forage balance all
+divide by that acreage, so a strip that holds them ninety minutes can read as
+a day.
+
+**The fix is already written.** `sweepSlice` returns the real polygon and the
+shoelace area of it is the honest figure; `pasture-map.test.ts` already
+computes exactly that to check the slicing. It needs lifting out of the test
+into `lib/`, and `stripAcres` needs to use it whenever a boundary exists and
+fall back to the fraction only when one does not.
+
+#### Shape of the work
+
+One page replacing two. The board's move form and the map's wire placement
+are the same act done twice, and the readout — acres, feed, density, width —
+is identical on both. Keep the gate readings (forage height, residual out,
+soil) on the same page rather than losing them; they were the reason the
+board's form existed.
+
+#### Answered: the back line is a position on the whole serpentine
+
+Asked whether setting a back line is its own dated act or a field on the next
+move. The answer reframes it, and is worth quoting:
+
+> The scenario I want to handle where I'm running the cows through paddock 2
+> but I decide to cut paddock 4 for hay. After working our way through paddock
+> 3, I might want to skip paddock 4 in which case I'd want to set the backline
+> to the start of paddock 5.
+
+**"The start of paddock 5" is a back line position.** So the back line is not
+a fraction within one unit — it is a point on the farm's single continuous
+path, P1 → P2 → P3 → P4 → P5 → P1. Skipping a unit is advancing the back line
+past the whole of it.
+
+That settles the dating question by dissolving it. A skipped unit is not
+grazed at all, so nothing about its rest changes when you decide to skip it —
+its clock keeps running from its last defoliation, and the hay cutting resets
+it when it happens. **The back line is a field on the next move, not a
+separately dated act.** The move already carries the date, and that date is
+the only one that means anything.
+
+#### The morning, as described
+
+Given the same day, and the thing to build against:
+
+> When I go out in the morning, I'm going to move the cows. I want to track
+> the height of the pasture grass where I'm moving them to, you'll already
+> have the weight of all the cows and how much we're anticipating they eat
+> each day. Given that information, I'll drag the wire line forward and see
+> live acres, days of feed, and lb/acre. This will help me decide how much to
+> give them plus log my move. I want the UX to be seemless, efficient, and
+> easy. the back line will be the wire line i moved forward yesterday. I
+> don't need to pick the paddock, it should already know. Once I'm done with
+> a paddock, I should be able to move to the next paddock and the backline
+> should automatically move to the start of that paddock with the wire line
+> defaulting away from the backline so I can see it and drag it. If I cut
+> hay, i want that recorded so I know when it was and how much rest there's
+> been. given that I might have cut a paddock for hay, i want the option to
+> skip paddocks.
+
+Read as a checklist, most of it is arrangement rather than new machinery:
+
+- **Opens on the current paddock, no picking.** The mob's open event already
+  says where they are; the page should start there. Picking a unit becomes
+  the exception — "next paddock" or "skip" — not the first step.
+- **The back line is yesterday's wire**, already true in the data and already
+  what `swept_from` derives. What changes is that it becomes visible and
+  overridable rather than invisible and fixed.
+- **The wire defaults away from the back line.** A concrete requirement worth
+  keeping: at the start of a unit the two coincide, and a wire sitting on the
+  back line cannot be seen or grabbed. It needs to open at a day's width —
+  which is also the useful default — so there is something to drag.
+- **Days of feed, not hours.** The readout currently says `36h` under a day
+  and a half. The word used is days; `formatFeed` should follow.
+- **Head and weight without asking.** Per-animal weights live in
+  `herd.weights`, which is still empty, and intake comes from the plan. Both
+  need to exist before this reads as effortless rather than blank — see the
+  head-count defect below.
+
+#### Grass height is the one genuinely new thing
+
+"Track the height of the pasture grass where I'm moving them to" is a
+measurement the module already has a column for —
+`grazing_events.forage_height_in_entry` — but it is currently *recorded and
+never used*. The ask is for it to **drive** the figures: height taken at the
+gate this morning is what should set standing forage for today's strip.
+
+That needs a conversion the app does not have and must not invent: **pounds
+of dry matter per acre-inch**. It varies with sward, season and density, it
+is exactly the kind of agronomic number this module has refused to hardcode
+everywhere else, and it belongs in the plan beside `default_dmi_pct_bw`.
+
+Worth asking rather than assuming: whether the reading is a plate-meter
+figure, a stick, or an eye; and whether the farm already has a lb/acre-inch
+figure it trusts, or wants one from Extension. Until it has one, the honest
+behaviour is what the readout does today — fall back to the availability
+record and say the figure is not theirs.
+
+Note also the ordering this implies. Height is taken **before** the move, of
+the ground about to be opened, so on the one page it belongs above the wire,
+feeding it — not in an "everything below is optional" section after it, which
+is where the board's form puts it.
+
+#### Answers, given 2026-08-13 — these are settled
+
+**1. A weight field on the animal.** Asked for so weights can be entered on
+the animal itself, and *summed across the herd* to give the total weight on
+pasture.
+
+This crosses an earlier decision in `GRAZING.md`, which chose `herd.weights`
+— dated rows — over "a single field on the animal", so that a heifer's April
+figure stays her April figure. Both wants are real, and the resolution is not
+to pick: **a weight field on the Animals form that writes a dated row to
+`herd.weights`.** It reads as one field and keeps the history, and nothing
+downstream changes.
+
+Note the summing is already how it works. `groupAvgWeightLb` averages each
+member's most recent weighing, so head × average *is* the sum of actual
+weights, and varying sizes are already handled. `herd.weights` being empty is
+the whole of the problem; there is no arithmetic to fix, only a way in.
+
+Total weight on pasture is worth showing outright, though — it is the figure
+behind stock density and nowhere on screen today.
+
+**2. Standing forage: 300 lb of dry matter per acre-inch.** The farm's
+figure, so it goes in the plan rather than the code — a new
+`grazing_plans.lb_dm_per_acre_inch` beside `default_dmi_pct_bw`, editable on
+the Plan page like everything else there. This morning's height reading ×
+300 × grazable acres is then the standing forage for today's strip, and the
+readout can finally say the figure is theirs rather than the app's.
+
+Worth stating what this does to the existing chain: it makes
+`forage_availability` the fallback rather than the source, since a height
+taken this morning beats a figure recorded for the month.
+
+**3. Rotation order: P1, P2, P3, P4, P5.** A `paddocks.rotation_order`
+carrying 1–5. It is what lets "the next paddock" and "the start of Paddock 5"
+be things the app can name, and it wraps — after P5 comes P1.
+
+**4. The one-page move — yes.** Build it as described above.
+
+**5. The acreage fix and the new KML together — yes.** One pass, so the
+figures move under the farm once.
+
+#### The database already does this — checked, not assumed
+
+Both skips were tested against the live farm inside a rolled-back
+transaction, as an `authenticated` user:
+
+| | |
+|---|---|
+| Jump the back line forward inside a unit (skip a section) | **accepted** |
+| Move on to another unit, leaving one part grazed (skip a unit) | **accepted** |
+| Put the wire back over ground just grazed | still refused |
+
+`log_grazing_move` only ever refused going *backwards*
+(`p_swept_from < v_open.swept_to`), and never constrained `swept_from` at all
+on a move to a different unit. So the skip mechanics need **no migration**.
+What is missing is only that the app never lets `swept_from` be anything but
+the derived value.
+
+That makes this materially smaller than it first read.
+
+#### What genuinely is missing
+
+**The rotation order is not stored anywhere.** "Set the back line to the start
+of Paddock 5" needs the app to know P5 follows P4 follows P3. The serpentine
+is confirmed and is implicit in the sweep headings, but nothing records the
+sequence — `rotationRounds` infers order from what happened, which is the
+wrong direction for this. Wants a `paddocks.rotation_order`, and it is the
+one schema change the skip needs.
+
+**Nothing can say a unit is shut up for hay.** After skipping Paddock 4 its
+rest keeps climbing and the board sorts it to the top as the best next
+choice — exactly the wrong advice, and the reason the skip happened. The
+schema already anticipated this and it was never used:
+`plan_schedule_periods.kind` includes `'deferment'`, and
+`plan_paddock_targets.planned_deferment_notes` exists. Deferring a unit
+should take it off the board's list and say why.
+
+**A partial hay cutting still has nowhere to go** — see above. Skipping a
+*section* to cut it is the case that needs `swept_from`/`swept_to` on
+`forage_removals`.
+
+### An updated KML is waiting, not loaded — **loaded 2026-08-13, migration 044**
+
+`docs/suchomski-farm-2026-08-13b.kml`, sent the same day. Loaded with the
+acreage fix in one pass, as argued below. The five units re-cut to 2.021,
+1.932, 1.972, 2.261 and 1.381 acres — 9.568 in total, which is the perimeter
+exactly.
+
+What changed, so nobody has to work it out later: **only the perimeter**. All
+four interior fence paths are byte-identical. Eight of the twelve perimeter
+vertices moved, none by more than 2.4 ft, and the enclosed area goes from
+**9.532 to 9.568 acres** — about 1,560 sq ft, a third of a percent. It reads
+as a redraw tidying the boundary rather than a change of fact.
+
+Small as it is, it should not be applied on its own. Reloading the perimeter
+re-cuts all five units, and the acreage fix above changes how a strip's acres
+are computed from those units — so both want doing together, once, rather
+than moving the numbers under the farm twice in a week. There are also real
+grazing events on file now, and their recorded `swept_from`/`swept_to`
+fractions are interpreted against whatever the boundary is; changing it
+silently re-prices ground already grazed.
+
+### The map's move records the wrong head count
+
+Found while checking the above: the farm has started logging real moves, and
+the ones logged from the map carry **4 head and no weight**, while the ones
+logged from the board carry the 5 head and 900 lb that were typed in.
+
+The board's form prefills head and weight from the animal records and lets
+them be corrected. The map's move takes the derived figures and offers no way
+to change them — and there are four animals on file against five head
+actually running, so every map-logged move understates the mob.
+
+With no weight it also produces no feed figure at all, which is half the
+reason to size a strip.
+
+Smallest honest fix is to carry head and weight onto the one-page move above,
+prefilled and editable, as the board already does. Adding the fifth animal to
+Herd → Animals fixes the count at its source and is worth doing either way.
+
+**Half fixed 2026-08-13.** Weight is no longer derived from a guess: each
+animal carries dated weighings, and the mob's total is the sum of the
+members' latest, shown in the page's own header. **Still open:** the head
+count. There are four animals on file against five running, so every derived
+figure is a fifth light until the fifth animal is added. Move has no override
+for head count — it reads the roll — which is the right shape, but it makes
+the missing animal the thing to fix.
+
+## Opened 2026-08-13, building Move
+
+- **The fifth animal.** Four on file, five running. Everything derived from
+  the roll — head count, mob weight, days of feed, stock density — is a fifth
+  light until it is added. This is the single highest-value entry on the list
+  and it is a data-entry job, not a build.
+- **Deferring a unit shut up for hay.** Skipping Paddock 4 works, but its rest
+  keeps climbing afterwards and the board sorts it to the top as the best next
+  choice — the exact opposite of the intent. `plan_schedule_periods.kind`
+  already has `'deferment'` and `plan_paddock_targets.planned_deferment_notes`
+  already exists; neither is used.
+- **A partial hay cutting has nowhere to go.** `forage_removals` records the
+  unit, not which part of it, so cutting a section leaves the rest of the unit
+  looking cut. Wants `swept_from`/`swept_to` on the removal.
+- **`.grz-field` inputs are 40 px.** The house rule is a 44 px target and the
+  new screens hold it, but the older grazing forms do not. A one-line change
+  whenever those screens are next touched.
+- **`stripAcres`'s fallback is still the old fraction.** Correct now wherever
+  a boundary exists, which is everywhere on this farm. Worth knowing it is
+  there before a unit is added without one.
 
 ## Carried over from earlier sessions
 

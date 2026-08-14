@@ -31,7 +31,7 @@ const paddock = (id: string, name: string, swept: boolean): Paddock => ({
   acresGrazable: 1.91,
   unitType: "permanent",
   sweepHeadingDeg: swept ? 270 : null,
-  sweepLengthFt: swept ? 400 : null,
+  sweepLengthFt: swept ? 400 : null, rotationOrder: null,
   seedingDate: null,
   fenceType: null,
   ecologicalSite: null,

@@ -330,3 +330,60 @@
     gap: 8px;
   }
 }
+
+/* ── Weight ──────────────────────────────────────────────────────────
+   One field to fill in, a dated row behind it. */
+
+.wt-now {
+  font-size: 30px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  margin: 0 0 14px;
+}
+
+.wt-unit { font-size: 16px; color: var(--ink-muted); }
+.wt-kind { font-size: 13px; color: var(--ink-faint); }
+
+.wt-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  padding-bottom: 10px;
+}
+
+.wt-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: 1 1 120px; }
+
+.wt-field input {
+  min-width: 0;
+  /* A weight gets typed in the barn, on a phone, so it is a 44px target. */
+  min-height: 44px;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 14px/1 "IBM Plex Sans", sans-serif;
+  padding: 0 8px;
+}
+
+.wt-field input:focus-visible { outline: 2px solid var(--herd-green); outline-offset: 1px; }
+
+.wt-why { font-size: 12.5px; color: var(--ink-faint); margin: 4px 0 0; max-width: 60ch; }
+
+.wt-history { margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+
+.wt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  margin: 0;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.wt-row__when { font-size: 12.5px; color: var(--ink-muted); }
+
+@media (max-width: 860px) {
+  /* 16px or Safari zooms on focus. */
+  .wt-field input { font-size: 16px; }
+}

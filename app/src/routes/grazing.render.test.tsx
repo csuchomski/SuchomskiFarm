@@ -44,7 +44,7 @@ const paddock = (n: number): Paddock => ({
   acresGrazable: 1.91,
   unitType: "permanent",
   sweepHeadingDeg: n === 5 ? 0 : n % 2 === 0 ? 90 : 270,
-  sweepLengthFt: 400,
+  sweepLengthFt: 400, rotationOrder: null,
   seedingDate: null,
   fenceType: null,
   ecologicalSite: null,
@@ -128,7 +128,7 @@ vi.mock("../lib/grazing", async (importOriginal) => {
             longTermGoals: null, immediateObjectives: null,
             benchmarkStockingRateAumPerAcre: null,
             monitoringCadenceKind: "every_rotation", monitoringCadenceValue: null,
-            defaultDmiPctBw: 2.5, active: true, notes: null,
+            defaultDmiPctBw: 2.5, lbDmPerAcreInch: 300, active: true, notes: null,
           }
         : null,
     ),

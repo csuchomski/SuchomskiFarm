@@ -45,7 +45,9 @@
 .grz-field input,
 .grz-field select {
   min-width: 0;
-  min-height: 40px;
+  /* The house rule is 44. These were 40 from before it was settled, and the
+     plan gets edited on the same phone everything else does. */
+  min-height: 44px;
   border: 1px solid var(--hairline);
   background: var(--paper);
   color: var(--ink);
@@ -630,3 +632,15 @@
 .mv-cut { border-top: 1px solid var(--hairline); margin-top: 14px; padding-top: 12px; }
 
 .mv-onward { display: flex; flex-wrap: wrap; gap: 6px; padding: 16px 0 0; }
+
+/* What the mob actually did to the strip they are standing on. Above the
+   forecast and set apart from it, because it is the one measured thing in
+   the morning and it is about the ground behind the wire, not ahead. */
+.mv-ate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 12px 0 14px;
+  border-bottom: 1px solid var(--hairline);
+}

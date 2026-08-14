@@ -973,3 +973,120 @@ desktop and twenty-seven on a tablet.
 Above 1,000 px the drawing and the readings sit side by side. That is not
 decoration: the whole premise is dragging the wire and watching the acres
 change, and on a phone `56vh` keeps both in view for the same reason.
+
+## The graze-down replaces the utilization percentage
+
+The farm's own words: "we can't assume the cows are eating all of the grass
+available. I want to be able to set the average height in a paddock and the
+height I want them to eat to."
+
+That is the right model and it was not the one the app had. The app took a
+height, turned it into pounds standing, and then discounted it by a
+**utilization percentage** — a number nobody on a farm sets, measures, or
+particularly believes, and which was sitting on this farm's app-supplied
+default of 50% because no paddock had ever been given one. A grazier sets a
+graze-down: in at eight inches, off at four. What comes off is the difference.
+
+    usable lb DM/acre = (entry height − graze-down) × lb per acre-inch
+
+### Utilization becomes an outcome, which is what makes it safe
+
+Nothing downstream changed, and that is deliberate. Rather than adding a
+second way to compute usable forage, `assumptionsFor` *derives* the
+percentage from the two heights:
+
+    utilization = (entry − residual) ÷ entry
+
+Feed that back in place of the typed figure and the arithmetic already in the
+app — standing × utilization — lands on exactly the expression above.
+`planStrip`, `widthForHours`, `openingWire` and the forage balance are all
+correct without knowing any of this exists.
+
+The failure this shape rules out is the quiet one: applying the graze-down
+**and** the percentage and halving the feed twice. There is no second path for
+them to disagree on, and a test asserts the case directly — a paddock carrying
+both an 8″→4″ graze-down and a 50% target still puts 1,200 lb an acre on
+offer, not 600.
+
+### Where the height comes from
+
+Most specific first, the same order as every other configured figure in the
+module:
+
+| | |
+|---|---|
+| Typed on the Move screen | this move only |
+| `plan_paddock_targets.target_residual_height_in` | this paddock |
+| `grazing_plans.target_residual_height_in` | the farm — **new in 045** |
+| Nothing set | falls back to a utilization percentage, labelled as such |
+
+The per-paddock column has been in the schema since 038 and the Plan page has
+always edited it. All five of this farm's were null, which is why nothing had
+ever used it. What was missing was the farm-wide default, so the per-paddock
+figure can stay an exception rather than five copies of one number.
+
+The Move screen shows the figure standing in as the field's **placeholder**,
+so the number in use is never invisible.
+
+### A graze-down at or above the grass is ignored
+
+Nothing to take. Left alone it would give a utilization of zero or less and a
+strip of infinite width, which is the sort of arithmetic that gets a paddock
+ruined. It falls back to the percentage and says so.
+
+### What was recorded, and what was measured
+
+The first version of this wrote the strip's *intended* utilization through
+`logMove`, which was wrong twice over, and the mistake is worth keeping
+written down.
+
+`log_grazing_move` sets `residual_height_in_exit` and `utilization_pct` on the
+event it **closes**, then inserts the new one. So those two arguments are
+never about the strip being opened — they are about the ground the mob is
+standing on and is about to leave. Sending a forecast through them filed it
+against the wrong strip *and* recorded an intention as a measurement.
+
+The test written alongside it asserted `utilizationPct === 75` and passed,
+because it checked the value handed to the function without checking where the
+function puts it. A test that pins an argument is not testing behaviour.
+
+**What goes in now, and only this:** the height the mob actually took that
+strip down to, typed on the next morning's move — which is exactly where the
+farmer is standing to see it. `utilization_pct` is worked out from *that
+strip's own* entry height, never this morning's reading of the ground ahead.
+The forecast for the new strip is not recorded anywhere, because a forecast is
+not a fact.
+
+If the residual read is at or above the height they went in on, the height is
+still recorded — it is what was seen — but no share of the sward is derived
+from it. That is not a graze.
+
+`forageEatenLbDm` prefers a measured residual over the percentage wherever one
+exists. It appears in the events CSV as "Dry matter eaten (lb)", blank rather
+than zero where the record cannot support a figure.
+
+### The farm's own numbers, which were not actually in the database
+
+Setting the graze-down default to 6″ turned up that the active plan
+("August 2026") had **no `lb_dm_per_acre_inch` at all** — the farm's stated 300
+had been built for and never stored, so every height reading was falling back
+to this app's 2,400 lb/acre standing. The 300 seen in an earlier check was a
+write made inside the verification transaction that then rolled back, which is
+a good argument for verifying against committed state rather than the tail of
+your own test.
+
+All three are set now: 3% intake, 300 lb an acre-inch, 6″ graze-down. The farm
+sets them once on the Plan page and every screen reads them from there; the
+Move screen shows the graze-down as its field's placeholder so it does not
+have to be typed each morning.
+
+Nothing in the code carries a default for these. 3% is the farm's figure
+stored on the plan, not a constant — the fallbacks still exist and are still
+labelled "this app's figure", and they now go unused. That distinction is the
+whole point of `AssumptionSources`: a farm that has said nothing should be
+able to see that the app is guessing on its behalf.
+
+Because `save_grazing_plan` writes the whole row, anything the plan editor
+fails to prefill would be written back as null — losing a figure to a rename,
+silently, with the app carrying on against its own fallback. A test now edits
+only the name and asserts all three survive.

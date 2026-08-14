@@ -20,6 +20,7 @@ import {
   fetchResourceConcerns,
   occupancyDays,
   rotationRounds,
+  forageEatenLbDm,
   stripAcres,
   sweepInWords,
   type ContingencyPlan,
@@ -176,6 +177,18 @@ export default function GrazingRecord() {
       { key: "entry", label: "Forage in (in)", value: (e) => e.forageHeightInEntry },
       { key: "residual", label: "Residual out (in)", value: (e) => e.residualHeightInExit },
       { key: "util", label: "Utilization %", value: (e) => e.utilizationPct },
+      {
+        // What came off: the acres times the height taken between entry and
+        // the graze-down. Blank rather than zero where the record does not
+        // carry enough to say — a figure and an absence should not look the
+        // same when the season is totalled.
+        key: "eaten", label: "Dry matter eaten (lb)",
+        value: (e) => {
+          const p = load.paddocks.find((x) => x.id === e.paddockId);
+          const lb = p ? forageEatenLbDm(e, p, load.plan) : null;
+          return lb === null ? null : Math.round(lb);
+        },
+      },
       { key: "soil", label: "Soil moisture", value: (e) => e.soilMoisture },
       { key: "notes", label: "Notes", value: (e) => e.notes },
     ];

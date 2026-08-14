@@ -15,6 +15,7 @@ import {
   fetchLatestWeights,
   fetchPaddocks,
   fetchPlanPaddockTargets,
+  grazeDownTo,
   groupHeadCount,
   inRotation,
   isSwept,
@@ -113,6 +114,8 @@ export default function Move() {
   const [movingBack, setMovingBack] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [height, setHeight] = useState("");
+  const [grazeTo, setGrazeTo] = useState("");
+  const [ateTo, setAteTo] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -199,6 +202,44 @@ export default function Move() {
   // strip maths takes an average, and average × head is that total.
   const avgWeight = mob.totalLb !== null && head ? mob.totalLb / head : null;
 
+  /** What the field falls back to when it is left blank — shown as its
+   *  placeholder so the figure in use is never invisible. */
+  const fallbackGrazeTo =
+    load.state === "ok" && dest
+      ? grazeDownTo({ paddockId: dest.id, plan: load.plan, targets: load.targets }).inches
+      : null;
+
+  /**
+   * What they actually took the strip they are standing on down to.
+   *
+   * This is about the ground behind the wire, not ahead of it, and it is the
+   * only measurement in the morning — everything else on this page is a
+   * forecast. `log_grazing_move` puts it on the event it closes, which is
+   * that strip.
+   */
+  const ateToIn = (() => {
+    const v = Number(ateTo.trim());
+    return ateTo.trim() !== "" && Number.isFinite(v) && v > 0 ? v : null;
+  })();
+
+  /** The strip they are on, which the move is about to close. */
+  const openStrip = standing?.open ?? null;
+
+  /** What that works out to as a share of the sward they went in on. Recorded
+   *  beside the height so the figure survives if the entry height is later
+   *  corrected — and left null rather than guessed when there is no entry
+   *  height to divide by. */
+  const atePct = (() => {
+    const entry = openStrip?.forageHeightInEntry ?? null;
+    if (ateToIn === null || entry === null || entry <= 0 || ateToIn >= entry) return null;
+    return Math.round(((entry - ateToIn) / entry) * 1000) / 10;
+  })();
+
+  const grazeToIn = (() => {
+    const v = Number(grazeTo.trim());
+    return grazeTo.trim() !== "" && Number.isFinite(v) && v > 0 ? v : null;
+  })();
+
   const heightIn = (() => {
     const v = Number(height.trim());
     return height.trim() !== "" && Number.isFinite(v) && v > 0 ? v : null;
@@ -214,8 +255,13 @@ export default function Move() {
           todayIso: nowIso(),
           fallback: FALLBACK,
           swardHeightIn: heightIn,
+          grazeToIn,
         })
-      : { assumptions: FALLBACK, sources: { standing: "default", utilization: "default", intake: "default" } as const };
+      : {
+          assumptions: FALLBACK,
+          sources: { standing: "default", utilization: "default", intake: "default" } as const,
+          grazeDown: { entryIn: null, residualIn: null, source: "none" },
+        };
 
   const stripped = dest !== null && isSwept(dest);
 
@@ -326,18 +372,31 @@ export default function Move() {
         notes: "",
         latitude: null,
         longitude: null,
-        residualHeightInExit: null,
-        utilizationPct: null,
+        // Both of these land on the strip being *closed*, not the one being
+        // opened — `log_grazing_move` sets them on the open event before it
+        // inserts the new one. So they are what the mob actually did to the
+        // ground they are standing on, never what is intended for the ground
+        // ahead. Writing a forecast here would file it against the wrong
+        // strip and call an intention a measurement twice over.
+        residualHeightInExit: ateToIn,
+        utilizationPct: atePct,
         sweptFrom: stripped ? backLine : null,
         sweptTo: stripped ? Math.max(wire, backLine + 0.005) : null,
       });
       setNote(
-        strip
-          ? `${strip.acres.toFixed(2)} acres of ${dest.name} opened to ${group.name}.`
-          : `${group.name} moved to ${dest.name}.`,
+        (strip
+          ? `${strip.acres.toFixed(2)} acres of ${dest.name} opened to ${group.name}` +
+            (assumed.grazeDown.residualIn === null
+              ? "."
+              : ` — about ${Math.round(strip.lbDmOnOffer).toLocaleString()} lb of dry matter,` +
+                ` down to ${assumed.grazeDown.residualIn}″.`)
+          : `${group.name} moved to ${dest.name}.`) +
+          (ateToIn === null ? "" : ` The strip they left is recorded at ${ateToIn}″.`),
       );
       goTo(null);
       setHeight("");
+      setGrazeTo("");
+      setAteTo("");
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -430,6 +489,46 @@ export default function Move() {
           {/* On a phone this is one column in the order written. On a wide
               screen the stylesheet puts the drawing beside the readings, so
               the wire and the acres it is changing are in view together. */}
+          {/* ── what they actually did to the strip they are on ────────
+              First, because it is the first thing you look at: you walk out,
+              see what they left, and only then decide what to give them next.
+              It is also the one measurement on this page — everything below
+              is a forecast. */}
+          {openStrip !== null && (
+            <div className="mv-ate">
+              <label className="mv-field">
+                <span className="eyebrow">
+                  They ate {standing?.paddock?.name ?? "the last strip"} down to, inches
+                </span>
+                <input
+                  value={ateTo}
+                  onChange={(e) => setAteTo(e.target.value)}
+                  inputMode="decimal"
+                  aria-label="They ate it down to, inches"
+                  placeholder="—"
+                />
+              </label>
+              <p className="mv-height__note">
+                {ateToIn === null ? (
+                  <>
+                    Measured off the strip behind the wire. Left blank, the record keeps
+                    what the strip was sized for and nothing more.
+                  </>
+                ) : atePct === null ? (
+                  <>
+                    Recorded against that strip. No entry height was taken for it, so
+                    there is nothing to work a share of the sward out from.
+                  </>
+                ) : (
+                  <>
+                    {atePct}% of the {openStrip.forageHeightInEntry}″ they went in on
+                    {" "}— recorded against that strip, not this one.
+                  </>
+                )}
+              </p>
+            </div>
+          )}
+
           <div className="mv-layout">
 
           {/* ── the grass, before the wire, because it sets the figures ── */}
@@ -445,6 +544,20 @@ export default function Move() {
                   placeholder="—"
                 />
               </label>
+              {/* The graze-down. Beside the height because the figures below
+                  are built on the difference between the two, not on either
+                  one. Blank falls back to the paddock's target, then the
+                  plan's — the placeholder says which is standing in. */}
+              <label className="mv-field">
+                <span className="eyebrow">Graze it down to, inches</span>
+                <input
+                  value={grazeTo}
+                  onChange={(e) => setGrazeTo(e.target.value)}
+                  inputMode="decimal"
+                  aria-label="Graze it down to, inches"
+                  placeholder={fallbackGrazeTo === null ? "—" : String(fallbackGrazeTo)}
+                />
+              </label>
               <p className="mv-height__note">
                 {load.plan?.lbDmPerAcreInch == null ? (
                   <>
@@ -453,6 +566,17 @@ export default function Move() {
                   </>
                 ) : heightIn === null ? (
                   <>At {load.plan.lbDmPerAcreInch} lb DM per acre-inch, from your plan.</>
+                ) : assumed.grazeDown.residualIn !== null ? (
+                  // The standing figure on its own reads as a contradiction
+                  // beside the panel's "on offer" one. Both are true; only the
+                  // difference is being eaten, so that is what this says.
+                  <>
+                    {Math.round(
+                      (heightIn - assumed.grazeDown.residualIn) * load.plan.lbDmPerAcreInch,
+                    ).toLocaleString()}{" "}
+                    lb DM/acre on offer — the {(heightIn - assumed.grazeDown.residualIn).toFixed(1)}″
+                    between them, at {load.plan.lbDmPerAcreInch} lb an acre-inch.
+                  </>
                 ) : (
                   <>
                     {(heightIn * load.plan.lbDmPerAcreInch).toLocaleString()} lb DM/acre standing —{" "}
@@ -587,6 +711,14 @@ export default function Move() {
                     </div>
                     <div className="eyebrow">Days of feed</div>
                   </div>
+                  {/* What is actually on offer between the two heights —
+                      the figure the graze-down exists to produce. */}
+                  <div>
+                    <div className="mono grz-strip-stats__v">
+                      {Math.round(strip.lbDmOnOffer).toLocaleString()}
+                    </div>
+                    <div className="eyebrow">lb they'll eat</div>
+                  </div>
                   <div>
                     <div className="mono grz-strip-stats__v">
                       {strip.lbPerAcre === null ? "—" : `${Math.round(strip.lbPerAcre / 100) / 10}k`}
@@ -643,10 +775,25 @@ export default function Move() {
 
               {stripped && (
                 <p className="grz-assume">
-                  {assumed.assumptions.standingLbDmPerAcre.toLocaleString()} lb DM/acre standing{" "}
-                  <em>({sourceWord(assumed.sources.standing)})</em>, {assumed.assumptions.utilizationPct}%
-                  utilization <em>({sourceWord(assumed.sources.utilization)})</em>, intake at{" "}
-                  {assumed.assumptions.intakePctBodyweight}% of body weight{" "}
+                  {assumed.grazeDown.residualIn !== null ? (
+                    <>
+                      {assumed.grazeDown.entryIn}″ down to {assumed.grazeDown.residualIn}″ ={" "}
+                      {Math.round(
+                        (assumed.grazeDown.entryIn! - assumed.grazeDown.residualIn) *
+                          (load.state === "ok" ? (load.plan?.lbDmPerAcreInch ?? 0) : 0),
+                      ).toLocaleString()}{" "}
+                      lb DM an acre on offer <em>({grazeWord(assumed.grazeDown.source)})</em> —{" "}
+                      {Math.round(assumed.assumptions.utilizationPct)}% of what is standing.{" "}
+                    </>
+                  ) : (
+                    <>
+                      {assumed.assumptions.standingLbDmPerAcre.toLocaleString()} lb DM/acre standing{" "}
+                      <em>({sourceWord(assumed.sources.standing)})</em>,{" "}
+                      {assumed.assumptions.utilizationPct}% utilization{" "}
+                      <em>({sourceWord(assumed.sources.utilization)})</em>.{" "}
+                    </>
+                  )}
+                  Intake at {assumed.assumptions.intakePctBodyweight}% of body weight{" "}
                   <em>({sourceWord(assumed.sources.intake)})</em>. A forecast, not a measurement.
                 </p>
               )}
@@ -772,6 +919,17 @@ function sourceWord(source: string): string {
     case "measured": return "measured on this unit";
     case "planned": return "your projection";
     case "plan": return "from your plan";
+    default: return "this app's figure";
+  }
+}
+
+/** Where the graze-down height came from — typed here, or standing in from
+ *  the paddock's target or the farm's default. */
+function grazeWord(source: string): string {
+  switch (source) {
+    case "today": return "set here";
+    case "paddock": return `${"this paddock's target"}`;
+    case "plan": return "your plan's default";
     default: return "this app's figure";
   }
 }

@@ -96,6 +96,7 @@ export default function GrazingPlan() {
   const [cadenceValue, setCadenceValue] = useState("");
   const [dmi, setDmi] = useState("");
   const [swardLb, setSwardLb] = useState("");
+  const [grazeTo, setGrazeTo] = useState("");
 
   const [concernCategory, setConcernCategory] = useState<ResourceCategory>("soil");
   const [concernText, setConcernText] = useState("");
@@ -160,6 +161,7 @@ export default function GrazingPlan() {
     setCadenceValue(fresh || !p || p.monitoringCadenceValue === null ? "" : String(p.monitoringCadenceValue));
     setDmi(fresh || !p || p.defaultDmiPctBw === null ? "" : String(p.defaultDmiPctBw));
     setSwardLb(fresh || !p || p.lbDmPerAcreInch === null ? "" : String(p.lbDmPerAcreInch));
+    setGrazeTo(fresh || !p || p.targetResidualHeightIn === null ? "" : String(p.targetResidualHeightIn));
     setEditing(true);
   };
 
@@ -192,6 +194,7 @@ export default function GrazingPlan() {
         monitoringCadenceValue: num(cadenceValue),
         defaultDmiPctBw: num(dmi),
         lbDmPerAcreInch: num(swardLb),
+        targetResidualHeightIn: num(grazeTo),
       });
       setEditing(false);
       return startingNew
@@ -333,6 +336,15 @@ export default function GrazingPlan() {
                       farm's to set and never this app's. */}
                   <span className="eyebrow">lb DM per acre-inch</span>
                   <input value={swardLb} onChange={(e) => setSwardLb(e.target.value)} inputMode="decimal" aria-label="lb DM per acre-inch" />
+                </label>
+                <label className="grz-field">
+                  {/* The graze-down. With a height reading it stands in for
+                      the utilization percentage rather than compounding with
+                      it — utilization becomes what these two heights work out
+                      to, which is the way round a grazier thinks about it. A
+                      paddock's own target below overrides this. */}
+                  <span className="eyebrow">Graze down to, in</span>
+                  <input value={grazeTo} onChange={(e) => setGrazeTo(e.target.value)} inputMode="decimal" aria-label="Graze down to, in" />
                 </label>
                 <label className="grz-field">
                   <span className="eyebrow">Benchmark AUM/acre</span>

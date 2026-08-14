@@ -122,7 +122,7 @@ const withPlan = (over: Partial<GrazingPlan> = {}): GrazingPlan => ({
   contractNumber: null, tractNumber: null, fieldIds: null,
   longTermGoals: null, immediateObjectives: null, benchmarkStockingRateAumPerAcre: null,
   monitoringCadenceKind: "every_n_days", monitoringCadenceValue: 30,
-  defaultDmiPctBw: 3, lbDmPerAcreInch: 300, active: true, notes: null, ...over,
+  defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: null, active: true, notes: null, ...over,
 });
 
 describe("what the page claims", () => {

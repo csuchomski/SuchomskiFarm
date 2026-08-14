@@ -973,3 +973,81 @@ desktop and twenty-seven on a tablet.
 Above 1,000 px the drawing and the readings sit side by side. That is not
 decoration: the whole premise is dragging the wire and watching the acres
 change, and on a phone `56vh` keeps both in view for the same reason.
+
+## The graze-down replaces the utilization percentage
+
+The farm's own words: "we can't assume the cows are eating all of the grass
+available. I want to be able to set the average height in a paddock and the
+height I want them to eat to."
+
+That is the right model and it was not the one the app had. The app took a
+height, turned it into pounds standing, and then discounted it by a
+**utilization percentage** — a number nobody on a farm sets, measures, or
+particularly believes, and which was sitting on this farm's app-supplied
+default of 50% because no paddock had ever been given one. A grazier sets a
+graze-down: in at eight inches, off at four. What comes off is the difference.
+
+    usable lb DM/acre = (entry height − graze-down) × lb per acre-inch
+
+### Utilization becomes an outcome, which is what makes it safe
+
+Nothing downstream changed, and that is deliberate. Rather than adding a
+second way to compute usable forage, `assumptionsFor` *derives* the
+percentage from the two heights:
+
+    utilization = (entry − residual) ÷ entry
+
+Feed that back in place of the typed figure and the arithmetic already in the
+app — standing × utilization — lands on exactly the expression above.
+`planStrip`, `widthForHours`, `openingWire` and the forage balance are all
+correct without knowing any of this exists.
+
+The failure this shape rules out is the quiet one: applying the graze-down
+**and** the percentage and halving the feed twice. There is no second path for
+them to disagree on, and a test asserts the case directly — a paddock carrying
+both an 8″→4″ graze-down and a 50% target still puts 1,200 lb an acre on
+offer, not 600.
+
+### Where the height comes from
+
+Most specific first, the same order as every other configured figure in the
+module:
+
+| | |
+|---|---|
+| Typed on the Move screen | this move only |
+| `plan_paddock_targets.target_residual_height_in` | this paddock |
+| `grazing_plans.target_residual_height_in` | the farm — **new in 045** |
+| Nothing set | falls back to a utilization percentage, labelled as such |
+
+The per-paddock column has been in the schema since 038 and the Plan page has
+always edited it. All five of this farm's were null, which is why nothing had
+ever used it. What was missing was the farm-wide default, so the per-paddock
+figure can stay an exception rather than five copies of one number.
+
+The Move screen shows the figure standing in as the field's **placeholder**,
+so the number in use is never invisible.
+
+### A graze-down at or above the grass is ignored
+
+Nothing to take. Left alone it would give a utilization of zero or less and a
+strip of infinite width, which is the sort of arithmetic that gets a paddock
+ruined. It falls back to the percentage and says so.
+
+### What was recorded, and what was measured
+
+Logging a move writes the entry height — measured that morning, so a fact —
+and the **percentage** the strip was sized for. It does not write the
+graze-down into `residual_height_in_exit`, because that column is for what was
+measured coming off, and filling it with an intention would make a plan
+indistinguishable from an observation in a season's totals.
+
+`forageEatenLbDm` reads it back, preferring a measured residual over the
+percentage where one exists: one is what happened, the other what was
+intended. It appears in the events CSV as "Dry matter eaten (lb)", and it is
+blank rather than zero where the record cannot support a figure.
+
+**Still open:** nothing yet asks how yesterday's strip actually came off. The
+natural place is the next morning's move, since that is where the farmer is
+standing — one number, back-filling `residual_height_in_exit` on the previous
+event and turning an intention into a measurement.

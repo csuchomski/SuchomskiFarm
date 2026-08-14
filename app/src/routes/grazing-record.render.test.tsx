@@ -160,7 +160,7 @@ describe("the shape of the document", () => {
       longTermGoals: "Deeper roots", immediateObjectives: "Cover the bare corner",
       benchmarkStockingRateAumPerAcre: null,
       monitoringCadenceKind: "every_n_days", monitoringCadenceValue: 30,
-      defaultDmiPctBw: 3, lbDmPerAcreInch: 300, active: true, notes: null,
+      defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: null, active: true, notes: null,
     };
     await mount();
     const text = document.body.textContent ?? "";
@@ -182,7 +182,7 @@ describe("the shape of the document", () => {
       contractNumber: "12345", tractNumber: "678", fieldIds: null,
       longTermGoals: null, immediateObjectives: null, benchmarkStockingRateAumPerAcre: null,
       monitoringCadenceKind: "every_rotation", monitoringCadenceValue: null,
-      defaultDmiPctBw: null, lbDmPerAcreInch: 300, active: true, notes: null,
+      defaultDmiPctBw: null, lbDmPerAcreInch: 300, targetResidualHeightIn: null, active: true, notes: null,
     };
     await mount();
     expect(screen.getByText(/contract 12345 · tract 678/)).toBeTruthy();

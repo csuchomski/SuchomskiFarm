@@ -211,6 +211,10 @@ export interface GrazingPlan {
    * height reading into forage. The farm's own figure — this app must never
    * supply one. */
   lbDmPerAcreInch: number | null;
+  /** The height to graze down to, in inches. A paddock's own target beats it;
+   * with an entry height it stands in for the utilization percentage rather
+   * than compounding with it. */
+  targetResidualHeightIn: number | null;
   active: boolean;
   notes: string | null;
 }
@@ -639,7 +643,7 @@ export async function fetchActivePlan(farmId: string): Promise<GrazingPlan | nul
   const { data, error } = await herdSchema()
     .from("grazing_plans")
     .select(
-      "id, name, period_start, period_end, contract_number, tract_number, field_ids, long_term_goals, immediate_objectives, benchmark_stocking_rate_aum_per_acre, monitoring_cadence_kind, monitoring_cadence_value, default_dmi_pct_bw, lb_dm_per_acre_inch, active, notes",
+      "id, name, period_start, period_end, contract_number, tract_number, field_ids, long_term_goals, immediate_objectives, benchmark_stocking_rate_aum_per_acre, monitoring_cadence_kind, monitoring_cadence_value, default_dmi_pct_bw, lb_dm_per_acre_inch, target_residual_height_in, active, notes",
     )
     .eq("farm_id", farmId)
     .eq("active", true)
@@ -664,6 +668,7 @@ export async function fetchActivePlan(farmId: string): Promise<GrazingPlan | nul
     monitoringCadenceValue: num(r.monitoring_cadence_value),
     defaultDmiPctBw: num(r.default_dmi_pct_bw),
     lbDmPerAcreInch: num(r.lb_dm_per_acre_inch),
+    targetResidualHeightIn: num(r.target_residual_height_in),
     active: Boolean(r.active),
     notes: (r.notes as string) ?? null,
   };
@@ -1089,6 +1094,43 @@ export function drawnSliceAcres(
   return sliceAcres(ring.map((p) => toLocal(frame, p)), paddock.sweepHeadingDeg, from, to);
 }
 
+/**
+ * What a recorded strip took off, in pounds of dry matter.
+ *
+ * The same arithmetic as the forecast, run against what was actually written
+ * down: the entry height measured that morning, the graze-down it was sized
+ * for, and the acres measured off the boundary. Recording a percentage rather
+ * than a residual height is deliberate — the height is what the farmer aims
+ * at, the percentage is what that works out to, and the percentage is the one
+ * that stays meaningful if the entry height is later corrected.
+ *
+ * Null rather than zero when the record does not carry enough to say. A
+ * forecast the app invented and a figure the farm measured should not be
+ * indistinguishable in a season's totals.
+ */
+export function forageEatenLbDm(
+  event: GrazingEvent,
+  paddock: Paddock,
+  plan: GrazingPlan | null,
+): number | null {
+  const acres = stripAcres(event, paddock);
+  if (acres === null || acres <= 0) return null;
+
+  const entry = event.forageHeightInEntry;
+  const lbPerInch = plan?.lbDmPerAcreInch ?? null;
+  if (entry === null || entry <= 0 || lbPerInch === null) return null;
+
+  // The residual measured on the way out is better than the percentage the
+  // strip was sized for — one is what happened, the other what was intended.
+  const takenPct =
+    event.residualHeightInExit !== null && event.residualHeightInExit < entry
+      ? ((entry - event.residualHeightInExit) / entry) * 100
+      : event.utilizationPct;
+  if (takenPct === null || takenPct <= 0) return null;
+
+  return acres * entry * lbPerInch * (takenPct / 100);
+}
+
 /** Feet along the sweep, when the unit's length is on file. */
 export function stripWidthFt(event: GrazingEvent, paddock: Paddock): number | null {
   if (paddock.sweepLengthFt === null || event.sweptFrom === null || event.sweptTo === null) return null;
@@ -1281,6 +1323,10 @@ export interface StripPlan {
   hoursOfFeed: number | null;
   lbPerAcre: number | null;
   widthFt: number | null;
+  /** Pounds of dry matter this strip puts in front of them — the acres times
+   * what comes off an acre between the entry height and the graze-down. What
+   * they will eat, and once it is logged, what they ate. */
+  lbDmOnOffer: number;
 }
 
 export interface ForageAssumptions {
@@ -1294,8 +1340,37 @@ export interface ForageAssumptions {
  * never mistaken for one built on measurements. */
 export interface AssumptionSources {
   standing: "height" | "measured" | "planned" | "default";
-  utilization: "plan" | "default";
+  /** `"graze-down"` means it was not typed as a percentage at all — it fell
+   * out of the two heights, which is the way round a grazier thinks. */
+  utilization: "graze-down" | "plan" | "default";
   intake: "plan" | "default";
+}
+
+/**
+ * The height they are to be taken down to, and where that figure came from.
+ *
+ * This morning's entry beats the paddock's target, which beats the farm's
+ * default — the same order as every other configured figure in the module,
+ * most specific first.
+ */
+export function grazeDownTo(input: {
+  paddockId: string;
+  plan: GrazingPlan | null;
+  targets: PlanPaddockTarget[];
+  /** Typed at the gate, for this move only. */
+  override?: number | null;
+}): { inches: number | null; source: "today" | "paddock" | "plan" | "none" } {
+  const { paddockId, plan, targets, override = null } = input;
+  if (override !== null && override > 0) return { inches: override, source: "today" };
+
+  const target = targets.find((t) => t.paddockId === paddockId) ?? null;
+  if (target?.targetResidualHeightIn != null && target.targetResidualHeightIn > 0) {
+    return { inches: target.targetResidualHeightIn, source: "paddock" };
+  }
+  if (plan?.targetResidualHeightIn != null && plan.targetResidualHeightIn > 0) {
+    return { inches: plan.targetResidualHeightIn, source: "plan" };
+  }
+  return { inches: null, source: "none" };
 }
 
 /**
@@ -1323,8 +1398,19 @@ export function assumptionsFor(input: {
    * everything else when the plan carries a pounds-per-acre-inch figure —
    * a reading taken today is worth more than one recorded for the month. */
   swardHeightIn?: number | null;
-}): { assumptions: ForageAssumptions; sources: AssumptionSources } {
-  const { paddockId, plan, targets, availability, todayIso, fallback, swardHeightIn = null } = input;
+  /** The height to graze down to, if it is being set for this move rather
+   * than taken from the paddock's target or the farm's default. */
+  grazeToIn?: number | null;
+}): {
+  assumptions: ForageAssumptions;
+  sources: AssumptionSources;
+  /** What the graze-down worked out to, for the page to show its working. */
+  grazeDown: { entryIn: number | null; residualIn: number | null; source: string };
+} {
+  const {
+    paddockId, plan, targets, availability, todayIso, fallback,
+    swardHeightIn = null, grazeToIn = null,
+  } = input;
   const day = todayIso.slice(0, 10);
 
   const target = targets.find((t) => t.paddockId === paddockId) ?? null;
@@ -1345,10 +1431,35 @@ export function assumptionsFor(input: {
       ? swardHeightIn * plan.lbDmPerAcreInch
       : null;
 
+  // The graze-down, which is what the farm actually sets: in at eight inches,
+  // off at four. It replaces the utilization percentage rather than stacking
+  // with it — utilization becomes the *outcome* of the two heights, so
+  //
+  //     standing × utilization = (entry × lb/in) × (entry − residual)/entry
+  //                            = (entry − residual) × lb/in
+  //
+  // which is the figure wanted, reached without a second path through the
+  // arithmetic that could drift or double-count. Everything downstream —
+  // planStrip, widthForHours, the forage balance — keeps using
+  // standing × utilization and is correct without knowing about any of this.
+  const grazeTo = grazeDownTo({ paddockId, plan, targets, override: grazeToIn });
+  const entryIn =
+    swardHeightIn !== null && swardHeightIn > 0
+      ? swardHeightIn
+      : (target?.targetEntryHeightIn ?? null);
+
+  // Only when the graze-down is a real bite out of a known sward. A residual
+  // at or above the entry height means there is nothing to take, and a
+  // utilization of zero or less would make the strip infinitely wide.
+  const fromGrazeDown =
+    entryIn !== null && entryIn > 0 && grazeTo.inches !== null && grazeTo.inches < entryIn
+      ? ((entryIn - grazeTo.inches) / entryIn) * 100
+      : null;
+
   return {
     assumptions: {
       standingLbDmPerAcre: fromHeight ?? covering?.lbDmPerAcre ?? fallback.standingLbDmPerAcre,
-      utilizationPct: target?.targetUtilizationPct ?? fallback.utilizationPct,
+      utilizationPct: fromGrazeDown ?? target?.targetUtilizationPct ?? fallback.utilizationPct,
       intakePctBodyweight: plan?.defaultDmiPctBw ?? fallback.intakePctBodyweight,
     },
     sources: {
@@ -1360,8 +1471,18 @@ export function assumptionsFor(input: {
             : covering.isPlanned
               ? "planned"
               : "measured",
-      utilization: target?.targetUtilizationPct === undefined || target?.targetUtilizationPct === null ? "default" : "plan",
+      utilization:
+        fromGrazeDown !== null
+          ? "graze-down"
+          : target?.targetUtilizationPct === undefined || target?.targetUtilizationPct === null
+            ? "default"
+            : "plan",
       intake: plan?.defaultDmiPctBw == null ? "default" : "plan",
+    },
+    grazeDown: {
+      entryIn,
+      residualIn: fromGrazeDown === null ? null : grazeTo.inches,
+      source: grazeTo.source,
     },
   };
 }
@@ -1403,6 +1524,7 @@ export function planStrip(input: {
     hoursOfFeed: dailyIntake === null || dailyIntake <= 0 ? null : (acres * usablePerAcre * 24) / dailyIntake,
     lbPerAcre: headCount === null || avgWeightLb === null ? null : (headCount * avgWeightLb) / acres,
     widthFt: paddock.sweepLengthFt === null ? null : (to - from) * paddock.sweepLengthFt,
+    lbDmOnOffer: acres * usablePerAcre,
   };
 }
 
@@ -1598,7 +1720,7 @@ export async function fetchPlans(farmId: string): Promise<GrazingPlan[]> {
   const { data, error } = await herdSchema()
     .from("grazing_plans")
     .select(
-      "id, name, period_start, period_end, contract_number, tract_number, field_ids, long_term_goals, immediate_objectives, benchmark_stocking_rate_aum_per_acre, monitoring_cadence_kind, monitoring_cadence_value, default_dmi_pct_bw, lb_dm_per_acre_inch, active, notes",
+      "id, name, period_start, period_end, contract_number, tract_number, field_ids, long_term_goals, immediate_objectives, benchmark_stocking_rate_aum_per_acre, monitoring_cadence_kind, monitoring_cadence_value, default_dmi_pct_bw, lb_dm_per_acre_inch, target_residual_height_in, active, notes",
     )
     .eq("farm_id", farmId)
     .is("deleted_at", null)
@@ -1620,6 +1742,7 @@ export async function fetchPlans(farmId: string): Promise<GrazingPlan[]> {
     monitoringCadenceValue: num(r.monitoring_cadence_value),
     defaultDmiPctBw: num(r.default_dmi_pct_bw),
     lbDmPerAcreInch: num(r.lb_dm_per_acre_inch),
+    targetResidualHeightIn: num(r.target_residual_height_in),
     active: Boolean(r.active),
     notes: (r.notes as string) ?? null,
   }));
@@ -1643,6 +1766,7 @@ export interface PlanDraft {
   monitoringCadenceValue: number | null;
   defaultDmiPctBw: number | null;
   lbDmPerAcreInch: number | null;
+  targetResidualHeightIn: number | null;
 }
 
 const orNull = (s: string) => (s.trim() === "" ? null : s.trim());
@@ -1664,6 +1788,7 @@ export async function savePlan(farmId: string, draft: PlanDraft): Promise<string
     p_monitoring_cadence_value: draft.monitoringCadenceValue,
     p_default_dmi_pct_bw: draft.defaultDmiPctBw,
     p_lb_dm_per_acre_inch: draft.lbDmPerAcreInch,
+    p_target_residual_height_in: draft.targetResidualHeightIn,
   });
   if (error) throw new Error(error.message);
   return data as string;

@@ -1387,7 +1387,11 @@ export function planStrip(input: {
   const unitAcres = paddock.acresGrazable ?? paddock.acresMeasured;
   if (unitAcres === null || to <= from) return null;
 
-  const acres = (to - from) * unitAcres;
+  // Off the drawn boundary, for the same reason `stripAcres` is: a strip's
+  // acres are not its share of the sweep unless the unit is a rectangle. This
+  // is the forecast rather than the record, but it is the number the wire is
+  // placed against, so it has to be the same number.
+  const acres = drawnSliceAcres(paddock, from, to) ?? (to - from) * unitAcres;
   const usablePerAcre = assumptions.standingLbDmPerAcre * (assumptions.utilizationPct / 100);
   const dailyIntake =
     headCount === null || avgWeightLb === null
@@ -1403,8 +1407,47 @@ export function planStrip(input: {
 }
 
 /**
+ * How far along the sweep a given acreage reaches, starting from `from`.
+ *
+ * The forward direction — acres of a slice — is a polygon clip. There is no
+ * closed form for the inverse, so it is bisected: slice area only grows as
+ * the wire advances, which is all bisection needs. Twenty passes puts it
+ * inside a millionth of the sweep, far finer than a wire gets placed.
+ *
+ * Null when there is no boundary to cut, and the caller falls back to the
+ * flat share.
+ */
+export function sweepToForAcres(
+  paddock: Paddock,
+  from: number,
+  acres: number,
+): number | null {
+  if (acres <= 0 || from >= 1) return null;
+  const whole = drawnSliceAcres(paddock, from, 1);
+  if (whole === null) return null;
+  if (acres >= whole) return 1; // the rest of the unit is not enough
+
+  let lo = from, hi = 1;
+  for (let i = 0; i < 20; i++) {
+    const mid = (lo + hi) / 2;
+    const got = drawnSliceAcres(paddock, from, mid);
+    if (got === null) return null;
+    if (got < acres) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/**
  * The width that would hold them for a given number of hours — the question
  * asked backwards, which is how the wire actually gets placed.
+ *
+ * `from` matters, and used not to. The width that feeds them for a day
+ * depends on *where along the sweep it starts*: the same tenth of Paddock 4
+ * is a fifth of an acre at the wide end and a twentieth at the point. Sizing
+ * it as a flat share of the unit put the "a day" preset sixteen times wide of
+ * the mark at that end — and the readout beside it, measured properly, then
+ * disagreed with the button that placed it.
  */
 export function widthForHours(input: {
   paddock: Paddock;
@@ -1412,8 +1455,10 @@ export function widthForHours(input: {
   headCount: number | null;
   avgWeightLb: number | null;
   assumptions: ForageAssumptions;
+  /** Where the strip starts. The back line, in practice. */
+  from?: number;
 }): number | null {
-  const { paddock, hours, headCount, avgWeightLb, assumptions } = input;
+  const { paddock, hours, headCount, avgWeightLb, assumptions, from = 0 } = input;
   const unitAcres = paddock.acresGrazable ?? paddock.acresMeasured;
   if (unitAcres === null || unitAcres <= 0) return null;
   if (headCount === null || avgWeightLb === null) return null;
@@ -1423,7 +1468,11 @@ export function widthForHours(input: {
 
   const dailyIntake = headCount * avgWeightLb * (assumptions.intakePctBodyweight / 100);
   const acres = (dailyIntake * (hours / 24)) / usablePerAcre;
-  return Math.min(1, acres / unitAcres);
+
+  const to = sweepToForAcres(paddock, from, acres);
+  if (to !== null) return Math.min(1 - from, to - from);
+
+  return Math.min(1 - from, acres / unitAcres);
 }
 
 /**
@@ -2228,7 +2277,7 @@ export function openingWire(input: {
   nominal?: number;
 }): number {
   const { paddock, backLine, headCount, avgWeightLb, assumptions, nominal = 0.08 } = input;
-  const day = widthForHours({ paddock, hours: 24, headCount, avgWeightLb, assumptions });
+  const day = widthForHours({ paddock, hours: 24, headCount, avgWeightLb, assumptions, from: backLine });
   const width = day !== null && day > 0.005 ? day : nominal;
   return Math.min(1, Math.max(backLine + 0.005, backLine + width));
 }

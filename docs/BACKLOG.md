@@ -566,9 +566,10 @@ the missing animal the thing to fix.
 - **`.grz-field` inputs are 40 px.** The house rule is a 44 px target and the
   new screens hold it, but the older grazing forms do not. A one-line change
   whenever those screens are next touched.
-- **`stripAcres`'s fallback is still the old fraction.** Correct now wherever
-  a boundary exists, which is everywhere on this farm. Worth knowing it is
-  there before a unit is added without one.
+- **The flat fallback is still the old fraction.** Correct wherever a boundary
+  exists, which is everywhere on this farm. Worth knowing it is there before a
+  unit is added without one — `stripAcres`, `planStrip` and `widthForHours` all
+  fall back to it.
 
 ## Carried over from earlier sessions
 

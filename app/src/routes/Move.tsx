@@ -242,7 +242,16 @@ export default function Move() {
   const dayWidth =
     stripped && dest
       ? widthForHours({
-          paddock: dest, hours: 24,
+          paddock: dest, hours: 24, from: backLine,
+          headCount: head, avgWeightLb: avgWeight,
+          assumptions: assumed.assumptions,
+        })
+      : null;
+
+  const halfDayWidth =
+    stripped && dest
+      ? widthForHours({
+          paddock: dest, hours: 12, from: backLine,
           headCount: head, avgWeightLb: avgWeight,
           assumptions: assumed.assumptions,
         })
@@ -597,8 +606,11 @@ export default function Move() {
                 <div className="grz-wire__presets">
                   {dayWidth !== null && (
                     <>
+                      {/* Its own figure, not half the day's width: half the
+                          ground is not half the distance unless the unit is a
+                          rectangle. */}
                       <button type="button" className="grz-preset"
-                        onClick={() => setWireTo(Math.min(1, backLine + dayWidth / 2))}>
+                        onClick={() => halfDayWidth !== null && setWireTo(Math.min(1, backLine + halfDayWidth))}>
                         Half a day
                       </button>
                       <button type="button" className="grz-preset"

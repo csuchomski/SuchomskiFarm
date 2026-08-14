@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { assumptionsFor, drawnSliceAcres, stripAcres, type ForageAssumptions, type GrazingEvent, type GrazingPlan, type Paddock } from "./grazing";
+import {
+  assumptionsFor, drawnSliceAcres, planStrip, stripAcres, widthForHours,
+  type ForageAssumptions, type GrazingEvent, type GrazingPlan, type Paddock,
+} from "./grazing";
 import { REAL_ACRES, REAL_BOUNDARIES, REAL_SWEEP } from "./__fixtures__/farm-geometry";
 
 /**
@@ -160,5 +163,81 @@ describe("this morning's grass height", () => {
     expect(ask({ swardHeightIn: 8, plan: plan({ lbDmPerAcreInch: null }) }).sources.standing).toBe("default");
     expect(ask({ swardHeightIn: null }).sources.standing).toBe("default");
     expect(ask({ swardHeightIn: 0 }).sources.standing).toBe("default");
+  });
+});
+
+describe("the forecast, on ground that is not a rectangle", () => {
+  /**
+   * `stripAcres` answers what a recorded strip was; `planStrip` answers what
+   * the one being placed would be. They are the same question at different
+   * times and were not, for a while, the same arithmetic — the record measured
+   * the boundary and the forecast still spread the acres evenly along the
+   * sweep. That is the number on the screen while the wire is being dragged,
+   * which makes it the more consequential of the two.
+   */
+  const ASSUMPTIONS: ForageAssumptions = {
+    standingLbDmPerAcre: 2400, utilizationPct: 50, intakePctBodyweight: 3,
+  };
+
+  it("measures the strip it is forecasting, rather than its share of the sweep", () => {
+    // Paddock 4's last sixteenth, where the unit tapers to a corner. A flat
+    // share calls it 0.141 acres; it is nearer a hundredth of that.
+    const plan = planStrip({
+      paddock: unit(4), from: 0.9375, to: 1,
+      headCount: 5, avgWeightLb: 1000, assumptions: ASSUMPTIONS,
+    })!;
+    const measured = drawnSliceAcres(unit(4), 0.9375, 1)!;
+    expect(plan.acres).toBeCloseTo(measured, 6);
+    expect(plan.acres).toBeLessThan(0.02);
+  });
+
+  it("agrees with what the same strip is once it has been grazed", () => {
+    for (const [from, to] of [[0, 0.1], [0.4, 0.55], [0.9, 1]]) {
+      const plan = planStrip({
+        paddock: unit(4), from, to,
+        headCount: 5, avgWeightLb: 1000, assumptions: ASSUMPTIONS,
+      })!;
+      const recorded = stripAcres(strip("p4", from, to), unit(4))!;
+      expect(plan.acres).toBeCloseTo(recorded, 6);
+    }
+  });
+});
+
+describe("placing the wire for a day", () => {
+  const ASSUMPTIONS: ForageAssumptions = {
+    standingLbDmPerAcre: 2400, utilizationPct: 50, intakePctBodyweight: 3,
+  };
+  const day = (paddock: Paddock, from: number) =>
+    widthForHours({ paddock, hours: 24, from, headCount: 5, avgWeightLb: 1000, assumptions: ASSUMPTIONS });
+
+  it("puts a day's width where a day's feed actually is", () => {
+    // 5 head x 1,000 lb x 3% = 150 lb a day, over 1,200 lb usable an acre:
+    // an eighth of an acre, wherever along the sweep it falls.
+    for (const from of [0, 0.25, 0.5, 0.8, 0.95]) {
+      const w = day(unit(4), from)!;
+      const acres = drawnSliceAcres(unit(4), from, from + w);
+      if (from + w >= 1) continue; // ran out of unit; nothing to check
+      expect(acres!).toBeCloseTo(0.125, 3);
+    }
+  });
+
+  it("widens as the unit narrows, instead of holding one figure throughout", () => {
+    // Paddock 4 tapers, so the same feed is a longer reach at the far end.
+    const near = day(unit(4), 0.1)!;
+    const far = day(unit(4), 0.85)!;
+    expect(far).toBeGreaterThan(near * 1.5);
+  });
+
+  it("stops at the end of the unit rather than past it", () => {
+    const w = day(unit(4), 0.99)!;
+    expect(w).toBeLessThanOrEqual(0.01 + 1e-9);
+  });
+
+  it("falls back to the flat share when there is no boundary to cut", () => {
+    const blind = { ...unit(2), boundary: null };
+    const w = day(blind, 0.5)!;
+    // An eighth of an acre out of 1.932 — the old arithmetic, still the best
+    // available when nothing is drawn.
+    expect(w).toBeCloseTo(0.125 / 1.932, 6);
   });
 });

@@ -908,6 +908,124 @@ export async function fetchGroupMembers(farmId: string): Promise<GrazingGroupMem
 }
 
 /**
+ * Writing a mob.
+ *
+ * Straight PostgREST rather than an RPC: the tables carry insert, select and
+ * update policies for `authenticated` already, checked against the live
+ * database as a real user rather than from an editor running as superuser.
+ * There is nothing here that has to land atomically with anything else.
+ *
+ * No delete anywhere, in keeping with the rest of the module. A mob that is
+ * finished with goes inactive and an animal that leaves gets a `left_on`,
+ * because "she was in this mob until August" is a fact worth keeping — it is
+ * what makes a past grazing event's head count make sense.
+ */
+export interface GroupDraft {
+  id?: string | null;
+  name: string;
+  species: string | null;
+  class: string | null;
+  headCountManual: number | null;
+  avgWeightLbManual: number | null;
+  active: boolean;
+  notes: string | null;
+}
+
+export async function saveGrazingGroup(farmId: string, draft: GroupDraft): Promise<string> {
+  const name = draft.name.trim();
+  if (name === "") throw new Error("A mob needs a name.");
+
+  const row = {
+    name,
+    species: draft.species,
+    class: draft.class,
+    head_count_manual: draft.headCountManual,
+    avg_weight_lb_manual: draft.avgWeightLbManual,
+    active: draft.active,
+    notes: draft.notes,
+  };
+
+  if (draft.id) {
+    const { error } = await herdSchema()
+      .from("grazing_groups")
+      .update(row)
+      .eq("id", draft.id)
+      .eq("farm_id", farmId);
+    if (error) throw new Error(`herd.grazing_groups: ${error.message}`);
+    return draft.id;
+  }
+
+  const { data, error } = await herdSchema()
+    .from("grazing_groups")
+    .insert({ ...row, farm_id: farmId })
+    .select("id")
+    .single();
+  if (error) throw new Error(`herd.grazing_groups: ${error.message}`);
+  return (data as { id: string }).id;
+}
+
+/**
+ * Why she cannot join, or null if she can.
+ *
+ * A rule rather than a query, because the database does not enforce it: there
+ * is no unique index on an open membership, only a check that a leaving date
+ * is not before a joining one. Two open rows for one animal would be summed
+ * twice by `mobWeight`, quietly making the mob heavier than it is and every
+ * strip cut from that figure wider than it should be.
+ *
+ * A closed membership is no obstacle. She may have been moved between mobs,
+ * or sold on and bought back; the old row stays, which is what keeps a head
+ * count recorded in July honest.
+ */
+export function joinRefusal(
+  members: GrazingGroupMember[],
+  animalId: string,
+  groupId: string,
+): string | null {
+  const open = members.find((m) => m.animalId === animalId && m.leftOn === null);
+  if (!open) return null;
+  return open.groupId === groupId
+    ? "She is already in this mob."
+    : "She is in another mob. Take her out of that one first.";
+}
+
+/** Put an animal in a mob, if `joinRefusal` has nothing to say about it. */
+export async function addToGroup(input: {
+  farmId: string;
+  groupId: string;
+  animalId: string;
+  joinedOn: string | null;
+  members: GrazingGroupMember[];
+}): Promise<string> {
+  const { farmId, groupId, animalId, joinedOn, members } = input;
+
+  const no = joinRefusal(members, animalId, groupId);
+  if (no !== null) throw new Error(no);
+
+  const { data, error } = await herdSchema()
+    .from("grazing_group_members")
+    .insert({ farm_id: farmId, group_id: groupId, animal_id: animalId, joined_on: joinedOn })
+    .select("id")
+    .single();
+  if (error) throw new Error(`herd.grazing_group_members: ${error.message}`);
+  return (data as { id: string }).id;
+}
+
+/** Take her out, as of a day. The row stays — see above. */
+export async function removeFromGroup(
+  farmId: string,
+  memberId: string,
+  leftOn: string,
+): Promise<void> {
+  const { error } = await herdSchema()
+    .from("grazing_group_members")
+    .update({ left_on: leftOn })
+    .eq("id", memberId)
+    .eq("farm_id", farmId);
+  if (error) throw new Error(`herd.grazing_group_members: ${error.message}`);
+}
+
+/**
  * Each animal's most recent weight.
  *
  * From `herd.weights`, which predates this module and is where weights

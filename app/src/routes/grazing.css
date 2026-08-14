@@ -644,3 +644,36 @@
   padding: 12px 0 14px;
   border-bottom: 1px solid var(--hairline);
 }
+
+/* ── Mobs: who is actually on the grass ──────────────────────────────── */
+
+.mb-mob { border-top: 1px solid var(--hairline); }
+.mb-mob:first-of-type { border-top: 0; }
+
+.mb-off { font-size: 13px; color: var(--ink-muted); }
+
+.mb-tally {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Not a warning colour. A missing weight is a gap in the record, not a
+   hazard, and the sentence below the list says what it costs. */
+.mb-missing { color: var(--ink-faint); }
+
+/* The checkbox is the one control here that is not a text field, and the
+   shared field rule would stretch it to the full 44px box. */
+.mb-still input { min-height: 0; width: 20px; height: 20px; align-self: start; margin-top: 12px; }
+
+/* A real target on a phone, the same shape as `.rot-back`: the underline is
+   text-decoration so it stays against the word instead of drifting to the
+   bottom of a padded box. */
+.mb-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 44px;
+  padding: 0 2px;
+}

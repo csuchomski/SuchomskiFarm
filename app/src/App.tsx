@@ -21,6 +21,7 @@ import GrazingPlanPage from "./routes/GrazingPlan";
 import DecisionsPage from "./routes/Decisions";
 import GrazingRecordPage from "./routes/GrazingRecord";
 import MovePage from "./routes/Move";
+import MobsPage from "./routes/Mobs";
 import CalvingsPage from "./routes/Calvings";
 import StoreCustomers from "./routes/StoreCustomers";
 import StoreCustomerDetail from "./routes/StoreCustomerDetail";
@@ -70,6 +71,7 @@ export default function App() {
                 <Route path="/depreciation" element={<DepreciationPage />} />
                 <Route path="/grazing" element={<GrazingPage />} />
                 <Route path="/grazing/move" element={<MovePage />} />
+                <Route path="/grazing/mobs" element={<MobsPage />} />
                 <Route path="/grazing/rotation" element={<RotationPage />} />
                 <Route path="/grazing/map" element={<PastureMapPage />} />
                 <Route path="/grazing/balance" element={<ForageBalancePage />} />

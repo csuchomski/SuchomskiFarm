@@ -1152,3 +1152,56 @@ because that tenth was the ribbon. They now test P4's western end, where the
 wedge is real: 0.70 of an even share, a 43% error, still worth measuring off
 the boundary and no longer an artifact. The arithmetic was right about the old
 shape; the shape was wrong.
+
+## Mobs: who is actually on the grass
+
+`grazing_group_members` could be read and never written. So an animal added to
+Herd → Animals was not in the mob, and the farm ran for a while with five
+animals on file and **four head** in every figure the module produced — strip
+width, days of feed, stock density, the forage balance. The head count is not a
+number anyone types; it is the length of a list nothing could edit.
+
+Herd → Mobs is that list. Start a mob, put animals in, take them out.
+
+**No migration.** Both tables already carry insert, select and update policies
+and grants for `authenticated` — checked against the live database as a real
+user in a rolled-back transaction, not from an editor running as superuser,
+where every permission check passes and proves nothing. Creating a mob, adding
+a member, dating a leaving and renaming all pass; another farm's is refused.
+
+### The database does not stop an animal being in two mobs
+
+There is no unique index on an open membership — only a check that a leaving
+date is not before a joining date. Two open rows for one animal would be summed
+twice by `mobWeight`: the mob reads heavier than it is, and every strip cut
+from that figure comes out too wide.
+
+So the rule lives in the app, as `joinRefusal` — a pure function rather than
+something buried in the write, because a rule that cannot be tested without a
+network is a rule that does not get tested. A closed membership is no obstacle:
+she may have moved between mobs or been sold on and bought back, and the old
+row stays, which is what keeps a head count recorded in July honest.
+
+### Two things the page will not offer
+
+**An AI bull.** `record_type` separates an animal that lives here from one on
+file only so a pedigree can name him. Four of this farm's nine animals are
+reference sires; offering them as candidates would be offering to put a straw
+of semen out on grass.
+
+**A manual head count.** `grazing_groups.head_count_manual` overrides the roll,
+and this page exists so the roll is right. It is written as null every time.
+
+### What it says when it cannot say a number
+
+Animals on the farm and in no mob are named at the foot of the page — "nothing
+counts them until they are in one" — which is the sentence that would have made
+the missing fifth head visible months earlier. A mob with unweighed members
+gives the total for the ones that have a weight and says how many it left out,
+rather than quietly reporting a light figure.
+
+### No delete
+
+A mob that is finished with goes to "not running"; an animal that leaves gets a
+date. Its past moves still name it, and a head count on a move from July has to
+keep making sense.

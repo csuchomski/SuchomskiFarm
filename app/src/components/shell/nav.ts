@@ -37,6 +37,7 @@ export const allGroups: NavGroup[] = [
       // pages rather than at the bottom of the group.
       // The daily act, so it sits above the board it used to live on.
       { label: "Move", to: "/grazing/move" },
+      { label: "Mobs", to: "/grazing/mobs" },
       { label: "Grazing", to: "/grazing" },
       { label: "Rotation", to: "/grazing/rotation" },
       { label: "Pasture map", to: "/grazing/map" },

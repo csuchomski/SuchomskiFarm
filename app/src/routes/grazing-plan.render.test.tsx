@@ -66,6 +66,17 @@ vi.mock("../lib/grazing", async (importOriginal) => {
     fetchPlanPaddockTargets: vi.fn(async () => targets),
     fetchResourceConcerns: vi.fn(async () => concerns),
     fetchContingencyPlans: vi.fn(async () => contingencies),
+    // The forage balance is a section of this page now, and it fetches eight
+    // things of its own. Unmocked they reach the real client: the test then
+    // passes or hangs depending on whether the network rejects or stalls,
+    // which is a coin toss dressed up as a test.
+    fetchForageAvailability: vi.fn(async () => []),
+    fetchForageDemand: vi.fn(async () => []),
+    fetchForageRemovals: vi.fn(async () => []),
+    fetchGrazingGroups: vi.fn(async () => []),
+    fetchGroupMembers: vi.fn(async () => []),
+    fetchLatestWeights: vi.fn(async () => new Map<string, number>()),
+    fetchActivePlan: vi.fn(async () => plans[0] ?? null),
     savePlan: savedPlan,
     savePaddockTarget: savedTarget,
     addResourceConcern: addedConcern,
@@ -102,7 +113,9 @@ afterEach(() => {
 const mount = async () => {
   const { default: GrazingPlanPage } = await import("./GrazingPlan");
   render(<MemoryRouter><GrazingPlanPage /></MemoryRouter>);
-  await waitFor(() => expect(screen.queryByText("Loading…")).toBeNull());
+  // queryAllBy, not queryBy: pages folded into others bring their own
+  // loading state, and queryByText throws when it finds more than one.
+  await waitFor(() => expect(screen.queryAllByText("Loading…")).toHaveLength(0));
 };
 
 describe("with no plan", () => {

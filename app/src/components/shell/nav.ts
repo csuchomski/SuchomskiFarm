@@ -33,20 +33,41 @@ export const allGroups: NavGroup[] = [
       { label: "Breedings", to: "/breedings" },
       { label: "Calvings", to: "/calvings" },
       { label: "Breeds", to: "/breeds" },
-      // First thing you want in a pasture, so it sits above the reference
-      // pages rather than at the bottom of the group.
-      // The daily act, so it sits above the board it used to live on.
-      { label: "Move", to: "/grazing/move" },
-      { label: "Grazing", to: "/grazing" },
-      { label: "Rotation", to: "/grazing/rotation" },
-      { label: "Pasture map", to: "/grazing/map" },
-      { label: "Forage balance", to: "/grazing/balance" },
-      { label: "Monitoring", to: "/grazing/monitoring" },
-      { label: "Plan", to: "/grazing/plan" },
-      { label: "Decisions", to: "/grazing/decisions" },
-      { label: "Annual record", to: "/grazing/record" },
       { label: "Depreciation", to: "/depreciation" },
       { label: "Health" },
+    ],
+  },
+  {
+    /**
+     * Grazing is its own section, not a tail on Herd.
+     *
+     * Ten pages had accumulated at the bottom of the Herd list, below Breeds
+     * and above Depreciation, which put the thing done every morning under a
+     * reference page consulted twice a year. It is a section in its own right
+     * and reads as one now.
+     *
+     * It stays on the **herd** module rather than getting one of its own.
+     * Grazing means nothing without livestock, so there is no business that
+     * would want one and not the other, and a module of its own would need a
+     * `business_type_modules` row plus a line in this app's fallback map —
+     * two places to forget, and forgetting either makes every page here
+     * unreachable. `moduleForPath` keeps returning "herd" for these paths, so
+     * route gating is exactly what it was.
+     *
+     * Ordered by the day rather than by the standard: the move first, then
+     * where things stand, then the season, then the plan and the record.
+     */
+    module: "herd",
+    heading: "Grazing",
+    items: [
+      { label: "Move", to: "/grazing/move" },
+      // Named for what it lists. It was "Grazing", which inside a section
+      // called Grazing said nothing.
+      { label: "Paddocks", to: "/grazing" },
+      { label: "Mobs", to: "/grazing/mobs" },
+      { label: "Rotation", to: "/grazing/rotation" },
+      { label: "Plan", to: "/grazing/plan" },
+      { label: "Record", to: "/grazing/record" },
     ],
   },
   {

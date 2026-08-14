@@ -6,9 +6,13 @@ running record of what was decided and what is still open.
 **All eight steps are built.** Migrations 036–042 are run. The module lives
 under Herd:
 
+Grazing is its own section in the rail, between Herd and Store:
+
 | Screen | What it is for |
 |---|---|
-| **Grazing** | The board, and logging a move as a strip |
+| **Move** | The morning: the wire, the graze-down, and what they ate |
+| **Paddocks** | The board — where every unit stands, and its rest |
+| **Mobs** | Who is on the grass, and what they weigh |
 | **Rotation** | The season as rounds, and hay off a unit |
 | **Pasture map** | The units drawn — and where the wire goes today |
 | **Forage balance** | Supply against demand, by unit and period |
@@ -16,6 +20,18 @@ under Herd:
 | **Plan** | Every threshold the rest of the module compares against |
 | **Decisions** | What changed, why, and what came of it |
 | **Annual record** | All of it, in the standard's own section order |
+
+**The section carries the `herd` module rather than one of its own.** Grazing
+means nothing without livestock, so no business would want one and not the
+other; a module of its own would need a `business_type_modules` row *and* a
+line in this app's fallback map, either of which could be forgotten, and
+forgetting either makes every page here unreachable. `moduleForPath` still
+returns `"herd"` for these paths, so route gating is exactly what it was, and
+a rental business still sees no Grazing at all.
+
+The board was called "Grazing", which inside a section called Grazing said
+nothing. It is **Paddocks** now, page title and all, because that is what it
+lists.
 
 Step 9 is conditional and not started: a worksheet-shaped export, only if the
 Wisconsin implementation requirements prescribe one. Nothing seen so far
@@ -1152,3 +1168,124 @@ because that tenth was the ribbon. They now test P4's western end, where the
 wedge is real: 0.70 of an even share, a 43% error, still worth measuring off
 the boundary and no longer an artifact. The arithmetic was right about the old
 shape; the shape was wrong.
+
+## Mobs: who is actually on the grass
+
+`grazing_group_members` could be read and never written. So an animal added to
+Herd → Animals was not in the mob, and the farm ran for a while with five
+animals on file and **four head** in every figure the module produced — strip
+width, days of feed, stock density, the forage balance. The head count is not a
+number anyone types; it is the length of a list nothing could edit.
+
+Herd → Mobs is that list. Start a mob, put animals in, take them out.
+
+**No migration.** Both tables already carry insert, select and update policies
+and grants for `authenticated` — checked against the live database as a real
+user in a rolled-back transaction, not from an editor running as superuser,
+where every permission check passes and proves nothing. Creating a mob, adding
+a member, dating a leaving and renaming all pass; another farm's is refused.
+
+### The database does not stop an animal being in two mobs
+
+There is no unique index on an open membership — only a check that a leaving
+date is not before a joining date. Two open rows for one animal would be summed
+twice by `mobWeight`: the mob reads heavier than it is, and every strip cut
+from that figure comes out too wide.
+
+So the rule lives in the app, as `joinRefusal` — a pure function rather than
+something buried in the write, because a rule that cannot be tested without a
+network is a rule that does not get tested. A closed membership is no obstacle:
+she may have moved between mobs or been sold on and bought back, and the old
+row stays, which is what keeps a head count recorded in July honest.
+
+### Two things the page will not offer
+
+**An AI bull.** `record_type` separates an animal that lives here from one on
+file only so a pedigree can name him. Four of this farm's nine animals are
+reference sires; offering them as candidates would be offering to put a straw
+of semen out on grass.
+
+**A manual head count.** `grazing_groups.head_count_manual` overrides the roll,
+and this page exists so the roll is right. It is written as null every time.
+
+### What it says when it cannot say a number
+
+Animals on the farm and in no mob are named at the foot of the page — "nothing
+counts them until they are in one" — which is the sentence that would have made
+the missing fifth head visible months earlier. A mob with unweighed members
+gives the total for the ones that have a weight and says how many it left out,
+rather than quietly reporting a light figure.
+
+### No delete
+
+A mob that is finished with goes to "not running"; an animal that leaves gets a
+date. Its past moves still name it, and a head count on a move from July has to
+keep making sense.
+
+## Ten pages became six
+
+The farm asked what the Pasture map and the board were adding. The audit was
+row counts, not impressions — after the module had been live a few days:
+
+| Page | Rows behind it |
+|---|---|
+| Move | 9 events, 5 weights |
+| Paddocks, Rotation | derived from the same events |
+| Pasture map | 12 infrastructure rows |
+| Plan | 1 plan, 2 targets |
+| Forage balance | **0 availability**, 1 demand — could not compute a balance |
+| Monitoring | **0 key areas, 0 records** |
+| Decisions | **0 rows** |
+
+The pages earning nothing were not the ones being questioned.
+
+### Pasture map was wholly redundant, which took looking to establish
+
+It had three things. The drawing is on Move. The unit list — acres, sweep,
+percent taken, rest — is the board. The infrastructure list is **section 2 of
+the annual record**, which has printed it all along.
+
+The one thing it had that Move did not is a **scale bar**, so that came over.
+
+A fence layer was built for Move and then removed before it shipped. The
+farm's four interior fences trace the same lines the units were cut from — the
+KML that drew the fences is the KML the paddocks came from — so drawing them
+puts a second line along every boundary already on screen. The perimeter is
+the outer edge of the same union. A layer that draws what is already drawn is
+worse than no layer.
+
+Water points were dropped on the farm's instruction. Seven are still on file
+and still print in the record's section 2; they are simply not drawn.
+
+### The board keeps its reason to exist and loses its form
+
+It is the only view that answers "which paddock next, and is it ready" across
+all five at once — rest, the sweep bar, days short of a recovery target, last
+residual. Move answers "which is next" from rotation order and cannot say that
+P2 is three days short.
+
+Its move form is gone: 222 lines that did what Move does better, and with it
+the state and arithmetic behind it. The compiler found the rest — seventeen
+now-dead bindings, which is what happens when a page stops doing two jobs.
+
+### Folding a page in without rewriting it
+
+Four pages became sections of other pages. Rather than restructure each so its
+body could be lifted out of its shell, `OpsShell` counts how deep it is. Depth
+zero renders the topbar and rail; deeper renders its children and nothing
+else, and `PageHeader` demotes its title to a section heading at depth two.
+A page stays a page and simply does not get a second rail when it is a
+section.
+
+The depth has to be a count, not a flag. A boolean "am I inside a shell" is
+true for every `PageHeader` on every page, so the first attempt demoted every
+page title in the app to a section heading — caught by a test asserting the
+board's own header, not by the type checker.
+
+Folding also put two "Loading…" nodes on one page, and
+`queryByText` throws when it finds more than one. It surfaced as a test that
+failed about one run in three. Every mount helper uses `queryAllByText` now.
+
+On the record, the two folded editors sit below the printed document behind a
+double rule, and `@media print` drops them: a form is how a record gets
+written, not part of it.

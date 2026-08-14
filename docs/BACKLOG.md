@@ -563,10 +563,10 @@ the missing animal the thing to fix.
 
 ## Opened 2026-08-13, building Move
 
-- **The fifth animal.** Four on file, five running. Everything derived from
-  the roll — head count, mob weight, days of feed, stock density — is a fifth
-  light until it is added. This is the single highest-value entry on the list
-  and it is a data-entry job, not a build.
+- ~~The fifth animal.~~ **Unblocked 2026-08-14.** Mercy is on file; the reason
+  she was not counted is that `grazing_group_members` had no write path at all.
+  Herd → Mobs now has one. The row itself is the farm's to add, because
+  `joined_on` is a fact this app does not know.
 - **Deferring a unit shut up for hay.** Skipping Paddock 4 works, but its rest
   keeps climbing afterwards and the board sorts it to the top as the best next
   choice — the exact opposite of the intent. `plan_schedule_periods.kind`

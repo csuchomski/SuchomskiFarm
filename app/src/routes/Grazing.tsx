@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, GridRow, Pill } from "../components/ui";
 import { useWorkspace } from "../lib/workspace";
 import {
-  assumptionsFor,
   boardRows,
-  endGrazing,
   fetchForageAvailability,
   fetchForageRemovals,
   fetchGrazingEvents,
@@ -15,21 +14,13 @@ import {
   fetchPaddocks,
   fetchPlanPaddockTargets,
   fetchActivePlan,
-  groupAvgWeightLb,
-  groupHeadCount,
   isSwept,
-  logMove,
+  whereIs,
   occupancyDays,
-  planStrip,
-  prefillFrom,
   readinessDays,
   stockingDensityLbPerAcre,
   sweepBands,
-  sweepInWords,
   sweptSoFar,
-  whereIs,
-  widthForHours,
-  type ForageAssumptions,
   type ForageAvailability,
   type ForageRemoval,
   type GrazingPlan,
@@ -39,7 +30,6 @@ import {
   type GrazingGroupMember,
   type Paddock,
   type PlanPaddockTarget,
-  type SoilMoisture,
 } from "../lib/grazing";
 import "./grazing.css";
 
@@ -86,40 +76,14 @@ const COLS_SM = "minmax(0, 1fr) 92px";
  *  nothing, because taking the tool away on somebody's first day helps no
  *  one — and the readout names which figures are the farm's and which are
  *  these, so a forecast is never mistaken for a measurement. */
-const FALLBACK: ForageAssumptions = {
-  standingLbDmPerAcre: 2400,
-  utilizationPct: 50,
-  intakePctBodyweight: 3,
-};
 
 const nowIso = () => new Date().toISOString();
 /** For a datetime-local input, which wants local time with no zone. */
-const toLocalInput = (iso: string) => {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
 
 export default function Grazing() {
   const { farmId } = useWorkspace();
+  const nav = useNavigate();
   const [load, setLoad] = useState<Load>({ state: "loading" });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
-  const [moving, setMoving] = useState(false);
-
-  const [at, setAt] = useState(() => toLocalInput(nowIso()));
-  const [paddockId, setPaddockId] = useState("");
-  const [groupId, setGroupId] = useState("");
-  const [headCount, setHeadCount] = useState("");
-  const [avgWeight, setAvgWeight] = useState("");
-  const [heightIn, setHeightIn] = useState("");
-  const [residualOut, setResidualOut] = useState("");
-  const [utilization, setUtilization] = useState("");
-  const [soil, setSoil] = useState<SoilMoisture | "">("");
-  const [notes, setNotes] = useState("");
-  /** Where the wire goes, as a fraction along the destination's sweep. */
-  const [wireTo, setWireTo] = useState(0.1);
 
   const refresh = useCallback(async () => {
     if (!farmId) {
@@ -162,115 +126,9 @@ export default function Grazing() {
     });
   }, [load]);
 
-  const group = load.state === "ok" ? (load.groups.find((g) => g.id === groupId) ?? load.groups[0] ?? null) : null;
+  const group = load.state === "ok" ? (load.groups[0] ?? null) : null;
   const here = group && load.state === "ok" ? whereIs(group.id, load.events) : null;
   const herePaddock = here && load.state === "ok" ? load.paddocks.find((p) => p.id === here.paddockId) : null;
-
-  const openMove = () => {
-    if (load.state !== "ok" || !group) return;
-    const derivedHead = groupHeadCount(group, load.members);
-    const derivedWeight = groupAvgWeightLb(group, load.members, load.weights);
-    const fill = prefillFrom(here, derivedHead, derivedWeight);
-    setGroupId(group.id);
-    setAt(toLocalInput(nowIso()));
-    setPaddockId("");
-    setHeadCount(fill.headCount === null ? "" : String(fill.headCount));
-    setAvgWeight(fill.avgWeightLb === null ? "" : String(Math.round(fill.avgWeightLb)));
-    setHeightIn("");
-    setResidualOut("");
-    setUtilization("");
-    setSoil("");
-    setNotes("");
-    setMoving(true);
-  };
-
-  // Moving the destination resets the wire to roughly a day's feed, which is
-  // where it lands most days anyway.
-  const pickDestination = (id: string) => {
-    setPaddockId(id);
-    if (load.state !== "ok") return;
-    const p = load.paddocks.find((x) => x.id === id);
-    if (!p || !isSwept(p)) return;
-    const from = here?.paddockId === id ? (here.sweptTo ?? 0) : 0;
-    const w = widthForHours({
-      paddock: p, hours: 24,
-      headCount: num(headCount), avgWeightLb: num(avgWeight),
-      assumptions: ASSUMPTIONS,
-    });
-    setWireTo(Math.min(1, from + (w ?? 0.08)));
-  };
-
-  const act = async (what: () => Promise<string>) => {
-    setBusy(true);
-    setError(null);
-    setNote(null);
-    try {
-      setNote(await what());
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const num = (s: string): number | null => {
-    const t = s.trim();
-    if (t === "") return null;
-    const v = Number(t);
-    return Number.isFinite(v) ? v : null;
-  };
-
-  // The row they are moving into, so the form can warn before it is saved.
-  const target = rows.find((r) => r.paddock.id === paddockId) ?? null;
-  const early = target?.eligible && !target.eligible.met ? target.eligible : null;
-
-  // The figures the readout divides by, from the farm's records where they
-  // exist and the stated fallback where they do not.
-  const assumed =
-    load.state === "ok" && paddockId !== ""
-      ? assumptionsFor({
-          paddockId,
-          plan: load.plan,
-          targets: load.targets,
-          availability: load.availability,
-          todayIso: nowIso(),
-          fallback: FALLBACK,
-        })
-      : { assumptions: FALLBACK, sources: { standing: "default", utilization: "default", intake: "default" } as const };
-  const ASSUMPTIONS = assumed.assumptions;
-
-  // ── the strip ───────────────────────────────────────────────────────
-  // Where this strip starts: where the last one in the same unit ended,
-  // or the beginning of the sweep when this is a fresh pass.
-  const dest = target?.paddock ?? null;
-  const stripped = dest !== null && isSwept(dest);
-  const wireFrom =
-    load.state === "ok" && dest && here?.paddockId === dest.id ? (here.sweptTo ?? 0) : 0;
-
-  const strip =
-    stripped && dest
-      ? planStrip({
-          paddock: dest,
-          from: wireFrom,
-          to: Math.max(wireTo, wireFrom + 0.005),
-          headCount: num(headCount),
-          avgWeightLb: num(avgWeight),
-          assumptions: ASSUMPTIONS,
-        })
-      : null;
-
-  // What a day would look like, so the wire has somewhere sensible to start.
-  const dayWidth =
-    stripped && dest
-      ? widthForHours({
-          paddock: dest,
-          hours: 24,
-          headCount: num(headCount),
-          avgWeightLb: num(avgWeight),
-          assumptions: ASSUMPTIONS,
-        })
-      : null;
 
   return (
     <OpsShell>
@@ -280,28 +138,13 @@ export default function Grazing() {
             ? `${rows.length} paddock${rows.length === 1 ? "" : "s"} · ${acresOf(load.paddocks).toFixed(2)} grazable acres`
             : "Herd"
         }
-        title="Grazing"
+        title="Paddocks"
         actions={
-          <Button
-            variant="filled"
-            onClick={() => (moving ? setMoving(false) : openMove())}
-            disabled={load.state !== "ok" || load.groups.length === 0}
-          >
-            {moving ? "Cancel" : "Log a move"}
+          <Button variant="filled" onClick={() => nav("/grazing/move")}>
+            Move the mob
           </Button>
         }
       />
-
-      {error && (
-        <div style={{ paddingTop: 16 }}>
-          <Callout tone="dashed">{error}</Callout>
-        </div>
-      )}
-      {note && (
-        <div style={{ paddingTop: 16 }}>
-          <Callout>{note}</Callout>
-        </div>
-      )}
 
       {load.state === "loading" && (
         <p style={{ fontSize: 14, color: "var(--ink-muted)", padding: "16px 8px" }}>Loading…</p>
@@ -328,227 +171,10 @@ export default function Grazing() {
             )}
           </p>
 
-          {moving && group && (
-            <div className="grz-form">
-              <div className="grz-form__row">
-                <label className="grz-field grz-field--wide">
-                  <span className="eyebrow">Move to</span>
-                  <select value={paddockId} onChange={(e) => pickDestination(e.target.value)} aria-label="Move to">
-                    <option value="">Pick a paddock…</option>
-                    {rows
-                      // The unit they are already in stays on the list when it
-                      // is swept — the next strip is the commonest move there
-                      // is, and hiding it would be hiding the daily job.
-                      .filter((r) => r.paddock.id !== here?.paddockId || isSwept(r.paddock))
-                      .map((r) => (
-                        <option key={r.paddock.id} value={r.paddock.id}>
-                          {r.paddock.name}
-                          {r.paddock.id === here?.paddockId
-                            ? " — next strip"
-                            : ` — ${restLabel(r)}`}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <label className="grz-field">
-                  <span className="eyebrow">When</span>
-                  <input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} aria-label="When" />
-                </label>
-              </div>
-
-              {/* A warning, never a block. The plan is the farm's, and a
-                  farmer moving cattle has reasons a form does not know. */}
-              {early && (
-                <p className="grz-warn">
-                  {target!.paddock.name} is {early.shortBy} day{early.shortBy === 1 ? "" : "s"} short of its recovery
-                  target — outside plan target, ready {shortDate(early.readyOn)}. Recording it anyway is fine.
-                </p>
-              )}
-
-              {stripped && dest && (
-                <div className="grz-wire">
-                  <div className="grz-wire__head">
-                    <span className="eyebrow">
-                      Wire across {dest.name} · swept {sweepInWords(dest.sweepHeadingDeg)}
-                    </span>
-                    <span className="mono grz-wire__pos">
-                      {Math.round(wireFrom * 100)}% → {Math.round(wireTo * 100)}%
-                    </span>
-                  </div>
-
-                  {/* The ground already taken this pass, then the strip about
-                      to be opened, then what is left standing. */}
-                  <div className="grz-sweep" aria-hidden="true">
-                    <span className="grz-sweep__done" style={{ width: `${wireFrom * 100}%` }} />
-                    <span className="grz-sweep__strip" style={{ width: `${Math.max(0, wireTo - wireFrom) * 100}%` }} />
-                  </div>
-
-                  <input
-                    type="range"
-                    min={Math.round(wireFrom * 1000) + 5}
-                    max={1000}
-                    step={5}
-                    value={Math.round(wireTo * 1000)}
-                    onChange={(e) => setWireTo(Number(e.target.value) / 1000)}
-                    aria-label="Wire position"
-                    className="grz-wire__range"
-                  />
-
-                  {strip && (
-                    <div className="grz-strip-stats">
-                      <div>
-                        <div className="mono grz-strip-stats__v">{strip.acres.toFixed(2)}</div>
-                        <div className="eyebrow">Acres</div>
-                      </div>
-                      <div>
-                        <div className="mono grz-strip-stats__v">
-                          {strip.hoursOfFeed === null ? "—" : formatFeed(strip.hoursOfFeed)}
-                        </div>
-                        <div className="eyebrow">Feed</div>
-                      </div>
-                      <div>
-                        <div className="mono grz-strip-stats__v">
-                          {strip.lbPerAcre === null ? "—" : `${Math.round(strip.lbPerAcre / 100) / 10}k`}
-                        </div>
-                        <div className="eyebrow">lb / acre</div>
-                      </div>
-                      <div>
-                        <div className="mono grz-strip-stats__v">
-                          {strip.widthFt === null ? "—" : `${Math.round(strip.widthFt)}′`}
-                        </div>
-                        <div className="eyebrow">Width</div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grz-wire__presets">
-                    {dayWidth !== null && (
-                      <>
-                        <button type="button" className="grz-preset"
-                          onClick={() => setWireTo(Math.min(1, wireFrom + dayWidth / 2))}>
-                          Half a day
-                        </button>
-                        <button type="button" className="grz-preset"
-                          onClick={() => setWireTo(Math.min(1, wireFrom + dayWidth))}>
-                          A day
-                        </button>
-                      </>
-                    )}
-                    <button type="button" className="grz-preset" onClick={() => setWireTo(1)}>
-                      The rest of it
-                    </button>
-                  </div>
-
-                  <p className="grz-assume">
-                    Feed assumes {ASSUMPTIONS.standingLbDmPerAcre.toLocaleString()} lb DM/acre standing{" "}
-                    <em>({sourceWord(assumed.sources.standing)})</em>, {ASSUMPTIONS.utilizationPct}% utilization{" "}
-                    <em>({sourceWord(assumed.sources.utilization)})</em> and intake at{" "}
-                    {ASSUMPTIONS.intakePctBodyweight}% of body weight{" "}
-                    <em>({sourceWord(assumed.sources.intake)})</em>. A forecast, not a measurement.
-                  </p>
-                </div>
-              )}
-
-              <p className="grz-optional">
-                Everything below is optional. Fill in what you know at the gate and the rest later.
-              </p>
-
-              <div className="grz-form__row">
-                <label className="grz-field">
-                  <span className="eyebrow">Head</span>
-                  <input value={headCount} onChange={(e) => setHeadCount(e.target.value)} inputMode="numeric" aria-label="Head" />
-                </label>
-                <label className="grz-field">
-                  <span className="eyebrow">Avg weight, lb</span>
-                  <input value={avgWeight} onChange={(e) => setAvgWeight(e.target.value)} inputMode="decimal" aria-label="Avg weight, lb" />
-                </label>
-                <label className="grz-field">
-                  <span className="eyebrow">Forage in, in</span>
-                  <input value={heightIn} onChange={(e) => setHeightIn(e.target.value)} inputMode="decimal" aria-label="Forage in, in" />
-                </label>
-                <label className="grz-field">
-                  <span className="eyebrow">Soil</span>
-                  <select value={soil} onChange={(e) => setSoil(e.target.value as SoilMoisture | "")} aria-label="Soil">
-                    <option value="">—</option>
-                    <option value="dry">dry</option>
-                    <option value="moist">moist</option>
-                    <option value="saturated">saturated</option>
-                  </select>
-                </label>
-              </div>
-
-              {here && herePaddock && (
-                <>
-                  <p className="grz-optional">
-                    Leaving <strong>{herePaddock.name}</strong> — what it looks like on the way out:
-                  </p>
-                  <div className="grz-form__row">
-                    <label className="grz-field">
-                      <span className="eyebrow">Residual out, in</span>
-                      <input value={residualOut} onChange={(e) => setResidualOut(e.target.value)} inputMode="decimal" aria-label="Residual out, in" />
-                    </label>
-                    <label className="grz-field">
-                      <span className="eyebrow">Utilization, %</span>
-                      <input value={utilization} onChange={(e) => setUtilization(e.target.value)} inputMode="decimal" aria-label="Utilization, %" />
-                    </label>
-                  </div>
-                </>
-              )}
-
-              <label className="grz-field grz-field--wide">
-                <span className="eyebrow">Notes</span>
-                <input value={notes} onChange={(e) => setNotes(e.target.value)} aria-label="Notes" />
-              </label>
-
-              <div className="grz-form__actions">
-                {here && (
-                  <Button
-                    disabled={busy}
-                    onClick={() =>
-                      act(async () => {
-                        await endGrazing(farmId!, group.id, new Date(at).toISOString(), num(residualOut), num(utilization));
-                        setMoving(false);
-                        return `${group.name} taken off pasture.`;
-                      })
-                    }
-                  >
-                    Off pasture
-                  </Button>
-                )}
-                <Button
-                  variant="filled"
-                  disabled={busy || paddockId === ""}
-                  onClick={() =>
-                    act(async () => {
-                      await logMove(farmId!, {
-                        paddockId,
-                        groupId: group.id,
-                        at: new Date(at).toISOString(),
-                        headCount: num(headCount),
-                        avgWeightLb: num(avgWeight),
-                        forageHeightInEntry: num(heightIn),
-                        soilMoisture: soil === "" ? null : soil,
-                        notes,
-                        latitude: null,
-                        longitude: null,
-                        residualHeightInExit: num(residualOut),
-                        utilizationPct: num(utilization),
-                        sweptFrom: stripped ? wireFrom : null,
-                        sweptTo: stripped ? Math.max(wireTo, wireFrom + 0.005) : null,
-                      });
-                      const to = load.paddocks.find((p) => p.id === paddockId);
-                      setMoving(false);
-                      return stripped && strip
-                        ? `${strip.acres.toFixed(2)} acres of ${to?.name ?? "the paddock"} opened to ${group.name}.`
-                        : `${group.name} moved to ${to?.name ?? "the paddock"}.`;
-                    })
-                  }
-                >
-                  {busy ? "Saving…" : "Log the move"}
-                </Button>
-              </div>
-            </div>
-          )}
+          {/* The move form used to live here. It is on Herd → Move now, which
+              knows where the mob is, where the back line is and what the strip
+              is worth — none of which a form on a board can say. This page
+              answers the other question: which paddock next, and is it ready. */}
 
           <GridRow cols={COLS} mobileCols={COLS_SM} as="header">
             <span>Paddock</span>
@@ -695,17 +321,6 @@ function bandFill(restDays: number | null, occupied: boolean): string {
   return "#e4e2d5";
 }
 
-/** Where a figure came from, in a word. "This app's figure" is the one worth
- * saying plainly — it is the only one nobody chose. */
-function sourceWord(source: string): string {
-  switch (source) {
-    case "measured": return "measured on this unit";
-    case "planned": return "your projection";
-    case "plan": return "from your plan";
-    default: return "this app's figure";
-  }
-}
-
 function acresOf(paddocks: Paddock[]): number {
   return paddocks
     .filter((p) => p.active)
@@ -726,10 +341,6 @@ function densityNote(event: GrazingEvent, paddock: Paddock): string {
 
 /** Hours below a day, days above it — strips can be half a day, and "0.5
  * days" is not how anybody says that. */
-function formatFeed(hours: number): string {
-  if (hours < 36) return `${Math.round(hours)}h`;
-  return `${(hours / 24).toFixed(1)}d`;
-}
 
 function shortDate(iso: string): string {
   const d = iso.length <= 10 ? new Date(`${iso}T00:00:00`) : new Date(iso);

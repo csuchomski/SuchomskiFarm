@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, Pill } from "../components/ui";
 import { useWorkspace } from "../lib/workspace";
@@ -138,7 +137,6 @@ export default function Decisions() {
         title="Decisions"
         actions={
           <>
-            <Link to="/grazing" className="rot-back mono">← the board</Link>
             <Button variant="filled" onClick={() => (open ? setOpen(false) : openSheet())} disabled={load.state !== "ok"}>
               {open ? "Cancel" : "Record a decision"}
             </Button>

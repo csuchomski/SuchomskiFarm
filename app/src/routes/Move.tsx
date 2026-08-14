@@ -46,6 +46,7 @@ import {
   localToLonLat,
   pathFor,
   ringCentre,
+  scaleBarFeet,
   sweepCutLine,
   sweepSlice,
   toLocal,
@@ -71,6 +72,18 @@ import "./grazing.css";
  * **The back line is settable.** Ordinarily it looks after itself, but a unit
  * cut for hay or a section skipped needs it moved, and the database has
  * always allowed that — only the app insisted on deriving it.
+ *
+ * The Pasture map page folded into this one. It had three things: this
+ * drawing, a list of units, and a list of infrastructure — and the last two
+ * were already on the board and in the annual record. The drawing came here
+ * and brought a **scale bar**, which is the one thing it had that this page
+ * did not.
+ *
+ * It did **not** bring a fence layer. The farm's four interior fences trace
+ * the same lines the units were cut from, so drawing them would put a second
+ * line on top of every boundary already here; and the water points were asked
+ * to stay off the map. A layer that draws what is already drawn is worse than
+ * no layer.
  *
  * Nothing here says "compliant".
  */
@@ -128,16 +141,17 @@ export default function Move() {
       setLoad({ state: "error", message: "No farm on this business." });
       return;
     }
-    const [paddocks, events, removals, availability, groups, members, weights, plan] = await Promise.all([
-      fetchPaddocks(farmId),
-      fetchGrazingEvents(farmId),
-      fetchForageRemovals(farmId),
-      fetchForageAvailability(farmId),
-      fetchGrazingGroups(farmId),
-      fetchGroupMembers(farmId),
-      fetchLatestWeights(farmId),
-      fetchActivePlan(farmId),
-    ]);
+    const [paddocks, events, removals, availability, groups, members, weights, plan] =
+      await Promise.all([
+        fetchPaddocks(farmId),
+        fetchGrazingEvents(farmId),
+        fetchForageRemovals(farmId),
+        fetchForageAvailability(farmId),
+        fetchGrazingGroups(farmId),
+        fetchGroupMembers(farmId),
+        fetchLatestWeights(farmId),
+        fetchActivePlan(farmId),
+      ]);
     const targets = plan ? await fetchPlanPaddockTargets(plan.id) : [];
     setLoad({ state: "ok", paddocks, events, removals, availability, groups, members, weights, targets, plan });
   }, [farmId]);
@@ -642,6 +656,8 @@ export default function Move() {
                   />
                 )}
 
+                <ScaleBar projection={drawn.projection} unitPx={unitPx} />
+
                 {/* What is about to be opened. */}
                 {dest && destRing && stripped && (
                   <>
@@ -938,6 +954,29 @@ function shortDate(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
     year: "numeric", month: "short", day: "numeric",
   });
+}
+
+/**
+ * How far is that, on the ground.
+ *
+ * Sized off `--pm-unit` like the labels are, so the bar and its caption stay
+ * the same size on a phone as on a desktop while the map behind them scales.
+ */
+function ScaleBar({
+  projection, unitPx,
+}: { projection: NonNullable<ReturnType<typeof fitPasture>>; unitPx: number }) {
+  const bar = scaleBarFeet(projection);
+  const y = projection.height - 10 * unitPx;
+  const x = 14 * unitPx;
+  const tick = 4 * unitPx;
+  return (
+    <g pointerEvents="none">
+      <line x1={x} y1={y} x2={x + bar.px} y2={y} stroke="var(--ink)" vectorEffect="non-scaling-stroke" />
+      <line x1={x} y1={y - tick} x2={x} y2={y + tick / 2} stroke="var(--ink)" vectorEffect="non-scaling-stroke" />
+      <line x1={x + bar.px} y1={y - tick} x2={x + bar.px} y2={y + tick / 2} stroke="var(--ink)" vectorEffect="non-scaling-stroke" />
+      <text x={x + bar.px + 6 * unitPx} y={y + 3 * unitPx} className="pm-sub">{bar.feet} ft</text>
+    </g>
+  );
 }
 
 /** Re-exported for the tests, which check the acreage the page will show

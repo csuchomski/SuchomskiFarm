@@ -129,7 +129,9 @@ afterEach(() => {
 const mount = async () => {
   const { default: Move } = await import("./Move");
   render(<MemoryRouter><Move /></MemoryRouter>);
-  await waitFor(() => expect(screen.queryByText("Loading…")).toBeNull());
+  // queryAllBy, not queryBy: pages folded into others bring their own
+  // loading state, and queryByText throws when it finds more than one.
+  await waitFor(() => expect(screen.queryAllByText("Loading…")).toHaveLength(0));
 };
 
 const svg = () => document.querySelector("svg.pm-svg")!;
@@ -619,5 +621,28 @@ describe("what they actually ate it down to", () => {
     fireEvent.change(screen.getByLabelText("They ate it down to, inches"), { target: { value: "2" } });
     expect(screen.getByText(/75% of the 8″ they went in on/)).toBeTruthy();
     expect(screen.getByText(/recorded against that strip, not this one/)).toBeTruthy();
+  });
+});
+
+describe("the map, now that it is the only one", () => {
+  /**
+   * The Pasture map page folded into this one. It brought a scale bar and
+   * nothing else: its unit list was already the board's, its infrastructure
+   * list is already section 2 of the annual record, and a fence layer would
+   * have drawn a second line along every boundary — the farm's interior
+   * fences are the lines the units were cut from.
+   */
+  it("puts a scale on it, so a strip width means something", async () => {
+    events.push(strip("s1", "p3", 0, 0.2, null));
+    await mount();
+    expect([...svg().querySelectorAll("text")].some((t) => /\d+ ft$/.test(t.textContent ?? ""))).toBe(true);
+  });
+
+  it("draws each boundary once", async () => {
+    events.push(strip("s1", "p3", 0, 0.2, null));
+    await mount();
+    // Every filled path is a unit. Nothing is stroked over the top of them.
+    const outlines = [...svg().querySelectorAll("path")].filter((p) => p.getAttribute("fill") === "none");
+    expect(outlines).toHaveLength(0);
   });
 });

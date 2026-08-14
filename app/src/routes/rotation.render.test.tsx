@@ -117,7 +117,9 @@ const mount = async () => {
   );
   // Not the title — "Rotation" is also the nav entry, so it matches twice.
   // Waiting on the loader clearing is what actually means "the fetch landed".
-  await waitFor(() => expect(screen.queryByText("Loading…")).toBeNull());
+  // queryAllBy, not queryBy: pages folded into others bring their own
+  // loading state, and queryByText throws when it finds more than one.
+  await waitFor(() => expect(screen.queryAllByText("Loading…")).toHaveLength(0));
 };
 
 /** One round through three units in May, a second starting in late June. */

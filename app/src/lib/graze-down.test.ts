@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  assumptionsFor, forageEatenLbDm, grazeDownTo, planStrip, stripAcres, widthForHours,
-  type ForageAssumptions, type GrazingEvent, type GrazingPlan, type Paddock,
+  assumptionsFor, forageEatenLbDm, grazeDownTo, joinRefusal, planStrip, stripAcres, widthForHours,
+  type ForageAssumptions, type GrazingEvent, type GrazingGroupMember, type GrazingPlan, type Paddock,
   type PlanPaddockTarget,
 } from "./grazing";
 import { REAL_ACRES, REAL_BOUNDARIES, REAL_SWEEP } from "./__fixtures__/farm-geometry";
@@ -264,5 +264,39 @@ describe("what a logged move says they ate", () => {
       event({ paddockId: "p4", sweptFrom: 0.85, sweptTo: 0.9 }), unit(4), plan(),
     )!;
     expect(narrow).toBeLessThan(wide * 0.6);
+  });
+});
+
+describe("who is in the mob", () => {
+  /**
+   * `grazing_group_members` has no unique index on an open membership — only a
+   * check that a leaving date is not before a joining date. So two open rows
+   * for one animal are possible, and `mobWeight` sums per member: she would be
+   * counted twice, the mob would read heavier than it is, and every strip cut
+   * from that figure would be too wide. The guard is the app's to make.
+   */
+  const roll = (over: Partial<GrazingGroupMember>[]): GrazingGroupMember[] =>
+    over.map((o, i) => ({
+      id: `m${i}`, groupId: "mob", animalId: `a${i}`, joinedOn: "2026-04-01", leftOn: null, ...o,
+    }));
+
+  it("refuses to put her in the same mob twice", () => {
+    expect(joinRefusal(roll([{ animalId: "a0" }]), "a0", "mob")).toMatch(/already in this mob/);
+  });
+
+  it("refuses to put her in a second mob while she is still in the first", () => {
+    expect(joinRefusal(roll([{ animalId: "a0", groupId: "mob" }]), "a0", "other"))
+      .toMatch(/another mob/);
+  });
+
+  it("lets her back in once she has left", () => {
+    // Not an error: she was moved between mobs, or sold on and bought back.
+    // The old row stays, which is what keeps July's head count honest.
+    expect(joinRefusal(roll([{ animalId: "a0", leftOn: "2026-07-01" }]), "a0", "mob")).toBeNull();
+  });
+
+  it("has nothing to say about an animal in no mob at all", () => {
+    expect(joinRefusal(roll([{ animalId: "a9" }]), "a0", "mob")).toBeNull();
+    expect(joinRefusal([], "a0", "mob")).toBeNull();
   });
 });

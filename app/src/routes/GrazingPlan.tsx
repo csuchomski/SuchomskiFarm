@@ -22,6 +22,7 @@ import {
   type PlanResourceConcern,
   type ResourceCategory,
 } from "../lib/grazing";
+import ForageBalance from "./ForageBalance";
 import "./grazing.css";
 
 /**
@@ -554,6 +555,13 @@ export default function GrazingPlan() {
           )}
         </>
       )}
+      {/* The balance is a planning calculation on the plan's own figures —
+          supply against demand, by unit and period. It was a page of its own
+          showing nothing, because this farm has no availability rows; as a
+          section it is the arithmetic at the bottom of the thing that feeds
+          it. */}
+      <ForageBalance />
+
     </OpsShell>
   );
 }

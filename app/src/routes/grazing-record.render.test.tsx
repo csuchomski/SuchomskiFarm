@@ -171,7 +171,7 @@ describe("the shape of the document", () => {
 
   it("prints the units with their measured acreage and sweep", async () => {
     await mount();
-    expect(screen.getByText("2.26")).toBeTruthy(); // south band
+    expect(screen.getByText("2.23")).toBeTruthy(); // south band
     expect(screen.getAllByText("east to west").length).toBe(2);
     expect(screen.getByText("south to north")).toBeTruthy();
   });

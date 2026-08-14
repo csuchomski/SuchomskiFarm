@@ -1090,3 +1090,65 @@ Because `save_grazing_plan` writes the whole row, anything the plan editor
 fails to prefill would be written back as null — losing a figure to a rename,
 silently, with the app carrying on against its own fallback. A test now edits
 only the name and asserts all three survive.
+
+## The fence between Paddock 4 and Paddock 5
+
+The owner marked the line on a screenshot: the P4/P5 boundary was in the wrong
+place and should run from the junction where P3, P5 and P4 meet down to P4's
+north-east corner.
+
+**What was wrong.** 040 cut the five units out of the perimeter with straight
+lines, and the line dividing P3/P5 from P4 was one horizontal at latitude
+42.87722457. West of P5 that is the fence. East of P3 it is not — the real
+southern boundary there runs about ten feet lower. The gap became part of
+Paddock 4: a ribbon 10 ft tall and 370 ft long tucked under P5, 1,090 sq ft,
+shaped like nothing anyone would fence.
+
+**It was not cosmetic.** Paddock 4 is swept west to east, so the ribbon was its
+*eastern hundred feet* — a 607 ft sweep ending in 100 ft of ten-foot ribbon.
+That is the same defect that turned up when the strip arithmetic was fixed:
+Paddock 4's last sixteenth measured 1,505% smaller than an even share, worse
+than any other ground on the farm by a factor of thirty. **The ribbon was that
+taper.** With it gone, P4's worst error falls to 43% and it reads as what it
+is — a wedge, narrow at the west, widening east.
+
+| unit | acres | sweep |
+|---|---|---|
+| P4 | 2.261 → 2.227 | 607 ft → 507 ft |
+| P5 | 1.381 → 1.416 | 405 ft → 416 ft |
+
+P1, P2 and P3 are untouched and the five still sum to **9.568** — the perimeter
+exactly. That check is what distinguishes moving a fence between two units from
+redrawing the farm.
+
+One vertex was deleted rather than moved, and checked before deleting:
+(-88.41269599, 42.87722457) sits **0.00 inches** off the straight line between
+P5's north-east corner and the perimeter vertex below it. That is what a
+constructed intersection looks like and what a surveyed corner does not.
+
+### The grazing already on file had to move with it
+
+044 could leave events alone — it shifted the perimeter by under 2.4 ft and no
+unit changed length, so a fraction still meant what it meant. This one changes
+both sweeps, so the same `swept_from` would silently point at different ground.
+
+Each fraction was rescaled to keep the wire where it actually was. Distance
+along the sweep axis is linear in the fraction, so the transform is exact:
+
+    position = min_old + f_old × span_old
+    f_new    = (position − min_new) ÷ span_new
+
+P4's western origin does not move — the ribbon came off the far end — so it is
+a pure rescale. P5 gains the ribbon at its southern end, so its origin moves
+11.1 ft south and there is a shift as well. Seven rows, every one holding its
+distance along the sweep to the foot.
+
+### What the tests had encoded
+
+Four tests failed on the new geometry, and three of them were asserting the
+ribbon rather than the farm — "badly wrong where a unit tapers" wanted P4's
+last tenth to measure under a tenth of its even share, which was true only
+because that tenth was the ribbon. They now test P4's western end, where the
+wedge is real: 0.70 of an even share, a 43% error, still worth measuring off
+the boundary and no longer an artifact. The arithmetic was right about the old
+shape; the shape was wrong.

@@ -76,6 +76,9 @@ export default function Today() {
         title="Today"
         actions={
           <>
+            {/* First, because it is the first job of the day — the mob gets
+                moved before anything here gets logged. */}
+            <Button onClick={() => navigate("/grazing/move")}>Cattle move</Button>
             <Button onClick={() => navigate("/milkings")}>Log milking</Button>
             <Button variant="filled" onClick={() => navigate("/books/transactions")}>
               Add entry

@@ -78,7 +78,6 @@ const COLS_SM = "minmax(0, 1fr) 92px";
  *  these, so a forecast is never mistaken for a measurement. */
 
 const nowIso = () => new Date().toISOString();
-/** For a datetime-local input, which wants local time with no zone. */
 
 export default function Grazing() {
   const { farmId } = useWorkspace();

@@ -3,6 +3,7 @@ import {
   animalDays,
   animalUnits,
   boardRows,
+  deleteEffect,
   groupAvgWeightLb,
   groupHeadCount,
   nextEligible,
@@ -334,5 +335,37 @@ describe("prefillFrom", () => {
   it("never prefills forage height — it is a reading, not a carry-over", () => {
     const last = event({ id: "a", paddockId: "p1", forageHeightInEntry: 9 });
     expect(prefillFrom(last, null, null).forageHeightInEntry).toBeNull();
+  });
+});
+
+describe("what deleting a move will do, said before it is done", () => {
+  // Which repair applies is not visible in a row, so the button says it.
+  const chain: GrazingEvent[] = [
+    event({ id: "a", paddockId: "p1", enteredAt: "2026-08-01T00:00:00.000Z", exitedAt: "2026-08-03T00:00:00.000Z" }),
+    event({ id: "b", paddockId: "p2", enteredAt: "2026-08-03T00:00:00.000Z", exitedAt: "2026-08-05T00:00:00.000Z" }),
+    event({ id: "c", paddockId: "p3", enteredAt: "2026-08-05T00:00:00.000Z", exitedAt: null }),
+  ];
+
+  it("promises the mob goes back where they came from, for the one they are on", () => {
+    expect(deleteEffect(chain[2], chain)).toContain("back where they came from");
+  });
+
+  it("warns of a gap for one in the middle, rather than quietly stretching a stay", () => {
+    const said = deleteEffect(chain[1], chain);
+    expect(said).toContain("gap");
+    expect(said).not.toContain("back where they came from");
+  });
+
+  it("says the mob is left off pasture when it is the only move there is", () => {
+    const only = [event({ id: "x", paddockId: "p1", enteredAt: "2026-08-01T00:00:00.000Z", exitedAt: null })];
+    expect(deleteEffect(only[0], only)).toContain("off pasture");
+  });
+
+  it("reads the chain of that mob alone, not whatever else is on the farm", () => {
+    // Another mob's later move must not be mistaken for this one's predecessor.
+    const other = event({ id: "z", paddockId: "p4", groupId: "mob-2",
+      enteredAt: "2026-08-04T00:00:00.000Z", exitedAt: null });
+    const only = [event({ id: "x", paddockId: "p1", enteredAt: "2026-08-06T00:00:00.000Z", exitedAt: null }), other];
+    expect(deleteEffect(only[0], only)).toContain("off pasture");
   });
 });

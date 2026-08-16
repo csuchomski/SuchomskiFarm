@@ -821,3 +821,104 @@
   .pr-table thead { display: table-header-group; }
   .pr-table tr { break-inside: avoid; }
 }
+
+/* ── Correcting the record: a stay opened out into its moves ───────────── */
+
+.rot-open {
+  color: var(--ink-faint);
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+.rot-round__foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.rot-round__del {
+  font: 500 12px/1 "IBM Plex Sans", sans-serif;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  background: none;
+  border: none;
+  padding: 10px 4px;
+  cursor: pointer;
+}
+
+.rot-round__del:hover { color: var(--red); }
+.rot-round__del:disabled { color: var(--ink-faint); cursor: default; }
+
+.rot-confirm {
+  padding: 12px;
+  margin: 8px 0;
+  background: var(--paper-tint);
+  border-left: 3px solid var(--red);
+}
+
+.rot-moves {
+  padding: 4px 0 10px 8px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--paper);
+}
+
+.rot-move {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  padding: 8px 4px;
+}
+
+.rot-move__when {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  flex: none;
+}
+
+.rot-move__what {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rot-move__edit {
+  flex: none;
+  font: 500 12px/1 "IBM Plex Sans", sans-serif;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--herd-green);
+  background: none;
+  border: none;
+  /* 44px of target on a phone, without 44px of visible chrome in a list. */
+  padding: 14px 8px;
+  margin: -14px -8px;
+  cursor: pointer;
+}
+
+.rot-move__edit:hover { color: var(--ink); }
+
+.mv-edit { margin: 8px 0 12px; }
+
+.mv-edit__confirm {
+  padding: 12px;
+  background: var(--paper-tint);
+  border-left: 3px solid var(--red);
+}
+
+@media (max-width: 640px) {
+  /* The stamp and the detail will not sit side by side at 360px without one
+     of them being cut in half. Two lines, not three: the time and the way in
+     are the row's handle, so they share the first line and the detail runs
+     under them. Left alone, wrapping put Edit on a line of its own and every
+     move stood three lines tall. */
+  .rot-move {
+    flex-wrap: wrap;
+    gap: 2px 12px;
+  }
+
+  .rot-move__when { order: 1; }
+  .rot-move__edit { order: 2; margin-left: auto; }
+  .rot-move__what { order: 3; flex-basis: 100%; }
+}

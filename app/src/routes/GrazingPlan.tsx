@@ -4,6 +4,8 @@ import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, GridRow, Pill } from "../components/ui";
 import { useWorkspace } from "../lib/workspace";
 import {
+  DEFAULT_FOULED_AREA_PCT,
+  DEFAULT_TRAMPLING_LOSS_PCT,
   addContingency,
   addResourceConcern,
   fetchContingencyPlans,
@@ -98,6 +100,8 @@ export default function GrazingPlan() {
   const [dmi, setDmi] = useState("");
   const [swardLb, setSwardLb] = useState("");
   const [grazeTo, setGrazeTo] = useState("");
+  const [trample, setTrample] = useState("");
+  const [fouled, setFouled] = useState("");
 
   const [concernCategory, setConcernCategory] = useState<ResourceCategory>("soil");
   const [concernText, setConcernText] = useState("");
@@ -163,6 +167,8 @@ export default function GrazingPlan() {
     setDmi(fresh || !p || p.defaultDmiPctBw === null ? "" : String(p.defaultDmiPctBw));
     setSwardLb(fresh || !p || p.lbDmPerAcreInch === null ? "" : String(p.lbDmPerAcreInch));
     setGrazeTo(fresh || !p || p.targetResidualHeightIn === null ? "" : String(p.targetResidualHeightIn));
+    setTrample(fresh || !p || p.tramplingLossPct === null ? "" : String(p.tramplingLossPct));
+    setFouled(fresh || !p || p.fouledAreaPct === null ? "" : String(p.fouledAreaPct));
     setEditing(true);
   };
 
@@ -196,6 +202,8 @@ export default function GrazingPlan() {
         defaultDmiPctBw: num(dmi),
         lbDmPerAcreInch: num(swardLb),
         targetResidualHeightIn: num(grazeTo),
+        tramplingLossPct: num(trample),
+        fouledAreaPct: num(fouled),
       });
       setEditing(false);
       return startingNew
@@ -348,10 +356,33 @@ export default function GrazingPlan() {
                   <input value={grazeTo} onChange={(e) => setGrazeTo(e.target.value)} inputMode="decimal" aria-label="Graze down to, in" />
                 </label>
                 <label className="grz-field">
+                  {/* The graze-down measures what left the sward, not what
+                      went into a cow. This is the gap: trodden in, lain on,
+                      knocked down going past. It comes off the dry matter in
+                      the forecast and in the record alike, because both start
+                      from a height that dropped. */}
+                  <span className="eyebrow">Trodden in, %</span>
+                  <input value={trample} onChange={(e) => setTrample(e.target.value)} inputMode="decimal" aria-label="Trodden in, %" />
+                </label>
+                <label className="grz-field">
+                  {/* Refused around dung. This one discounts the *area* and
+                      only in the forecast — the fringe they will not touch is
+                      still standing when the residual is read, so a measured
+                      height has already accounted for it. */}
+                  <span className="eyebrow">Fouled ground, %</span>
+                  <input value={fouled} onChange={(e) => setFouled(e.target.value)} inputMode="decimal" aria-label="Fouled ground, %" />
+                </label>
+                <label className="grz-field">
                   <span className="eyebrow">Benchmark AUM/acre</span>
                   <input value={benchmark} onChange={(e) => setBenchmark(e.target.value)} inputMode="decimal" aria-label="Benchmark AUM/acre" />
                 </label>
               </div>
+
+              <p className="grz-optional">
+                Left blank, the app uses {DEFAULT_TRAMPLING_LOSS_PCT}% trodden in and{" "}
+                {DEFAULT_FOULED_AREA_PCT}% fouled — its own figures for a daily-move mob, not this
+                farm's. Both are worth replacing with what you see on the ground.
+              </p>
 
               <div className="grz-form__actions">
                 <Button variant="filled" disabled={busy || name.trim() === ""} onClick={savePlanNow}>

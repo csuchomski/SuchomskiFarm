@@ -5,6 +5,8 @@ import { Button, Callout } from "../components/ui";
 import { useWorkspace } from "../lib/workspace";
 import {
   assumptionsFor,
+  DEFAULT_FOULED_AREA_PCT,
+  DEFAULT_TRAMPLING_LOSS_PCT,
   drawnSliceAcres,
   fetchActivePlan,
   fetchForageAvailability,
@@ -112,6 +114,8 @@ const FALLBACK: ForageAssumptions = {
   standingLbDmPerAcre: 2400,
   utilizationPct: 50,
   intakePctBodyweight: 3,
+  tramplingLossPct: DEFAULT_TRAMPLING_LOSS_PCT,
+  fouledAreaPct: DEFAULT_FOULED_AREA_PCT,
 };
 
 const nowIso = () => new Date().toISOString();
@@ -252,7 +256,9 @@ export default function Move() {
         })
       : {
           assumptions: FALLBACK,
-          sources: { standing: "default", utilization: "default", intake: "default" } as const,
+          sources: {
+            standing: "default", utilization: "default", intake: "default", losses: "default",
+          } as const,
           grazeDown: { entryIn: null, residualIn: null, source: "none" },
         };
 
@@ -381,7 +387,7 @@ export default function Move() {
           ? `${strip.acres.toFixed(2)} acres of ${dest.name} opened to ${group.name}` +
             (assumed.grazeDown.residualIn === null
               ? "."
-              : ` — about ${Math.round(strip.lbDmOnOffer).toLocaleString()} lb of dry matter,` +
+              : ` — about ${Math.round(strip.lbDmOnOffer).toLocaleString()} lb of dry matter eaten,` +
                 ` down to ${assumed.grazeDown.residualIn}″.`)
           : `${group.name} moved to ${dest.name}.`) +
           (ateToIn === null ? "" : ` The strip they left is recorded at ${ateToIn}″.`),
@@ -560,15 +566,17 @@ export default function Move() {
                 ) : heightIn === null ? (
                   <>At {load.plan.lbDmPerAcreInch} lb DM per acre-inch, from your plan.</>
                 ) : assumed.grazeDown.residualIn !== null ? (
-                  // The standing figure on its own reads as a contradiction
-                  // beside the panel's "on offer" one. Both are true; only the
-                  // difference is being eaten, so that is what this says.
+                  // What the height drop is worth, which is not what a cow
+                  // gets: some of it goes under a hoof. Rendered beside the
+                  // panel's lower figure this read as a contradiction, so it
+                  // says which of the two it is and where the other lives.
                   <>
                     {Math.round(
                       (heightIn - assumed.grazeDown.residualIn) * load.plan.lbDmPerAcreInch,
                     ).toLocaleString()}{" "}
-                    lb DM/acre on offer — the {(heightIn - assumed.grazeDown.residualIn).toFixed(1)}″
-                    between them, at {load.plan.lbDmPerAcreInch} lb an acre-inch.
+                    lb DM/acre comes off the plant — the{" "}
+                    {(heightIn - assumed.grazeDown.residualIn).toFixed(1)}″ between them, at{" "}
+                    {load.plan.lbDmPerAcreInch} lb an acre-inch. What they eat of it is below.
                   </>
                 ) : (
                   <>
@@ -706,8 +714,9 @@ export default function Move() {
                     </div>
                     <div className="eyebrow">Days of feed</div>
                   </div>
-                  {/* What is actually on offer between the two heights —
-                      the figure the graze-down exists to produce. */}
+                  {/* What goes into them: the two heights, less what is
+                      trodden in and the ground they will refuse. The label
+                      says "eat" and now means it. */}
                   <div>
                     <div className="mono grz-strip-stats__v">
                       {Math.round(strip.lbDmOnOffer).toLocaleString()}
@@ -775,10 +784,12 @@ export default function Move() {
                       {assumed.grazeDown.entryIn}″ down to {assumed.grazeDown.residualIn}″ ={" "}
                       {Math.round(
                         (assumed.grazeDown.entryIn! - assumed.grazeDown.residualIn) *
-                          (load.state === "ok" ? (load.plan?.lbDmPerAcreInch ?? 0) : 0),
+                          (load.state === "ok" ? (load.plan?.lbDmPerAcreInch ?? 0) : 0) *
+                          (1 - assumed.assumptions.tramplingLossPct / 100),
                       ).toLocaleString()}{" "}
-                      lb DM an acre on offer <em>({grazeWord(assumed.grazeDown.source)})</em> —{" "}
-                      {Math.round(assumed.assumptions.utilizationPct)}% of what is standing.{" "}
+                      lb DM an acre eaten <em>({grazeWord(assumed.grazeDown.source)})</em> —{" "}
+                      {Math.round(assumed.assumptions.utilizationPct)}% of what is standing comes
+                      off, less what goes under a hoof.{" "}
                     </>
                   ) : (
                     <>
@@ -789,7 +800,14 @@ export default function Move() {
                     </>
                   )}
                   Intake at {assumed.assumptions.intakePctBodyweight}% of body weight{" "}
-                  <em>({sourceWord(assumed.sources.intake)})</em>. A forecast, not a measurement.
+                  <em>({sourceWord(assumed.sources.intake)})</em>.{" "}
+                  {/* Named rather than folded in silently: they are the
+                      difference between what leaves the sward and what feeds
+                      a cow, and a forecast that hides them reads as if the
+                      mob ate every blade that vanished. */}
+                  {assumed.assumptions.tramplingLossPct}% trodden in and{" "}
+                  {assumed.assumptions.fouledAreaPct}% of the ground fouled{" "}
+                  <em>({sourceWord(assumed.sources.losses)})</em>. A forecast, not a measurement.
                 </p>
               )}
 

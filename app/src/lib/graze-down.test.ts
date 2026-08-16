@@ -42,6 +42,7 @@ const plan = (over: Partial<GrazingPlan> = {}): GrazingPlan => ({
   longTermGoals: null, immediateObjectives: null, benchmarkStockingRateAumPerAcre: null,
   monitoringCadenceKind: "every_rotation", monitoringCadenceValue: null,
   defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: null,
+  tramplingLossPct: null, fouledAreaPct: null,
   active: true, notes: null, ...over,
 });
 
@@ -54,7 +55,7 @@ const target = (over: Partial<PlanPaddockTarget> = {}): PlanPaddockTarget => ({
 });
 
 const FALLBACK: ForageAssumptions = {
-  standingLbDmPerAcre: 2400, utilizationPct: 50, intakePctBodyweight: 3,
+  standingLbDmPerAcre: 2400, utilizationPct: 50, intakePctBodyweight: 3, tramplingLossPct: 0, fouledAreaPct: 0,
 };
 
 const ask = (over: Partial<Parameters<typeof assumptionsFor>[0]> = {}) =>

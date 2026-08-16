@@ -128,7 +128,8 @@ vi.mock("../lib/grazing", async (importOriginal) => {
             longTermGoals: null, immediateObjectives: null,
             benchmarkStockingRateAumPerAcre: null,
             monitoringCadenceKind: "every_rotation", monitoringCadenceValue: null,
-            defaultDmiPctBw: 2.5, lbDmPerAcreInch: 300, targetResidualHeightIn: null, active: true, notes: null,
+            defaultDmiPctBw: 2.5, lbDmPerAcreInch: 300, targetResidualHeightIn: null,
+  tramplingLossPct: null, fouledAreaPct: null, active: true, notes: null,
           }
         : null,
     ),

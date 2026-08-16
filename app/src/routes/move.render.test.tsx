@@ -104,7 +104,8 @@ const withPlan = (over: Partial<GrazingPlan> = {}): GrazingPlan => ({
   contractNumber: null, tractNumber: null, fieldIds: null,
   longTermGoals: null, immediateObjectives: null, benchmarkStockingRateAumPerAcre: null,
   monitoringCadenceKind: "every_rotation", monitoringCadenceValue: null,
-  defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: null, active: true, notes: null, ...over,
+  defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: null,
+  tramplingLossPct: null, fouledAreaPct: null, active: true, notes: null, ...over,
 });
 
 beforeEach(() => {
@@ -462,10 +463,14 @@ describe("the graze-down, on the page", () => {
     fireEvent.change(screen.getByLabelText("Grass height, inches"), { target: { value: "8" } });
     fireEvent.change(screen.getByLabelText("Graze it down to, inches"), { target: { value: "4" } });
 
-    // 8″ − 4″ = 4″ at 300 lb an acre-inch = 1,200 lb an acre, half the sward.
+    // 8″ − 4″ = 4″ at 300 lb an acre-inch = 1,200 lb an acre off the plant —
+    // but that is what *disappeared*. This plan sets no trampling figure, so
+    // the app's 15% applies and 1,020 lb of it is eaten. The page says eaten,
+    // because saying "on offer" is what let the loss go unnoticed.
     expect(screen.getByText(/8″ down to 4″/)).toBeTruthy();
-    expect(screen.getByText(/1,200 lb DM an acre on offer/)).toBeTruthy();
+    expect(screen.getByText(/1,020 lb DM an acre eaten/)).toBeTruthy();
     expect(screen.getByText(/50% of what is standing/)).toBeTruthy();
+    expect(screen.getByText(/15% trodden in and 3% of the ground fouled/)).toBeTruthy();
   });
 
   it("narrows the strip when they are to graze it harder", async () => {

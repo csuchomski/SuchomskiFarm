@@ -89,7 +89,8 @@ const plan = (over: Partial<GrazingPlan> = {}): GrazingPlan => ({
   contractNumber: null, tractNumber: null, fieldIds: null,
   longTermGoals: null, immediateObjectives: null, benchmarkStockingRateAumPerAcre: null,
   monitoringCadenceKind: "every_n_days", monitoringCadenceValue: 30,
-  defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: null, active: true, notes: null, ...over,
+  defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: null,
+  tramplingLossPct: null, fouledAreaPct: null, active: true, notes: null, ...over,
 });
 
 beforeEach(() => {
@@ -179,6 +180,7 @@ describe("with a plan in force", () => {
     await waitFor(() => expect(savedPlan).toHaveBeenCalledTimes(1));
     expect(savedPlan.mock.calls[0][1]).toMatchObject({
       defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: 6,
+  tramplingLossPct: null, fouledAreaPct: null,
       monitoringCadenceValue: 30, periodStart: "2026-04-01", periodEnd: "2026-10-31",
     });
   });

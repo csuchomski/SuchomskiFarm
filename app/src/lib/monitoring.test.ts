@@ -25,7 +25,8 @@ const plan = (over: Partial<GrazingPlan> = {}): GrazingPlan => ({
   longTermGoals: null, immediateObjectives: null,
   benchmarkStockingRateAumPerAcre: null,
   monitoringCadenceKind: "every_n_days", monitoringCadenceValue: 30,
-  defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: null, active: true, notes: null,
+  defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: null,
+  tramplingLossPct: null, fouledAreaPct: null, active: true, notes: null,
   ...over,
 });
 

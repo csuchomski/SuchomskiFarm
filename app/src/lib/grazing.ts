@@ -215,6 +215,14 @@ export interface GrazingPlan {
    * with an entry height it stands in for the utilization percentage rather
    * than compounding with it. */
   targetResidualHeightIn: number | null;
+  /** Share of the forage that *disappears* which is trodden in rather than
+   * eaten. The graze-down measures disappearance, not intake, and the gap
+   * between the two is mostly hoof. */
+  tramplingLossPct: number | null;
+  /** Share of a strip the mob refuses around dung. Discounts usable area in
+   * the forecast only — refused grass stays standing, so a measured residual
+   * already carries it. */
+  fouledAreaPct: number | null;
   active: boolean;
   notes: string | null;
 }
@@ -643,7 +651,7 @@ export async function fetchActivePlan(farmId: string): Promise<GrazingPlan | nul
   const { data, error } = await herdSchema()
     .from("grazing_plans")
     .select(
-      "id, name, period_start, period_end, contract_number, tract_number, field_ids, long_term_goals, immediate_objectives, benchmark_stocking_rate_aum_per_acre, monitoring_cadence_kind, monitoring_cadence_value, default_dmi_pct_bw, lb_dm_per_acre_inch, target_residual_height_in, active, notes",
+      "id, name, period_start, period_end, contract_number, tract_number, field_ids, long_term_goals, immediate_objectives, benchmark_stocking_rate_aum_per_acre, monitoring_cadence_kind, monitoring_cadence_value, default_dmi_pct_bw, lb_dm_per_acre_inch, target_residual_height_in, trampling_loss_pct, fouled_area_pct, active, notes",
     )
     .eq("farm_id", farmId)
     .eq("active", true)
@@ -669,6 +677,8 @@ export async function fetchActivePlan(farmId: string): Promise<GrazingPlan | nul
     defaultDmiPctBw: num(r.default_dmi_pct_bw),
     lbDmPerAcreInch: num(r.lb_dm_per_acre_inch),
     targetResidualHeightIn: num(r.target_residual_height_in),
+    tramplingLossPct: num(r.trampling_loss_pct),
+    fouledAreaPct: num(r.fouled_area_pct),
     active: Boolean(r.active),
     notes: (r.notes as string) ?? null,
   };
@@ -1335,7 +1345,12 @@ export function forageEatenLbDm(
       : event.utilizationPct;
   if (takenPct === null || takenPct <= 0) return null;
 
-  return acres * entry * lbPerInch * (takenPct / 100);
+  // Trampling comes off here too: the height that vanished is not the height
+  // that was swallowed. Fouling does not — the refused fringe is still
+  // standing when the residual is read, so it has already taken itself out of
+  // `takenPct` and discounting the area as well would count it twice.
+  const trampled = plan?.tramplingLossPct ?? 0;
+  return acres * entry * lbPerInch * (takenPct / 100) * (1 - trampled / 100);
 }
 
 /** Feet along the sweep, when the unit's length is on file. */
@@ -1540,6 +1555,65 @@ export interface ForageAssumptions {
   standingLbDmPerAcre: number;
   utilizationPct: number;
   intakePctBodyweight: number;
+  /** Of the forage that leaves the sward, the share trodden in rather than
+   * eaten. See `intakePerAcre`. */
+  tramplingLossPct: number;
+  /** Of a strip's ground, the share refused around dung. See `usableAcres`. */
+  fouledAreaPct: number;
+}
+
+/**
+ * The app's own loss figures, for a farm that has not set its own.
+ *
+ * Fifteen percent trodden in is the middle of what is reported for daily-move
+ * strip grazing, where a fresh break arrives before the mob has walked the
+ * last one in. Looser rotations lose a good deal more; the published pairs of
+ * "harvest efficiency" and "utilization" work out at roughly half the removed
+ * forage eaten under continuous grazing, and about two thirds under an
+ * intensive rotation — and those include senescence and wildlife, which do
+ * not happen inside a one-day strip.
+ *
+ * Three percent fouled is this farm's own arithmetic rather than a citation:
+ * five head at eleven or twelve pats a day, a refused fringe of ten to twenty
+ * centimetres round each — call it 0.4 m² a pat — against a strip of a fifth
+ * of an acre. Roughly 240 square feet of a 0.2-acre break.
+ *
+ * Both are stated in the UI as the app's numbers, not the farm's.
+ */
+export const DEFAULT_TRAMPLING_LOSS_PCT = 15;
+export const DEFAULT_FOULED_AREA_PCT = 3;
+
+/**
+ * Pounds of dry matter an acre actually puts *into the animals*.
+ *
+ * The graze-down gives disappearance — nine inches down to six means a third
+ * of the standing forage left the sward. It does not mean a third was eaten.
+ * Some of it went under a hoof, and that share is discounted here rather than
+ * anywhere further down, so every caller gets the same answer.
+ *
+ *     standing × utilization × (1 − trampling)
+ *
+ * Utilization is what leaves the plant; trampling is what leaves it without
+ * being swallowed. They multiply because they are sequential, not competing.
+ */
+export function intakePerAcre(a: ForageAssumptions): number {
+  return a.standingLbDmPerAcre * (a.utilizationPct / 100) * (1 - a.tramplingLossPct / 100);
+}
+
+/**
+ * The acres of a strip the mob will actually graze over.
+ *
+ * Cattle refuse the fringe around a dung pat, and that grass stays standing
+ * at full height while they are in the strip. So it is ground inside the wire
+ * that feeds nobody this pass.
+ *
+ * This belongs to the **forecast only**. Worked backwards from a residual
+ * height measured on the way out, refused clumps have already pulled that
+ * average up and taken themselves out of the sum — applying this as well
+ * would count the same grass missing twice.
+ */
+export function usableAcres(acres: number, a: ForageAssumptions): number {
+  return acres * (1 - a.fouledAreaPct / 100);
 }
 
 /** Which of the three figures came from the farm's own records, and which
@@ -1551,6 +1625,10 @@ export interface AssumptionSources {
    * out of the two heights, which is the way round a grazier thinks. */
   utilization: "graze-down" | "plan" | "default";
   intake: "plan" | "default";
+  /** Trampling and fouling together — they are set as a pair on the plan and
+   * a readout that named them separately would be listing two sources that
+   * are always the same. */
+  losses: "plan" | "default";
 }
 
 /**
@@ -1668,6 +1746,8 @@ export function assumptionsFor(input: {
       standingLbDmPerAcre: fromHeight ?? covering?.lbDmPerAcre ?? fallback.standingLbDmPerAcre,
       utilizationPct: fromGrazeDown ?? target?.targetUtilizationPct ?? fallback.utilizationPct,
       intakePctBodyweight: plan?.defaultDmiPctBw ?? fallback.intakePctBodyweight,
+      tramplingLossPct: plan?.tramplingLossPct ?? fallback.tramplingLossPct,
+      fouledAreaPct: plan?.fouledAreaPct ?? fallback.fouledAreaPct,
     },
     sources: {
       standing:
@@ -1685,6 +1765,7 @@ export function assumptionsFor(input: {
             ? "default"
             : "plan",
       intake: plan?.defaultDmiPctBw == null ? "default" : "plan",
+      losses: plan?.tramplingLossPct == null && plan?.fouledAreaPct == null ? "default" : "plan",
     },
     grazeDown: {
       entryIn,
@@ -1720,7 +1801,11 @@ export function planStrip(input: {
   // is the forecast rather than the record, but it is the number the wire is
   // placed against, so it has to be the same number.
   const acres = drawnSliceAcres(paddock, from, to) ?? (to - from) * unitAcres;
-  const usablePerAcre = assumptions.standingLbDmPerAcre * (assumptions.utilizationPct / 100);
+  // Ground they will graze over, and what an acre of it puts into them. The
+  // acres in the readout stay the acres of the strip — the wire really is
+  // that wide — but the feed comes off what they can reach and swallow.
+  const grazable = usableAcres(acres, assumptions);
+  const perAcre = intakePerAcre(assumptions);
   const dailyIntake =
     headCount === null || avgWeightLb === null
       ? null
@@ -1728,10 +1813,10 @@ export function planStrip(input: {
 
   return {
     acres,
-    hoursOfFeed: dailyIntake === null || dailyIntake <= 0 ? null : (acres * usablePerAcre * 24) / dailyIntake,
+    hoursOfFeed: dailyIntake === null || dailyIntake <= 0 ? null : (grazable * perAcre * 24) / dailyIntake,
     lbPerAcre: headCount === null || avgWeightLb === null ? null : (headCount * avgWeightLb) / acres,
     widthFt: paddock.sweepLengthFt === null ? null : (to - from) * paddock.sweepLengthFt,
-    lbDmOnOffer: acres * usablePerAcre,
+    lbDmOnOffer: grazable * perAcre,
   };
 }
 
@@ -1792,11 +1877,17 @@ export function widthForHours(input: {
   if (unitAcres === null || unitAcres <= 0) return null;
   if (headCount === null || avgWeightLb === null) return null;
 
-  const usablePerAcre = assumptions.standingLbDmPerAcre * (assumptions.utilizationPct / 100);
-  if (usablePerAcre <= 0) return null;
+  const perAcre = intakePerAcre(assumptions);
+  if (perAcre <= 0) return null;
 
   const dailyIntake = headCount * avgWeightLb * (assumptions.intakePctBodyweight / 100);
-  const acres = (dailyIntake * (hours / 24)) / usablePerAcre;
+  // Inverted, so the losses widen the strip rather than narrowing it: they
+  // need the ground that feeds them *plus* the ground they will foul. This is
+  // the exact inverse of `usableAcres`, and the guard is for a nonsense
+  // figure arriving from a fallback — the column itself is constrained.
+  const grazableAcres = (dailyIntake * (hours / 24)) / perAcre;
+  const unfouled = 1 - assumptions.fouledAreaPct / 100;
+  const acres = unfouled > 0 ? grazableAcres / unfouled : grazableAcres;
 
   const to = sweepToForAcres(paddock, from, acres);
   if (to !== null) return Math.min(1 - from, to - from);
@@ -1927,7 +2018,7 @@ export async function fetchPlans(farmId: string): Promise<GrazingPlan[]> {
   const { data, error } = await herdSchema()
     .from("grazing_plans")
     .select(
-      "id, name, period_start, period_end, contract_number, tract_number, field_ids, long_term_goals, immediate_objectives, benchmark_stocking_rate_aum_per_acre, monitoring_cadence_kind, monitoring_cadence_value, default_dmi_pct_bw, lb_dm_per_acre_inch, target_residual_height_in, active, notes",
+      "id, name, period_start, period_end, contract_number, tract_number, field_ids, long_term_goals, immediate_objectives, benchmark_stocking_rate_aum_per_acre, monitoring_cadence_kind, monitoring_cadence_value, default_dmi_pct_bw, lb_dm_per_acre_inch, target_residual_height_in, trampling_loss_pct, fouled_area_pct, active, notes",
     )
     .eq("farm_id", farmId)
     .is("deleted_at", null)
@@ -1950,6 +2041,8 @@ export async function fetchPlans(farmId: string): Promise<GrazingPlan[]> {
     defaultDmiPctBw: num(r.default_dmi_pct_bw),
     lbDmPerAcreInch: num(r.lb_dm_per_acre_inch),
     targetResidualHeightIn: num(r.target_residual_height_in),
+    tramplingLossPct: num(r.trampling_loss_pct),
+    fouledAreaPct: num(r.fouled_area_pct),
     active: Boolean(r.active),
     notes: (r.notes as string) ?? null,
   }));
@@ -1974,6 +2067,8 @@ export interface PlanDraft {
   defaultDmiPctBw: number | null;
   lbDmPerAcreInch: number | null;
   targetResidualHeightIn: number | null;
+  tramplingLossPct: number | null;
+  fouledAreaPct: number | null;
 }
 
 const orNull = (s: string) => (s.trim() === "" ? null : s.trim());
@@ -1996,6 +2091,8 @@ export async function savePlan(farmId: string, draft: PlanDraft): Promise<string
     p_default_dmi_pct_bw: draft.defaultDmiPctBw,
     p_lb_dm_per_acre_inch: draft.lbDmPerAcreInch,
     p_target_residual_height_in: draft.targetResidualHeightIn,
+    p_trampling_loss_pct: draft.tramplingLossPct,
+    p_fouled_area_pct: draft.fouledAreaPct,
   });
   if (error) throw new Error(error.message);
   return data as string;

@@ -54,7 +54,7 @@ const strip = (
 });
 
 const ASSUMPTIONS: ForageAssumptions = {
-  standingLbDmPerAcre: 2400, utilizationPct: 50, intakePctBodyweight: 3,
+  standingLbDmPerAcre: 2400, utilizationPct: 50, intakePctBodyweight: 3, tramplingLossPct: 0, fouledAreaPct: 0,
 };
 
 describe("the round", () => {

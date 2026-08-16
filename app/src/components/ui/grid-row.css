@@ -48,3 +48,25 @@
     display: none;
   }
 }
+
+/* A row that opens something. It is a real <button>, so the browser's own
+   button styling has to be undone — left-aligned, full width, and inheriting
+   the text around it rather than the system font. */
+.grid-row--tap {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--hairline);
+  cursor: pointer;
+}
+
+.grid-row--tap.grid-row--highlight {
+  background: var(--paper-tint);
+}
+
+.grid-row--tap:hover {
+  background: var(--paper-tint);
+}

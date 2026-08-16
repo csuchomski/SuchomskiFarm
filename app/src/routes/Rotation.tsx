@@ -4,6 +4,9 @@ import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, GridRow, Pill } from "../components/ui";
 import { useWorkspace } from "../lib/workspace";
 import {
+  deleteMove,
+  deleteMoves,
+  editMove,
   fetchForageRemovals,
   fetchGrazingEvents,
   fetchPaddocks,
@@ -11,11 +14,13 @@ import {
   rotationRounds,
   type ForageRemoval,
   type GrazingEvent,
+  type MoveEdit,
   type Paddock,
   type RemovalKind,
   type Round,
   type Stay,
 } from "../lib/grazing";
+import { MoveEditor } from "../components/herd/MoveEditor";
 import "./grazing.css";
 
 /**
@@ -61,6 +66,13 @@ export default function Rotation() {
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [cutting, setCutting] = useState(false);
+
+  // Which stay is opened out into its moves, which move is being corrected,
+  // and which round has been asked to go. One at a time: two open editors on
+  // one chain is a way to save a correction against a stale neighbour.
+  const [openStay, setOpenStay] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [confirmRound, setConfirmRound] = useState<number | null>(null);
 
   const [paddockId, setPaddockId] = useState("");
   const [removedOn, setRemovedOn] = useState(today);
@@ -138,6 +150,49 @@ export default function Rotation() {
       const where = nameOf(paddockId);
       setCutting(false);
       setNote(`Recorded off ${where}. Its rest now counts from ${shortDate(removedOn)}.`);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** The last move in the mob's chain owns its own departure. */
+  const isLastInChain = (ev: GrazingEvent): boolean =>
+    load.state === "ok" &&
+    !load.events.some((e) => e.groupId === ev.groupId && e.enteredAt > ev.enteredAt);
+
+  const saveEdit = async (ev: GrazingEvent, edit: MoveEdit) => {
+    await editMove(farmId!, ev.id, edit);
+    setEditing(null);
+    setNote(`Corrected the move onto ${nameOf(edit.paddockId)}.`);
+    setError(null);
+    await refresh();
+  };
+
+  const removeMove = async (ev: GrazingEvent) => {
+    await deleteMove(farmId!, ev.id);
+    setEditing(null);
+    setNote(
+      ev.exitedAt === null
+        ? "Deleted. They are back where they came from."
+        : `Deleted the move onto ${nameOf(ev.paddockId)}.`,
+    );
+    setError(null);
+    await refresh();
+  };
+
+  const removeRound = async (round: Round) => {
+    setBusy(true);
+    setError(null);
+    setNote(null);
+    try {
+      const ids = round.stays.flatMap((s) => s.events.map((e) => e.id));
+      const n = await deleteMoves(farmId!, ids);
+      setConfirmRound(null);
+      setOpenStay(null);
+      setNote(`Round ${round.index} deleted — ${n} move${n === 1 ? "" : "s"} off the record.`);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -322,36 +377,116 @@ export default function Rotation() {
                 <span className="text-right hide-sm">Days</span>
               </GridRow>
 
-              {round.stays.map((stay) => (
-                <GridRow
-                  key={stay.enteredAt + stay.paddockId}
-                  cols={COLS}
-                  mobileCols={COLS_SM}
-                  as="body"
-                  highlight={stay.exitedAt === null}
-                >
-                  <span style={{ minWidth: 0 }}>
-                    <span className="serif" style={{ fontSize: 17 }}>
-                      {nameOf(stay.paddockId)}
-                    </span>
-                    <br />
-                    <span style={{ fontSize: 12.5, color: "var(--ink-muted)" }}>{stayNote(stay)}</span>
-                  </span>
-                  <span className="mono" style={{ fontSize: 15 }}>
-                    {stay.restBeforeDays === null ? (
-                      <span style={{ color: "var(--ink-faint)" }}>first time</span>
-                    ) : (
-                      `${stay.restBeforeDays} day${stay.restBeforeDays === 1 ? "" : "s"}`
+              {round.stays.map((stay) => {
+                const key = stay.enteredAt + stay.paddockId;
+                const open = openStay === key;
+                return (
+                  <div key={key}>
+                    <GridRow
+                      cols={COLS}
+                      mobileCols={COLS_SM}
+                      as="body"
+                      highlight={stay.exitedAt === null}
+                      onClick={() => {
+                        setOpenStay(open ? null : key);
+                        setEditing(null);
+                      }}
+                    >
+                      <span style={{ minWidth: 0 }}>
+                        <span className="serif" style={{ fontSize: 17 }}>
+                          {nameOf(stay.paddockId)}
+                        </span>
+                        <span className="rot-open" aria-hidden="true">
+                          {open ? "▾" : "▸"}
+                        </span>
+                        <br />
+                        <span style={{ fontSize: 12.5, color: "var(--ink-muted)" }}>{stayNote(stay)}</span>
+                      </span>
+                      <span className="mono" style={{ fontSize: 15 }}>
+                        {stay.restBeforeDays === null ? (
+                          <span style={{ color: "var(--ink-faint)" }}>first time</span>
+                        ) : (
+                          `${stay.restBeforeDays} day${stay.restBeforeDays === 1 ? "" : "s"}`
+                        )}
+                      </span>
+                      <span className="mono hide-sm" style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+                        {spanLabel(stay.enteredAt, stay.exitedAt)}
+                      </span>
+                      <span className="mono text-right hide-sm" style={{ fontSize: 15 }}>
+                        {stay.days}
+                      </span>
+                    </GridRow>
+
+                    {/* The moves the stay is made of. A stay is a summary; a
+                        correction has to land on the move that was actually
+                        logged, so this is where editing lives. */}
+                    {open && (
+                      <div className="rot-moves">
+                        {stay.events.map((ev) =>
+                          editing === ev.id ? (
+                            <MoveEditor
+                              key={ev.id}
+                              event={ev}
+                              events={load.events}
+                              paddocks={load.paddocks}
+                              isLast={isLastInChain(ev)}
+                              onSave={(edit) => saveEdit(ev, edit)}
+                              onDelete={() => removeMove(ev)}
+                              onCancel={() => setEditing(null)}
+                            />
+                          ) : (
+                            <div key={ev.id} className="rot-move">
+                              <span className="mono rot-move__when">{stamp(ev.enteredAt)}</span>
+                              <span className="rot-move__what">{moveNote(ev)}</span>
+                              <button
+                                type="button"
+                                className="rot-move__edit"
+                                onClick={() => setEditing(ev.id)}
+                              >
+                                Edit
+                              </button>
+                            </div>
+                          ),
+                        )}
+                      </div>
                     )}
-                  </span>
-                  <span className="mono hide-sm" style={{ fontSize: 13, color: "var(--ink-muted)" }}>
-                    {spanLabel(stay.enteredAt, stay.exitedAt)}
-                  </span>
-                  <span className="mono text-right hide-sm" style={{ fontSize: 15 }}>
-                    {stay.days}
-                  </span>
-                </GridRow>
-              ))}
+                  </div>
+                );
+              })}
+
+              {/* Under the round rather than beside its name. Taking a whole
+                  round off the record is a rare thing next to correcting one
+                  move, and it should not sit where the eye lands first or
+                  where a thumb reaching for the first row can catch it. */}
+              {confirmRound === round.index ? (
+                <div className="rot-confirm">
+                  <p className="grz-warn" style={{ margin: "0 0 10px" }}>
+                    A round is not a thing of its own — it is the moves that make it up. Deleting it
+                    takes all {round.stays.reduce((n, s) => n + s.events.length, 0)} of them off the
+                    record{round.endedAt === null ? ", and puts the mob back where they stood before it began" : ""}.
+                    Cuttings are not touched.
+                  </p>
+                  <div className="grz-form__actions">
+                    <Button disabled={busy} onClick={() => setConfirmRound(null)}>
+                      Keep it
+                    </Button>
+                    <Button variant="filled" disabled={busy} onClick={() => removeRound(round)}>
+                      {busy ? "Deleting…" : `Delete round ${round.index}`}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rot-round__foot">
+                  <button
+                    type="button"
+                    className="rot-round__del"
+                    disabled={busy}
+                    onClick={() => setConfirmRound(round.index)}
+                  >
+                    Delete round {round.index}
+                  </button>
+                </div>
+              )}
 
               {/* Cuttings sit with the round they fell in, because the reason
                   to show them here is that they explain a rest figure that
@@ -386,6 +521,26 @@ export default function Rotation() {
       )}
     </OpsShell>
   );
+}
+
+/** A move's own line in the opened-out stay: the wire, the grass, the head. */
+function moveNote(ev: GrazingEvent): string {
+  const parts: string[] = [];
+  if (ev.sweptFrom !== null && ev.sweptTo !== null) {
+    parts.push(`wire ${Math.round(ev.sweptFrom * 100)}→${Math.round(ev.sweptTo * 100)}%`);
+  }
+  if (ev.forageHeightInEntry !== null) parts.push(`in at ${ev.forageHeightInEntry}"`);
+  if (ev.residualHeightInExit !== null) parts.push(`off at ${ev.residualHeightInExit}"`);
+  if (ev.headCount !== null) parts.push(`${ev.headCount} head`);
+  if (ev.exitedAt === null) parts.push("still on it");
+  return parts.length === 0 ? "no detail recorded" : parts.join(" · ");
+}
+
+/** Day and time, which is the resolution a wire move happens at. */
+function stamp(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  });
 }
 
 /** What made up the stay: how many wire moves, and how much ground. */

@@ -1120,6 +1120,95 @@ export async function endGrazing(
   if (error) throw new Error(error.message);
 }
 
+/** What a move can be corrected to. `exitedAt` is only accepted on the last
+ * move in the chain — anywhere else the departure is the next move's arrival,
+ * and the function says so rather than letting the two disagree. */
+export interface MoveEdit {
+  paddockId: string;
+  enteredAt: string;
+  exitedAt: string | null;
+  headCount: number | null;
+  avgWeightLb: number | null;
+  forageHeightInEntry: number | null;
+  residualHeightInExit: number | null;
+  utilizationPct: number | null;
+  soilMoisture: SoilMoisture | null;
+  notes: string;
+  sweptFrom: number | null;
+  sweptTo: number | null;
+}
+
+/**
+ * Correct a move that was logged wrong.
+ *
+ * An RPC for the same reason logging one is: a move is a boundary shared with
+ * the move before it, and both sides have to move together or the record
+ * tears — see migration 047.
+ */
+export async function editMove(farmId: string, eventId: string, edit: MoveEdit): Promise<void> {
+  const { error } = await herdSchema().rpc("edit_grazing_move", {
+    p_farm_id: farmId,
+    p_event_id: eventId,
+    p_paddock_id: edit.paddockId,
+    p_entered_at: edit.enteredAt,
+    p_exited_at: edit.exitedAt,
+    p_head_count: edit.headCount,
+    p_avg_weight_lb: edit.avgWeightLb,
+    p_forage_height_in_entry: edit.forageHeightInEntry,
+    p_residual_height_in_exit: edit.residualHeightInExit,
+    p_utilization_pct: edit.utilizationPct,
+    p_soil_moisture: edit.soilMoisture,
+    p_notes: edit.notes,
+    p_swept_from: edit.sweptFrom,
+    p_swept_to: edit.sweptTo,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Take a move out of the record. Deleting the one they are standing in puts
+ * them back where they came from; deleting a closed one leaves the gap. */
+export async function deleteMove(farmId: string, eventId: string): Promise<void> {
+  const { error } = await herdSchema().rpc("delete_grazing_move", {
+    p_farm_id: farmId,
+    p_event_id: eventId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** A whole round. There is no rotations table — a round is the moves that
+ * make it up, so deleting one is deleting those. Returns how many went. */
+export async function deleteMoves(farmId: string, eventIds: string[]): Promise<number> {
+  const { data, error } = await herdSchema().rpc("delete_grazing_moves", {
+    p_farm_id: farmId,
+    p_event_ids: eventIds,
+  });
+  if (error) throw new Error(error.message);
+  return (data as number) ?? 0;
+}
+
+/**
+ * What deleting this move will do to the record, in words, before it is done.
+ *
+ * The repair is not the same for every move, and which one applies is not
+ * obvious from looking at a row — so it is said out loud on the button rather
+ * than discovered afterwards.
+ */
+export function deleteEffect(event: GrazingEvent, events: GrazingEvent[]): string {
+  const mine = events.filter((e) => e.groupId === event.groupId);
+  const prev = mine
+    .filter((e) => e.enteredAt < event.enteredAt)
+    .sort((a, b) => b.enteredAt.localeCompare(a.enteredAt))[0];
+
+  if (event.exitedAt === null) {
+    return prev === undefined
+      ? "This is the only move on the record. The mob will be off pasture until the next one is logged."
+      : "They are standing here now, so this puts them back where they came from — the move out never happened.";
+  }
+  return prev === undefined
+    ? "This move leaves the record entirely."
+    : "This move leaves the record. Nothing stretches to cover it, so the record will show a gap where it was.";
+}
+
 /** Fill in what the last move said, so the common case is one tap and a
  * paddock. Nothing here is a measurement — it is the previous reading, and
  * the form lets it be corrected. */

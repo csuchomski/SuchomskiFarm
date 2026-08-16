@@ -26,6 +26,7 @@ export function GridRow({
   padded = true,
   style,
   className = "",
+  onClick,
 }: {
   cols: string;
   mobileCols?: string;
@@ -35,12 +36,17 @@ export function GridRow({
   padded?: boolean;
   style?: CSSProperties;
   className?: string;
+  /** Makes the row a real button, so it can be tabbed to and pressed with a
+   * keyboard. A click handler on the div would leave it reachable by mouse
+   * only. */
+  onClick?: () => void;
 }) {
   const classes = [
     "grid-row",
     as === "header" ? "grid-row--header eyebrow" : "",
     as === "body" && padded ? "grid-row--body" : "",
     highlight ? "grid-row--highlight" : "",
+    onClick ? "grid-row--tap" : "",
     className,
   ]
     .filter(Boolean)
@@ -52,6 +58,14 @@ export function GridRow({
     "--grid-cols": cols,
     "--grid-cols-sm": mobileCols ?? cols,
   } as CSSProperties;
+
+  if (onClick) {
+    return (
+      <button type="button" className={classes} style={{ ...vars, ...style }} onClick={onClick}>
+        {children}
+      </button>
+    );
+  }
 
   return (
     <div className={classes} style={{ ...vars, ...style }}>

@@ -1,0 +1,80 @@
+/* ── Starting a farm ──────────────────────────────────────────────────────
+   The first screen of the app for somebody who is not yet a customer of it,
+   so it gets room rather than the density the working pages want. */
+
+.start-farm {
+  max-width: 34rem;
+  padding: 32px 8px 48px;
+}
+
+.start-farm__title {
+  font-size: 34px;
+  letter-spacing: -.01em;
+  margin: 4px 0 12px;
+}
+
+.start-farm__lede {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  max-width: 60ch;
+  margin: 0 0 24px;
+}
+
+.start-farm__field {
+  display: block;
+}
+
+.start-farm__field .eyebrow {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.start-farm__field input {
+  width: 100%;
+  /* 16px or Safari zooms the page on focus, which on the first screen of the
+     app reads as the thing being broken. */
+  font-size: 16px;
+  padding: 12px;
+  min-height: 44px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  color: var(--ink);
+}
+
+.start-farm__foot {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  max-width: 60ch;
+  margin: 28px 0 0;
+}
+
+@media (max-width: 640px) {
+  .start-farm { padding: 24px 4px 40px; }
+  .start-farm__title { font-size: 27px; }
+}
+
+/* Its own page rather than a page inside the app: there is no business yet,
+   so the shell has nothing true to put in its top bar or its rail. */
+.start-farm-page {
+  min-height: 100vh;
+  background: var(--page);
+  display: flex;
+  justify-content: center;
+  padding: 0 16px;
+}
+
+.start-farm__out {
+  display: block;
+  margin-top: 32px;
+  padding: 12px 4px;
+  font: 500 13px/1 "IBM Plex Sans", sans-serif;
+  color: var(--ink-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.start-farm__out:hover { color: var(--ink); }

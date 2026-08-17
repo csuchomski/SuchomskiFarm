@@ -31,6 +31,10 @@ export interface WorkspaceState {
   userId: string | null;
   migrated: boolean;
   setBusinessId: (id: number) => void;
+  /** Load it all again. For the one moment the workspace changes underneath
+   * the app rather than because the session did — starting a farm, which
+   * turns "a member of nothing" into a workspace without any sign-in. */
+  reload: () => void;
 }
 
 /** Used until business_type_modules exists. Mirrors what migration 004 seeds. */
@@ -59,7 +63,7 @@ export const missingRelation = (message: string) =>
   /does not exist|schema cache|not find the table|relation .* does not exist/i.test(message);
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<Omit<WorkspaceState, "setBusinessId">>({
+  const [state, setState] = useState<Omit<WorkspaceState, "setBusinessId" | "reload">>({
     loading: true,
     error: null,
     businesses: [],
@@ -79,6 +83,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, String(id));
     setSelectedId(id);
   }, []);
+
+  // Bumping this re-runs the loader. A counter rather than a flag, so two
+  // reloads in a row are two reloads.
+  const [nonce, setNonce] = useState(0);
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
 
   /**
    * The workspace follows the session rather than asking for it once.
@@ -158,9 +167,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [selectedId, userId, authLoading]);
+  }, [selectedId, userId, authLoading, nonce]);
 
-  const value = useMemo<WorkspaceState>(() => ({ ...state, setBusinessId }), [state, setBusinessId]);
+  const value = useMemo<WorkspaceState>(
+    () => ({ ...state, setBusinessId, reload }),
+    [state, setBusinessId, reload],
+  );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }
@@ -222,7 +234,30 @@ async function loadMembership(userId: string): Promise<Membership> {
   };
 }
 
+/**
+ * What this business has, most specific first.
+ *
+ * `business_modules` is the entitlement itself — what *this* business was
+ * granted, which is the row a subscription would write. `business_type_modules`
+ * is what a business of this kind starts with, and is the answer for anything
+ * created before 049. The built-in map is the last resort, for a database that
+ * has neither table yet.
+ *
+ * The order matters in one direction that is easy to get backwards: a business
+ * with an entitlement row must never have the type map widen it. Somebody
+ * paying for herd alone would otherwise get the store back by virtue of being
+ * a farm — which is the whole thing 049 exists to stop. So a non-empty answer
+ * from `business_modules` is final.
+ */
 async function loadModules(business: Business): Promise<string[]> {
+  const own = await supabase.from("business_modules").select("module_code").eq("business_id", business.id);
+  if (!own.error) {
+    const codes = (own.data ?? []).map((r) => (r as { module_code: string }).module_code);
+    if (codes.length > 0) return codes;
+  } else if (!missingRelation(own.error.message)) {
+    throw new Error(`business_modules: ${own.error.message}`);
+  }
+
   const res = await supabase.from("business_type_modules").select("module_code").eq("type_code", business.type);
   if (!res.error) {
     const codes = (res.data ?? []).map((r) => (r as { module_code: string }).module_code);

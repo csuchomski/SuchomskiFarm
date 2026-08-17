@@ -52,3 +52,21 @@
     padding-top: 12vh;
   }
 }
+
+/* Switching between signing in and starting a farm. A button rather than a
+   link — it changes the form in place and goes nowhere. */
+.sign-in-switch {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px 4px;
+  font: 500 13px/1 "IBM Plex Sans", sans-serif;
+  color: var(--ink-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.sign-in-switch:hover { color: var(--ink); }

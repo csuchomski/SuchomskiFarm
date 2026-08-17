@@ -260,8 +260,12 @@ describe("hay on the record", () => {
 
 describe("getting back", () => {
   it("links to the board, since the daily job is there", async () => {
+    // The board is a tab now rather than a page of its own, so the link
+    // carries which tab to open. Asserting the whole href rather than the
+    // path keeps that honest — a link to the page with no tab lands on the
+    // report, which is not where "the board" means.
     await mount();
     const back = screen.getByText("← the board");
-    expect(back.getAttribute("href")).toBe("/grazing");
+    expect(back.getAttribute("href")).toBe("/grazing/records?tab=paddocks");
   });
 });

@@ -246,7 +246,7 @@ export default function GrazingPlan() {
         title={active ? active.name : "Grazing plan"}
         actions={
           <>
-            <Link to="/grazing" className="rot-back mono">← the board</Link>
+            <Link to="/grazing/records?tab=paddocks" className="rot-back mono">← the board</Link>
             {active && (
               <Button onClick={() => (editing && startingNew ? setEditing(false) : openEdit(true))}>
                 {editing && startingNew ? "Cancel" : "Start a new plan"}

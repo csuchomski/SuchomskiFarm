@@ -146,3 +146,36 @@
   font-size: 21px;
   margin: 0;
 }
+
+/* ── Printing ─────────────────────────────────────────────────────────────
+   The shell is navigation, and navigation on paper is ink spent on nothing.
+
+   This is not a fix — it was already happening. `books-taxes.css` carries a
+   print block that hides `.topbar` and `.ops-shell__body > *:not(.ops-shell__main)`,
+   and since every stylesheet is bundled together that rule has been dressing
+   every printed page in the app, including the payment record. Measured
+   before and after adding this: no difference, because the rail was already
+   going.
+
+   It stays anyway, because the arrangement it replaces is a trap. A page
+   that prints correctly only for as long as the *tax* stylesheet exists, by
+   way of a structural selector that assumes the shell's DOM shape, is one
+   refactor away from posting a nav rail to a conservationist. Naming the
+   elements here, in the stylesheet that owns them, is what the behaviour
+   should have depended on all along. */
+@media print {
+  .topbar,
+  .rail,
+  .ops-shell__scrim {
+    display: none !important;
+  }
+
+  .ops-shell,
+  .ops-shell__body {
+    display: block;
+  }
+
+  .ops-shell__main {
+    padding: 0;
+  }
+}

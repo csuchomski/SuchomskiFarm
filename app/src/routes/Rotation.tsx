@@ -214,7 +214,7 @@ export default function Rotation() {
         title="Rotation"
         actions={
           <>
-            <Link to="/grazing" className="rot-back mono">
+            <Link to="/grazing/records?tab=paddocks" className="rot-back mono">
               ← the board
             </Link>
             <Button

@@ -17,6 +17,7 @@ import RotationPage from "./routes/Rotation";
 import GrazingPlanPage from "./routes/GrazingPlan";
 import GrazingRecordPage from "./routes/GrazingRecord";
 import MovePage from "./routes/Move";
+import GrazingRecordsPage from "./routes/GrazingRecords";
 import MobsPage from "./routes/Mobs";
 import PaymentRecordPage from "./routes/PaymentRecord";
 import CalvingsPage from "./routes/Calvings";
@@ -68,6 +69,7 @@ export default function App() {
                 <Route path="/depreciation" element={<DepreciationPage />} />
                 <Route path="/grazing" element={<GrazingPage />} />
                 <Route path="/grazing/move" element={<MovePage />} />
+                <Route path="/grazing/records" element={<GrazingRecordsPage />} />
                 <Route path="/grazing/mobs" element={<MobsPage />} />
                 <Route path="/grazing/rotation" element={<RotationPage />} />
                 <Route path="/grazing/plan" element={<GrazingPlanPage />} />

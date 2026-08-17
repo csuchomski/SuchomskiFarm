@@ -54,22 +54,22 @@ export const allGroups: NavGroup[] = [
      * unreachable. `moduleForPath` keeps returning "herd" for these paths, so
      * route gating is exactly what it was.
      *
-     * Ordered by the day rather than by the standard: the move first, then
-     * where things stand, then the season, then the plan and the record.
+     * Two items, because there are two things: the day's work, and the
+     * record it leaves. Paddocks, Mobs, Rotation and the payment record were
+     * four separate stops to reach the one that gets printed, so they are
+     * tabs on one page now.
+     *
+     * Plan and Record are still routed and still work — a bookmark to either
+     * opens as it always did. They are off the rail because nothing on this
+     * farm is done from them, and a nav is a list of what you use rather
+     * than a list of what exists.
      */
     module: "herd",
     heading: "Grazing",
     items: [
       { label: "Move", to: "/grazing/move" },
-      // Named for what it lists. It was "Grazing", which inside a section
-      // called Grazing said nothing.
-      { label: "Paddocks", to: "/grazing" },
-      { label: "Mobs", to: "/grazing/mobs" },
-      { label: "Rotation", to: "/grazing/rotation" },
-      { label: "Plan", to: "/grazing/plan" },
-      { label: "Record", to: "/grazing/record" },
-      // The conservationist's form, filled from the moves, for a date range.
-      { label: "Payment record", to: "/grazing/payment-record" },
+      // The form, the rounds behind it, the ground and the mob — one page.
+      { label: "Grazing records", to: "/grazing/records" },
     ],
   },
   {

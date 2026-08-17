@@ -1,0 +1,57 @@
+/* ── Grazing records: four pages under one heading ─────────────────────── */
+
+.gr-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--ink);
+  margin-top: 4px;
+  /* Four tabs fit 320px; if a fifth ever arrives they scroll rather than
+     wrap into a second row that shifts the whole page down. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.gr-tabs::-webkit-scrollbar { display: none; }
+
+.gr-tab {
+  flex: none;
+  padding: 12px 14px;
+  min-height: 44px;
+  font: 500 13px/1 "IBM Plex Sans", sans-serif;
+  letter-spacing: .03em;
+  color: var(--ink-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.gr-tab:hover { color: var(--ink); }
+
+.gr-tab--on {
+  color: var(--ink);
+  border-bottom-color: var(--herd-green);
+}
+
+.gr-hint {
+  font-size: 12.5px;
+  color: var(--ink-faint);
+  margin: 10px 2px 0;
+}
+
+/* The folded page's header stays. It looks like a repeat of the tab, and the
+   first instinct was to hide it — but the actions live in that header, so
+   hiding it takes the Print button off the report and "Record hay" off the
+   rounds. A duplicated word costs a line; a missing Print button costs the
+   page its purpose. */
+
+@media print {
+  /* Printing this page means printing what is on the open tab. The tabs
+     themselves are navigation. */
+  .gr-tabs,
+  .gr-hint {
+    display: none !important;
+  }
+}

@@ -222,7 +222,30 @@ async function loadMembership(userId: string): Promise<Membership> {
   };
 }
 
+/**
+ * What this business has, most specific first.
+ *
+ * `business_modules` is the entitlement itself — what *this* business was
+ * granted, which is the row a subscription would write. `business_type_modules`
+ * is what a business of this kind starts with, and is the answer for anything
+ * created before 049. The built-in map is the last resort, for a database that
+ * has neither table yet.
+ *
+ * The order matters in one direction that is easy to get backwards: a business
+ * with an entitlement row must never have the type map widen it. Somebody
+ * paying for herd alone would otherwise get the store back by virtue of being
+ * a farm — which is the whole thing 049 exists to stop. So a non-empty answer
+ * from `business_modules` is final.
+ */
 async function loadModules(business: Business): Promise<string[]> {
+  const own = await supabase.from("business_modules").select("module_code").eq("business_id", business.id);
+  if (!own.error) {
+    const codes = (own.data ?? []).map((r) => (r as { module_code: string }).module_code);
+    if (codes.length > 0) return codes;
+  } else if (!missingRelation(own.error.message)) {
+    throw new Error(`business_modules: ${own.error.message}`);
+  }
+
   const res = await supabase.from("business_type_modules").select("module_code").eq("type_code", business.type);
   if (!res.error) {
     const codes = (res.data ?? []).map((r) => (r as { module_code: string }).module_code);

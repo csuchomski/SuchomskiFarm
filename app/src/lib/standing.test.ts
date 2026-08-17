@@ -27,6 +27,7 @@ const unit = (n: number, over: Partial<Paddock> = {}): Paddock => {
   return {
     id: `p${n}`, name, code: `P${n}`,
     acresMeasured: REAL_ACRES[name] ?? 1, acresGrazable: REAL_ACRES[name] ?? 1,
+    pastureId: null,
     unitType: "permanent",
     sweepHeadingDeg: sweep.headingDeg,
     sweepLengthFt: sweep.lengthFt,

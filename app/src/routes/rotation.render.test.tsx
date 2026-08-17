@@ -33,6 +33,7 @@ const paddock = (n: number): Paddock => ({
   code: `P${n}`,
   acresMeasured: 1.91,
   acresGrazable: 1.91,
+  pastureId: null,
   unitType: "permanent",
   sweepHeadingDeg: n === 5 ? 0 : n % 2 === 0 ? 90 : 270,
   sweepLengthFt: 400, rotationOrder: null,

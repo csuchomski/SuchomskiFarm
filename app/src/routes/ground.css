@@ -1,0 +1,291 @@
+/* Settings → Ground. The form styles come from grazing.css; what is here is
+   the pasture-and-its-paddocks shape, which nothing else has. */
+
+.gnd-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 16px 0 20px;
+}
+
+.gnd-pasture {
+  margin-top: 28px;
+}
+
+/* The rule sits above the name, so a pasture reads as a heading with its
+   ground under it rather than as one more row in a list. */
+.gnd-pasture__head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--ink-faint);
+  padding: 12px 0 10px;
+}
+
+.gnd-pasture__name {
+  font-size: 22px;
+  font-weight: 400;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.gnd-pasture__sub {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin: 4px 0 0;
+}
+
+.gnd-pasture__notes {
+  font-size: 13px;
+  color: var(--ink-faint);
+  margin: 4px 0 0;
+  max-width: 60ch;
+}
+
+.gnd-pasture__acts,
+.gnd-row-acts {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Row actions sit under the name in a grid cell, where the 14px gap above is
+   too tight to hit with a thumb. */
+.gnd-row-acts .link-button {
+  min-height: 32px;
+}
+
+.gnd-danger {
+  color: var(--red);
+}
+
+.gnd-code {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.gnd-dim {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.gnd-quiet {
+  font-size: 14px;
+  color: var(--ink-muted);
+  padding: 16px 8px;
+}
+
+.gnd-error {
+  font-size: 13px;
+  color: var(--red);
+  padding: 12px 0;
+}
+
+.gnd-note {
+  font-size: 13px;
+  color: var(--herd-green);
+  padding: 12px 0;
+}
+
+/* What the server said when it refused to remove ground with history on it,
+   and the way out. Ochre: a warning about the record, not a failure. */
+.gnd-stuck {
+  border-left: 2px solid var(--ochre);
+  background: var(--paper-tint);
+  padding: 12px 14px;
+  margin: 2px 0 10px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.gnd-stuck p {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 60ch;
+}
+
+.gnd-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  font-size: 14px;
+  min-height: 44px;
+}
+
+.gnd-check input {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  accent-color: var(--herd-green);
+}
+
+@media (max-width: 640px) {
+  .gnd-pasture__acts {
+    gap: 16px;
+  }
+
+  .gnd-stuck {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* The two columns GridRow drops on a phone, said under the name instead.
+   The strip setup is the reason to open this page from the gateway, so
+   losing it below 640px would be losing the point of the row. */
+.gnd-onsmall {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .gnd-onsmall {
+    display: block;
+    font-size: 12.5px;
+    margin-top: 2px;
+  }
+}
+
+/* ── importing from a drawn file ─────────────────────────────────────── */
+
+.kml-lede {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 12px;
+  max-width: 68ch;
+  line-height: 1.5;
+}
+
+.kml-lede code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.kml-file {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.kml-file input {
+  font: 400 14px/1.4 "IBM Plex Sans", sans-serif;
+  color: var(--ink);
+  padding: 10px 0;
+  min-height: 44px;
+}
+
+/* Names come out of the file and are usually wrong for a paddock list —
+   "Untitled Polygon", or the whole farm's name on every shape. Editable in
+   place, because retyping five of them elsewhere is the same work twice. */
+.kml-name {
+  width: 100%;
+  /* A name is a few words. Left to fill the cell it ran 700px on a desktop,
+     which reads as a text area rather than a label. */
+  max-width: 34ch;
+  min-height: 36px;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 15px/1.2 "IBM Plex Serif", Georgia, serif;
+  padding: 0 8px;
+}
+
+.kml-name:disabled {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink-faint);
+  text-decoration: line-through;
+}
+
+.kml-order {
+  width: 64px;
+  min-height: 36px;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 14px/1 "IBM Plex Mono", monospace;
+  padding: 0 8px;
+}
+
+.kml-meta {
+  display: block;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  margin-top: 3px;
+}
+
+.kml-measure {
+  font-size: 14px;
+}
+
+.kml-tally {
+  font-size: 14px;
+  color: var(--ink-soft);
+  padding: 14px 0 4px;
+  border-top: 1px solid var(--hairline);
+  margin-top: 8px;
+}
+
+/* The role picker rides in the name cell, which is the one cell no screen
+   width drops — a review with its only control hidden is not a review. */
+.kml-role {
+  margin-top: 6px;
+  min-height: 36px;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 14px/1 "IBM Plex Sans", sans-serif;
+  padding: 0 8px;
+  max-width: 100%;
+}
+
+@media (max-width: 640px) {
+  .kml-role,
+  .kml-name {
+    font-size: 16px;
+  }
+
+  .kml-role {
+    width: 100%;
+    min-height: 44px;
+  }
+}
+
+/* Names that repeat. Ochre: the import will be refused for it, but nothing is
+   wrong yet — it is a thing to fix, not a failure. */
+.kml-warn {
+  font-size: 13px;
+  color: var(--ochre);
+  border-left: 2px solid var(--ochre);
+  padding: 8px 12px;
+  margin: 4px 0 0;
+  max-width: 68ch;
+}
+
+/* The two decisions per row — what it is, and which way the wire runs — side
+   by side where there is room and stacked where there is not. */
+.kml-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .kml-picks {
+    display: block;
+  }
+
+  .kml-picks .kml-role + .kml-role {
+    margin-top: 6px;
+  }
+}

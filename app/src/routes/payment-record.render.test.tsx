@@ -34,6 +34,7 @@ const unit = (n: number): Paddock => {
   return {
     id: `p${n}`, name, code: `P${n}`,
     acresMeasured: REAL_ACRES[name], acresGrazable: REAL_ACRES[name],
+    pastureId: null,
     unitType: "permanent",
     sweepHeadingDeg: REAL_SWEEP[name].headingDeg,
     sweepLengthFt: REAL_SWEEP[name].lengthFt,

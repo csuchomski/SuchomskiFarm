@@ -1,5 +1,5 @@
 import { herdSchema } from "./supabase";
-import { asPolygonRing, frameFor, sliceAcres, toLocal } from "./pasture-map";
+import { asPolygonRing, frameFor, sliceAcres, sweepLengthFt, toLocal } from "./pasture-map";
 
 /**
  * Grazing management — the types and reads. Migration 036.
@@ -34,9 +34,35 @@ import { asPolygonRing, frameFor, sliceAcres, toLocal } from "./pasture-map";
  * are both real management units, and neither has a fence on the map. */
 export type PaddockUnitType = "permanent" | "temporary" | "virtual";
 
+/**
+ * A piece of land. Migration 052.
+ *
+ * The level between the farm and the paddock: the home place, the rented
+ * forty. A farm with one block never needed it; a farm with two has no other
+ * way to say which block a paddock is on.
+ *
+ * `acres` is what the deed says, and is deliberately not the sum of its
+ * paddocks' acres — that sum is what is fenced and grazable, and the
+ * difference between the two is the lane, the woods and the pond.
+ */
+export interface Pasture {
+  id: string;
+  name: string;
+  code: string | null;
+  acres: number | null;
+  notes: string | null;
+  active: boolean;
+  /** GeoJSON as stored, unparsed. Written by the KML import (053), never by
+   *  the edit form — see the migration for why they are kept apart. */
+  boundary: unknown | null;
+}
+
 export interface Paddock {
   id: string;
   name: string;
+  /** Which piece of land it is on. Null for a paddock recorded before
+   * pastures existed — shown as unassigned rather than guessed at. */
+  pastureId: string | null;
   code: string | null;
   acresMeasured: number | null;
   acresGrazable: number | null;
@@ -524,7 +550,7 @@ export async function fetchPaddocks(farmId: string): Promise<Paddock[]> {
   const { data, error } = await herdSchema()
     .from("paddocks")
     .select(
-      "id, name, code, acres_measured, acres_grazable, unit_type, sweep_heading_deg, sweep_length_ft, rotation_order, seeding_date, fence_type, ecological_site, soil_map_unit, noxious_species, noxious_extent, sensitive_riparian, sensitive_wetland, sensitive_habitat, sensitive_karst, sensitive_high_erosion, heavy_use_notes, boundary, active, notes",
+      "id, name, pasture_id, code, acres_measured, acres_grazable, unit_type, sweep_heading_deg, sweep_length_ft, rotation_order, seeding_date, fence_type, ecological_site, soil_map_unit, noxious_species, noxious_extent, sensitive_riparian, sensitive_wetland, sensitive_habitat, sensitive_karst, sensitive_high_erosion, heavy_use_notes, boundary, active, notes",
     )
     .eq("farm_id", farmId)
     .is("deleted_at", null)
@@ -534,6 +560,7 @@ export async function fetchPaddocks(farmId: string): Promise<Paddock[]> {
   return (data ?? []).map((r: Record<string, unknown>) => ({
     id: r.id as string,
     name: r.name as string,
+    pastureId: (r.pasture_id as string) ?? null,
     code: (r.code as string) ?? null,
     acresMeasured: num(r.acres_measured),
     acresGrazable: num(r.acres_grazable),
@@ -558,6 +585,26 @@ export async function fetchPaddocks(farmId: string): Promise<Paddock[]> {
     boundary: r.boundary ?? null,
     active: Boolean(r.active),
     notes: (r.notes as string) ?? null,
+  }));
+}
+
+export async function fetchPastures(farmId: string): Promise<Pasture[]> {
+  const { data, error } = await herdSchema()
+    .from("pastures")
+    .select("id, name, code, acres, notes, active, boundary")
+    .eq("farm_id", farmId)
+    .is("deleted_at", null)
+    .order("name");
+  if (error) throw new Error(`herd.pastures: ${error.message}`);
+
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    name: r.name as string,
+    code: (r.code as string) ?? null,
+    acres: num(r.acres),
+    notes: (r.notes as string) ?? null,
+    active: Boolean(r.active),
+    boundary: r.boundary ?? null,
   }));
 }
 
@@ -1185,6 +1232,125 @@ export async function deleteMove(farmId: string, eventId: string): Promise<void>
   if (error) throw new Error(error.message);
 }
 
+// ─── the ground itself ─────────────────────────────────────────────────
+//
+// Adding and editing land, as against recording what happened on it. All
+// four go through RPCs (migration 052) rather than table writes, because the
+// rules are not things a form can be trusted to keep: which farm a pasture
+// belongs to, that a name is not already taken, and above all that ground the
+// herd has been on is retired rather than removed.
+
+export interface PastureEdit {
+  name: string;
+  code: string | null;
+  acres: number | null;
+  notes: string | null;
+  active: boolean;
+}
+
+/** Add one when `id` is null, change it when it isn't. Returns its id. */
+export async function savePasture(
+  farmId: string,
+  id: string | null,
+  edit: PastureEdit,
+): Promise<string> {
+  const { data, error } = await herdSchema().rpc("save_pasture", {
+    p_farm_id: farmId,
+    p_id: id,
+    p_name: edit.name,
+    p_code: edit.code,
+    p_acres: edit.acres,
+    p_notes: edit.notes,
+    p_active: edit.active,
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+/** Refuses while it still holds paddocks, and says how many. */
+export async function deletePasture(farmId: string, id: string): Promise<void> {
+  const { error } = await herdSchema().rpc("delete_pasture", { p_farm_id: farmId, p_id: id });
+  if (error) throw new Error(error.message);
+}
+
+export interface PaddockEdit {
+  name: string;
+  pastureId: string | null;
+  code: string | null;
+  acresMeasured: number | null;
+  acresGrazable: number | null;
+  unitType: PaddockUnitType;
+  rotationOrder: number | null;
+  /** A heading is what makes it strippable — see `isSwept`. */
+  sweepHeadingDeg: number | null;
+  sweepLengthFt: number | null;
+  fenceType: string | null;
+  notes: string | null;
+  active: boolean;
+}
+
+export async function savePaddock(
+  farmId: string,
+  id: string | null,
+  edit: PaddockEdit,
+): Promise<string> {
+  const { data, error } = await herdSchema().rpc("save_paddock", {
+    p_farm_id: farmId,
+    p_id: id,
+    p_name: edit.name,
+    p_pasture_id: edit.pastureId,
+    p_code: edit.code,
+    p_acres_measured: edit.acresMeasured,
+    p_acres_grazable: edit.acresGrazable,
+    p_unit_type: edit.unitType,
+    p_rotation_order: edit.rotationOrder,
+    p_sweep_heading_deg: edit.sweepHeadingDeg,
+    p_sweep_length_ft: edit.sweepLengthFt,
+    p_fence_type: edit.fenceType,
+    p_notes: edit.notes,
+    p_active: edit.active,
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+/**
+ * A pasture and its paddocks from a drawn file, in one transaction.
+ *
+ * All or nothing (migration 053). A name clash on the last paddock leaves the
+ * farm exactly as it was, rather than half a map and an error message.
+ *
+ * `payload` is built by `toPayload` in lib/kml.ts from the choices confirmed
+ * on the review screen — the client never sends what the file said, only what
+ * somebody looked at and agreed to.
+ */
+export async function importGround(
+  farmId: string,
+  payload: unknown,
+): Promise<{ pastureId: string; paddocks: number }> {
+  const { data, error } = await herdSchema().rpc("import_ground", {
+    p_farm_id: farmId,
+    p_payload: payload,
+  });
+  if (error) throw new Error(error.message);
+  const out = (data ?? {}) as { pastureId?: string; paddocks?: number };
+  return { pastureId: out.pastureId ?? "", paddocks: out.paddocks ?? 0 };
+}
+
+/**
+ * Remove a paddock outright.
+ *
+ * Only possible while nothing has been recorded on it. Once the herd has been
+ * there the moves name it, and the payment record prints that name against
+ * every strip — so the server refuses, and the answer is to retire it
+ * (`active: false`) instead, which takes it off the board and out of the
+ * rotation while the record still reads back.
+ */
+export async function deletePaddock(farmId: string, id: string): Promise<void> {
+  const { error } = await herdSchema().rpc("delete_paddock", { p_farm_id: farmId, p_id: id });
+  if (error) throw new Error(error.message);
+}
+
 /** A whole round. There is no rotations table — a round is the moves that
  * make it up, so deleting one is deleting those. Returns how many went. */
 export async function deleteMoves(farmId: string, eventIds: string[]): Promise<number> {
@@ -1246,6 +1412,25 @@ export function prefillFrom(
 // query, so strips from different passes may overlap however they like —
 // which is the case the old paddock-with-a-rest-clock model could not hold.
 
+/**
+ * The eight directions a wire is actually said to run.
+ *
+ * Shared, so the picker on Settings → Ground and the one on the KML review
+ * offer the same words for the same thing. A heading already on file that is
+ * not one of these — measured off a drawing, as this farm's were — is kept
+ * exactly as it is rather than rounded to the nearest.
+ */
+export const SWEEP_HEADINGS: { deg: number; label: string }[] = [
+  { deg: 0, label: "north" },
+  { deg: 45, label: "north-east" },
+  { deg: 90, label: "east" },
+  { deg: 135, label: "south-east" },
+  { deg: 180, label: "south" },
+  { deg: 225, label: "south-west" },
+  { deg: 270, label: "west" },
+  { deg: 315, label: "north-west" },
+];
+
 /** Which way the mob advances, in words, for a heading in degrees. */
 export function sweepInWords(headingDeg: number | null): string | null {
   if (headingDeg === null) return null;
@@ -1286,6 +1471,18 @@ export function stripAcres(event: GrazingEvent, paddock: Paddock): number | null
   if (drawn !== null) return drawn;
 
   return acres === null ? null : (event.sweptTo - event.sweptFrom) * acres;
+}
+
+/**
+ * How far across a paddock is along a heading, measured off its own boundary.
+ *
+ * The Ground form used to ask for this by hand, which meant typing a figure
+ * the drawing already knew — and typing it again every time the direction
+ * changed. Null when there is nothing drawn to measure.
+ */
+export function drawnSweepLengthFt(paddock: Paddock, headingDeg: number): number | null {
+  const ring = asPolygonRing(paddock.boundary);
+  return ring === null ? null : sweepLengthFt(ring, headingDeg);
 }
 
 /**

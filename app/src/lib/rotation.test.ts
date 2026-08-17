@@ -29,6 +29,7 @@ const paddock = (id: string, name: string, swept: boolean): Paddock => ({
   code: name.replace("Paddock ", "P"),
   acresMeasured: 1.91,
   acresGrazable: 1.91,
+  pastureId: null,
   unitType: "permanent",
   sweepHeadingDeg: swept ? 270 : null,
   sweepLengthFt: swept ? 400 : null, rotationOrder: null,

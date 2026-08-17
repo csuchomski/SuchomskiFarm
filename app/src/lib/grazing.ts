@@ -1,5 +1,5 @@
 import { herdSchema } from "./supabase";
-import { asPolygonRing, frameFor, sliceAcres, toLocal } from "./pasture-map";
+import { asPolygonRing, frameFor, sliceAcres, sweepLengthFt, toLocal } from "./pasture-map";
 
 /**
  * Grazing management — the types and reads. Migration 036.
@@ -1412,6 +1412,25 @@ export function prefillFrom(
 // query, so strips from different passes may overlap however they like —
 // which is the case the old paddock-with-a-rest-clock model could not hold.
 
+/**
+ * The eight directions a wire is actually said to run.
+ *
+ * Shared, so the picker on Settings → Ground and the one on the KML review
+ * offer the same words for the same thing. A heading already on file that is
+ * not one of these — measured off a drawing, as this farm's were — is kept
+ * exactly as it is rather than rounded to the nearest.
+ */
+export const SWEEP_HEADINGS: { deg: number; label: string }[] = [
+  { deg: 0, label: "north" },
+  { deg: 45, label: "north-east" },
+  { deg: 90, label: "east" },
+  { deg: 135, label: "south-east" },
+  { deg: 180, label: "south" },
+  { deg: 225, label: "south-west" },
+  { deg: 270, label: "west" },
+  { deg: 315, label: "north-west" },
+];
+
 /** Which way the mob advances, in words, for a heading in degrees. */
 export function sweepInWords(headingDeg: number | null): string | null {
   if (headingDeg === null) return null;
@@ -1452,6 +1471,18 @@ export function stripAcres(event: GrazingEvent, paddock: Paddock): number | null
   if (drawn !== null) return drawn;
 
   return acres === null ? null : (event.sweptTo - event.sweptFrom) * acres;
+}
+
+/**
+ * How far across a paddock is along a heading, measured off its own boundary.
+ *
+ * The Ground form used to ask for this by hand, which meant typing a figure
+ * the drawing already knew — and typing it again every time the direction
+ * changed. Null when there is nothing drawn to measure.
+ */
+export function drawnSweepLengthFt(paddock: Paddock, headingDeg: number): number | null {
+  const ring = asPolygonRing(paddock.boundary);
+  return ring === null ? null : sweepLengthFt(ring, headingDeg);
 }
 
 /**

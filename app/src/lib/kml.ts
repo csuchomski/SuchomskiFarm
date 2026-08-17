@@ -3,6 +3,8 @@ import {
   ringAcres,
   ringCentre,
   ringEncloses,
+  sweepExtent,
+  sweepLengthFt,
   toLocal,
   type Local,
   type LonLat,
@@ -239,6 +241,84 @@ export function parseKml(text: string): KmlShape[] {
   return shapes;
 }
 
+// ─── the strip axis ────────────────────────────────────────────────────
+
+/**
+ * How far it is across a shape along a given heading, in feet.
+ *
+ * This is `sweep_length_ft`, and it is not a guess: given a direction, the
+ * extent of the drawn shape along it is a measurement. 040 set this by hand
+ * for all five units; once the direction is picked here, the drawing answers
+ * it. On an irregular unit it is the widest line across rather than a
+ * constant, which is the right precision for its only job — telling somebody
+ * at the gate roughly how far in the wire sits.
+ */
+export function sweepLengthFtAlong(shape: KmlShape, headingDeg: number): number | null {
+  return shape.kind === "polygon" ? sweepLengthFt(shape.points, headingDeg) : null;
+}
+
+export interface LongAxis {
+  /** The two headings along it — the same line, walked either way. */
+  deg: number;
+  oppositeDeg: number;
+  lengthFt: number;
+}
+
+/**
+ * The direction the shape is longest in.
+ *
+ * A strip-grazed unit is nearly always swept **along** its long axis, so the
+ * wire stays short and the strip stays wide — every one of this farm's five
+ * is. That much is geometry, and worth saying.
+ *
+ * **Found as the perpendicular of the narrowest width, not as the widest
+ * projection.** Those are not the same thing, and taking the second is a
+ * mistake that survives every rectangle you test it on by looking plausible:
+ * a 420 × 200 unit projects 438 ft onto its own diagonal, more than the 420
+ * along its long side, so the widest projection points across the corner. It
+ * reported this farm's east–west units as running north-east to south-west.
+ * The narrow direction has no such trap — a shape is narrowest across its
+ * short side — and the long axis is square to it.
+ *
+ * What it deliberately does not do is pick between the two ends of that axis.
+ * East-to-west and west-to-east are the same line; which one you walk depends
+ * on where the gate is and what the unit before it was, and no amount of
+ * looking at the polygon reveals it. So this reports the axis, and the two
+ * headings on it, and the choice stays with the farmer.
+ */
+export function longAxis(shape: KmlShape): LongAxis | null {
+  if (shape.kind !== "polygon") return null;
+  const local = localRing(shape.points);
+  if (local === null) return null;
+
+  // Extent is symmetric about 180°, so half a turn covers every distinct
+  // direction. One degree is finer than this could ever need to be.
+  let narrowest: { deg: number; span: number } | null = null;
+  for (let deg = 0; deg < 180; deg++) {
+    const extent = sweepExtent(local, deg);
+    if (extent === null) continue;
+    const span = extent.max - extent.min;
+    if (narrowest === null || span < narrowest.span) narrowest = { deg, span };
+  }
+  if (narrowest === null) return null;
+
+  const deg = (narrowest.deg + 90) % 180;
+  const along = sweepExtent(local, deg);
+  if (along === null) return null;
+
+  return {
+    deg,
+    oppositeDeg: (deg + 180) % 360,
+    lengthFt: (along.max - along.min) * FEET_PER_METRE,
+  };
+}
+
+/** The nearest of the eight, for describing an axis in words. Used only to
+ *  *say* which way a shape runs — never to set a heading. */
+export function nearestCompassDeg(headingDeg: number): number {
+  return (Math.round((((headingDeg % 360) + 360) % 360) / 45) % 8) * 45;
+}
+
 // ─── what to do with what was found ────────────────────────────────────
 
 export type Role = "pasture" | "paddock" | "skip";
@@ -315,6 +395,11 @@ export interface ImportRow {
   name: string;
   /** Only meaningful on paddocks: their place in the round. */
   rotationOrder: number | null;
+  /** Which way the wire advances across it, or null for taken whole. Asked
+   *  on the review rather than left for afterwards: without it the unit
+   *  draws on the map but has no wire, and its strip acreage falls back to a
+   *  flat fraction of the whole. */
+  sweepHeadingDeg: number | null;
 }
 
 export interface ImportPayload {
@@ -351,7 +436,10 @@ const round3 = (n: number): number => Math.round(n * 1000) / 1000;
  * Filling it in from the drawing would be the app asserting something it
  * cannot see.
  *
- * **No sweep heading.** Which way the wire advances is how the farm is walked.
+ * **The sweep heading comes from the review, and `sweepLengthFt` follows from
+ * it.** The direction is a decision somebody makes; how far it is across the
+ * shape in that direction is then a measurement, so it is taken off the
+ * drawing rather than asked for twice.
  */
 export function toPayload(input: {
   rows: ImportRow[];
@@ -405,14 +493,21 @@ export function toPayload(input: {
       notes: null,
       boundary: pasture?.shape.geo ?? null,
     },
-    paddocks: paddocks.map((p) => ({
-      name: p.name.trim(),
-      acresMeasured: p.shape.acres === null ? null : round3(p.shape.acres),
-      acresGrazable: null,
-      sweepHeadingDeg: null,
-      sweepLengthFt: null,
-      rotationOrder: p.rotationOrder,
-      boundary: p.shape.geo,
-    })),
+    paddocks: paddocks.map((p) => {
+      const across =
+        p.sweepHeadingDeg === null ? null : sweepLengthFtAlong(p.shape, p.sweepHeadingDeg);
+      return {
+        name: p.name.trim(),
+        acresMeasured: p.shape.acres === null ? null : round3(p.shape.acres),
+        acresGrazable: null,
+        sweepHeadingDeg: p.sweepHeadingDeg,
+        // Whole feet: it is a bounding extent used to say "the wire is about
+        // 120 ft in", and a decimal on it would claim a precision the shape
+        // does not have.
+        sweepLengthFt: across === null ? null : Math.round(across),
+        rotationOrder: p.rotationOrder,
+        boundary: p.shape.geo,
+      };
+    }),
   };
 }

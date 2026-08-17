@@ -290,6 +290,7 @@ export function localToLonLat(frame: Frame, p: Local): LonLat {
 }
 
 const SQ_FT_PER_ACRE = 43_560;
+const FT_PER_M = 3.280839895;
 const SQ_M_PER_ACRE = 4046.8564224;
 
 /**
@@ -335,6 +336,23 @@ export function sliceAcres(
 ): number | null {
   const slice = sweepSlice(ring, headingDeg, from, to);
   return slice === null ? null : ringAcres(slice);
+}
+
+/**
+ * How far it is across a ring along a heading, in feet.
+ *
+ * This is `sweep_length_ft`. Given a direction it is a measurement, not a
+ * guess — 040 set it by hand for all five of this farm's units, and anything
+ * with a drawn boundary can now be asked instead. On an irregular unit it is
+ * the widest line across rather than a constant, which is the right precision
+ * for its only job: telling somebody at the gate roughly how far in the wire
+ * sits.
+ */
+export function sweepLengthFt(ring: LonLat[], headingDeg: number): number | null {
+  const frame = frameFor(ring);
+  if (frame === null) return null;
+  const extent = sweepExtent(ring.map((p) => toLocal(frame, p)), headingDeg);
+  return extent === null ? null : (extent.max - extent.min) * FT_PER_M;
 }
 
 /** Square feet, for a figure small enough that acres read as nothing. */

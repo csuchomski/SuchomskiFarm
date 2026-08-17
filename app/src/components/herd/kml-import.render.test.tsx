@@ -232,6 +232,76 @@ describe("when it will not go", () => {
   });
 });
 
+describe("which way the strips run", () => {
+  it("asks per paddock, on the review, rather than leaving it for afterwards", async () => {
+    // Without it the unit draws on the map but has no wire on Move, prints no
+    // strips on the payment record, and its strip acreage falls back to a
+    // flat fraction — the thing migration 040 showed was up to 94% wrong.
+    await mount();
+    await drop(FARM);
+    expect(screen.getByLabelText("Which way strips run on Untitled Polygon")).toBeTruthy();
+  });
+
+  it("asks it of paddocks only", async () => {
+    await mount();
+    await drop(FARM);
+    expect(screen.queryByLabelText("Which way strips run on Farm perimeter")).toBeNull();
+    expect(screen.queryByLabelText("Which way strips run on Interior fence")).toBeNull();
+  });
+
+  it("picks nothing by itself, because the drawing cannot know which gate you use", async () => {
+    await mount();
+    await drop(FARM);
+    const pick = screen.getByLabelText("Which way strips run on Untitled Polygon") as HTMLSelectElement;
+    expect(pick.value).toBe("");
+    expect(within(pick).getByText("Not stripped — taken whole")).toBeTruthy();
+  });
+
+  it("says which way the shape is longest, which is geometry and worth knowing", async () => {
+    await mount();
+    await drop(FARM);
+    expect(row("Untitled Polygon").textContent).toMatch(/longest .+–.+, \d+ ft/);
+  });
+
+  it("measures across from the drawing once a direction is picked", async () => {
+    await mount();
+    await drop(FARM);
+    fireEvent.change(screen.getByLabelText("Which way strips run on Untitled Polygon"), {
+      target: { value: "270" },
+    });
+    expect(row("Untitled Polygon").textContent).toContain("ft across, off the drawing");
+
+    fireEvent.click(screen.getByRole("button", { name: "Import this ground" }));
+    await waitFor(() => expect(importGround).toHaveBeenCalled());
+    const paddock = payload().paddocks[0] as unknown as {
+      sweepHeadingDeg: number | null;
+      sweepLengthFt: number | null;
+    };
+    expect(paddock.sweepHeadingDeg).toBe(270);
+    expect(paddock.sweepLengthFt).toBeGreaterThan(0);
+  });
+
+  it("sends a paddock left whole with no heading and no distance", async () => {
+    await mount();
+    await drop(FARM);
+    fireEvent.click(screen.getByRole("button", { name: "Import this ground" }));
+    await waitFor(() => expect(importGround).toHaveBeenCalled());
+    const paddock = payload().paddocks[0] as unknown as {
+      sweepHeadingDeg: number | null;
+      sweepLengthFt: number | null;
+    };
+    expect(paddock.sweepHeadingDeg).toBeNull();
+    expect(paddock.sweepLengthFt).toBeNull();
+  });
+
+  it("drops the question when a row stops being a paddock", async () => {
+    await mount();
+    await drop(FARM);
+    fireEvent.change(screen.getByLabelText("What Untitled Polygon is"), { target: { value: "skip" } });
+    expect(screen.queryByLabelText("Which way strips run on Untitled Polygon")).toBeNull();
+  });
+});
+
 describe("names that repeat", () => {
   it("says so while the names are still on screen, not after Import is pressed", async () => {
     // Google Earth names everything "Untitled Polygon". A file of five fields

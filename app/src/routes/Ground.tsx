@@ -5,10 +5,12 @@ import { useWorkspace } from "../lib/workspace";
 import {
   deletePaddock,
   deletePasture,
+  drawnSweepLengthFt,
   fetchPaddocks,
   fetchPastures,
   savePaddock,
   savePasture,
+  SWEEP_HEADINGS,
   type Paddock,
   type PaddockUnitType,
   type Pasture,
@@ -49,18 +51,8 @@ type Load =
 const PADDOCK_COLS = "minmax(0, 1fr) 96px 140px 118px";
 const PADDOCK_COLS_SM = "minmax(0, 1fr) 96px";
 
-/** The eight a farmer would actually say. An exact heading already on file is
- *  kept as its own option rather than rounded to the nearest of these. */
-const COMPASS: { deg: number; label: string }[] = [
-  { deg: 0, label: "north" },
-  { deg: 45, label: "north-east" },
-  { deg: 90, label: "east" },
-  { deg: 135, label: "south-east" },
-  { deg: 180, label: "south" },
-  { deg: 225, label: "south-west" },
-  { deg: 270, label: "west" },
-  { deg: 315, label: "north-west" },
-];
+/** Shared with the KML review, so both pickers say the same words. */
+const COMPASS = SWEEP_HEADINGS;
 
 const UNIT_TYPES: { value: PaddockUnitType; label: string }[] = [
   { value: "permanent", label: "Permanent fence" },
@@ -108,6 +100,9 @@ interface PastureForm {
 
 interface PaddockForm {
   id: string | null;
+  /** The row this was opened from, kept for its boundary — the drawing is
+   *  what answers "how far across", once a direction is picked. */
+  drawn: Paddock | null;
   pastureId: string;
   name: string;
   code: string;
@@ -127,7 +122,7 @@ const blankPasture = (): PastureForm => ({
 });
 
 const blankPaddock = (pastureId: string): PaddockForm => ({
-  id: null, pastureId, name: "", code: "", acresMeasured: "", acresGrazable: "",
+  id: null, drawn: null, pastureId, name: "", code: "", acresMeasured: "", acresGrazable: "",
   unitType: "permanent", rotationOrder: "", sweepHeadingDeg: "", sweepLengthFt: "",
   fenceType: "", notes: "", active: true,
 });
@@ -282,6 +277,7 @@ export default function Ground() {
   const startEditPaddock = (p: Paddock) => {
     setPaddockForm({
       id: p.id,
+      drawn: p,
       pastureId: p.pastureId ?? "",
       name: p.name,
       code: p.code ?? "",
@@ -874,7 +870,22 @@ function PaddockEditor({
           <span className="eyebrow">Strips run</span>
           <select
             value={form.sweepHeadingDeg}
-            onChange={(e) => set("sweepHeadingDeg", e.target.value)}
+            onChange={(e) => {
+              const deg = e.target.value;
+              // The drawing already knows how far across it is in that
+              // direction. Filled in only when the box is empty, so a figure
+              // somebody measured with a wheel is never overwritten.
+              const measured =
+                deg === "" || form.drawn === null ? null : drawnSweepLengthFt(form.drawn, Number(deg));
+              onChange({
+                ...form,
+                sweepHeadingDeg: deg,
+                sweepLengthFt:
+                  form.sweepLengthFt.trim() === "" && measured !== null
+                    ? String(Math.round(measured))
+                    : form.sweepLengthFt,
+              });
+            }}
             aria-label="Strips run"
           >
             <option value="">Not stripped — taken whole</option>
@@ -908,8 +919,11 @@ function PaddockEditor({
       </div>
       <p className="grz-optional">
         The heading is the way the wire advances across this paddock, and it is what makes strips possible here at
-        all — the Move page offers a wire position on a paddock that has one. Feet across lets it say how far in the
-        wire is; without it the same move is recorded as a share of the paddock instead.
+        all — the Move page offers a wire position on a paddock that has one, prints its strips on the payment
+        record, and measures their acres off the boundary instead of as a flat share of the whole.
+        {form.drawn?.boundary != null
+          ? " This paddock is drawn, so the feet across are measured from it as soon as you pick a direction."
+          : " Feet across lets it say how far in the wire is; without it the same move is recorded as a share of the paddock instead."}
       </p>
 
       <div className="grz-form__row">

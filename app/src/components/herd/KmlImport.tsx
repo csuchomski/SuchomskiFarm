@@ -2,14 +2,17 @@ import { useState } from "react";
 import { Button, Callout, GridRow, Pill } from "../ui";
 import {
   KmlError,
+  longAxis,
+  nearestCompassDeg,
   parseKml,
   proposeGround,
+  sweepLengthFtAlong,
   toPayload,
   type ImportRow,
   type KmlShape,
   type Role,
 } from "../../lib/kml";
-import { importGround, type Pasture } from "../../lib/grazing";
+import { importGround, SWEEP_HEADINGS, type Pasture } from "../../lib/grazing";
 
 /**
  * Setting up a pasture from a drawn file.
@@ -58,6 +61,24 @@ const kindLabel: Record<KmlShape["kind"], string> = {
   point: "marker",
 };
 
+const compassName = (deg: number): string =>
+  SWEEP_HEADINGS.find((h) => h.deg === nearestCompassDeg(deg))?.label ?? `${deg}°`;
+
+/**
+ * Which way the shape runs, in words, for the line under the picker.
+ *
+ * The axis is geometry and worth saying — a unit is nearly always swept along
+ * its long side, so the wire stays short. Which *end* of that axis you start
+ * from is not in the drawing, so both are offered and neither is chosen.
+ */
+const axisNote = (shape: KmlShape): string | null => {
+  const axis = longAxis(shape);
+  if (axis === null) return null;
+  const a = compassName(axis.deg);
+  const b = compassName(axis.oppositeDeg);
+  return `longest ${a}–${b}, ${Math.round(axis.lengthFt)} ft`;
+};
+
 export function KmlImport({
   farmId,
   pastures,
@@ -87,6 +108,9 @@ export function KmlImport({
         role: proposal[i].role,
         name: s.name,
         rotationOrder: null,
+        // Not pre-picked. See `longAxis`: the drawing knows which way the
+        // unit is longest, and nothing about which end the gate is at.
+        sweepHeadingDeg: null,
       }));
       const pasture = rows.find((r) => r.role === "pasture");
       setPastureName(pasture?.name ?? "");
@@ -295,18 +319,53 @@ export function KmlImport({
                 picker hidden is not a review. One control, not one per
                 breakpoint: two selects with the same label is two controls
                 to a screen reader however the CSS hides them. */}
-            <select
-              className="kml-role"
-              value={r.role}
-              onChange={(e) => setRow(r.shape.id, { role: e.target.value as Role })}
-              aria-label={`What ${r.shape.name} is`}
-            >
-              {ROLES.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            <span className="kml-picks">
+              <select
+                className="kml-role"
+                value={r.role}
+                onChange={(e) => setRow(r.shape.id, { role: e.target.value as Role })}
+                aria-label={`What ${r.shape.name} is`}
+              >
+                {ROLES.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+
+              {/* Asked here rather than left for afterwards. Without it the
+                  unit draws on the map but has no wire on Move, prints no
+                  strips on the payment record, and its strip acreage falls
+                  back to a flat fraction of the whole — which measured up to
+                  94% wrong on this farm's own tapering unit. */}
+              {r.role === "paddock" && (
+                <select
+                  className="kml-role"
+                  value={r.sweepHeadingDeg === null ? "" : String(r.sweepHeadingDeg)}
+                  onChange={(e) =>
+                    setRow(r.shape.id, {
+                      sweepHeadingDeg: e.target.value === "" ? null : Number(e.target.value),
+                    })
+                  }
+                  aria-label={`Which way strips run on ${r.shape.name}`}
+                >
+                  <option value="">Not stripped — taken whole</option>
+                  {SWEEP_HEADINGS.map((h) => (
+                    <option key={h.deg} value={String(h.deg)}>
+                      {`strips toward the ${h.label}`}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </span>
+
+            {r.role === "paddock" && (
+              <span className="kml-meta">
+                {r.sweepHeadingDeg === null
+                  ? (axisNote(r.shape) ?? "")
+                  : `${Math.round(sweepLengthFtAlong(r.shape, r.sweepHeadingDeg) ?? 0)} ft across, off the drawing`}
+              </span>
+            )}
           </span>
 
           <span className="mono text-right kml-measure">{measure(r.shape)}</span>

@@ -270,3 +270,22 @@
   margin: 4px 0 0;
   max-width: 68ch;
 }
+
+/* The two decisions per row — what it is, and which way the wire runs — side
+   by side where there is room and stacked where there is not. */
+.kml-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .kml-picks {
+    display: block;
+  }
+
+  .kml-picks .kml-role + .kml-role {
+    margin-top: 6px;
+  }
+}

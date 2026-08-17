@@ -329,3 +329,51 @@ describe("where it lives", () => {
     expect(src).toContain('to="/settings?tab=ground"');
   });
 });
+
+describe("the strip direction, on a paddock that is drawn", () => {
+  /** Paddock 1's real ring, from migration 044 — 533 ft across east–west. */
+  const RING = {
+    type: "Polygon",
+    coordinates: [[
+      [-88.41291314, 42.87833348], [-88.41299683, 42.87876087], [-88.41331173, 42.87882226],
+      [-88.41412428, 42.87883078], [-88.41463922, 42.87873318], [-88.41489766, 42.87874084],
+      [-88.41491083, 42.87833348], [-88.41291314, 42.87833348],
+    ]],
+  };
+
+  it("measures the feet across off the boundary when a direction is picked", async () => {
+    paddocks = [paddock({ id: "drawn", name: "Drawn one", pastureId: "home", boundary: RING })];
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "edit Drawn one" }));
+    fireEvent.change(screen.getByLabelText("Strips run"), { target: { value: "270" } });
+    // 044 measured 533 ft along due west, by hand, off this same ring.
+    const across = Number((screen.getByLabelText("Feet across") as HTMLInputElement).value);
+    expect(across).toBeGreaterThan(520);
+    expect(across).toBeLessThan(545);
+  });
+
+  it("never overwrites a figure somebody measured with a wheel", async () => {
+    paddocks = [
+      paddock({ id: "drawn", name: "Drawn one", pastureId: "home", boundary: RING, sweepLengthFt: 400 }),
+    ];
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "edit Drawn one" }));
+    fireEvent.change(screen.getByLabelText("Strips run"), { target: { value: "270" } });
+    expect((screen.getByLabelText("Feet across") as HTMLInputElement).value).toBe("400");
+  });
+
+  it("leaves it to be typed when there is nothing drawn to measure", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "edit Paddock 2" }));
+    fireEvent.change(screen.getByLabelText("Strips run"), { target: { value: "90" } });
+    expect((screen.getByLabelText("Feet across") as HTMLInputElement).value).toBe("");
+    expect(screen.getByText(/without it the same move is recorded as a share/)).toBeTruthy();
+  });
+
+  it("says the drawing will answer it, on a paddock that has one", async () => {
+    paddocks = [paddock({ id: "drawn", name: "Drawn one", pastureId: "home", boundary: RING })];
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "edit Drawn one" }));
+    expect(screen.getByText(/measured from it as soon as you pick a direction/)).toBeTruthy();
+  });
+});

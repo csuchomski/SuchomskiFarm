@@ -1,6 +1,16 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { KmlError, parseCoordinates, parseKml, proposeGround, toPayload, type ImportRow } from "./kml";
+import {
+  KmlError,
+  longAxis,
+  nearestCompassDeg,
+  parseCoordinates,
+  parseKml,
+  proposeGround,
+  sweepLengthFtAlong,
+  toPayload,
+  type ImportRow,
+} from "./kml";
 
 /**
  * Reading a drawn file.
@@ -300,6 +310,7 @@ describe("what gets sent", () => {
       role: proposal[i].role,
       name: s.name,
       rotationOrder: null,
+      sweepHeadingDeg: null,
       ...over[i],
     }));
   };
@@ -323,10 +334,36 @@ describe("what gets sent", () => {
     expect(out.paddocks[0].acresGrazable).toBeNull();
   });
 
-  it("guesses no sweep heading, because that is how the farm is walked", () => {
+  it("leaves the heading unset when the review did not pick one", () => {
     const out = toPayload({ rows: rowsFor(), existingPastureId: null, pastureName: "" });
     if ("error" in out) throw new Error(out.error);
     expect(out.paddocks.every((p) => p.sweepHeadingDeg === null)).toBe(true);
+    expect(out.paddocks.every((p) => p.sweepLengthFt === null)).toBe(true);
+  });
+
+  it("carries a picked heading, and measures the distance across from the drawing", () => {
+    const rows = rowsFor([{}, { sweepHeadingDeg: 270 }]);
+    const out = toPayload({ rows, existingPastureId: null, pastureName: "" });
+    if ("error" in out) throw new Error(out.error);
+    expect(out.paddocks[0].sweepHeadingDeg).toBe(270);
+    // 044 recorded Paddock 1 as 533 ft across, measured by hand off the same
+    // ring. The direction is the farmer's; the distance is the drawing's.
+    expect(out.paddocks[0].sweepLengthFt).toBeGreaterThan(520);
+    expect(out.paddocks[0].sweepLengthFt).toBeLessThan(545);
+  });
+
+  it("measures across in whole feet, not to the millimetre", () => {
+    const rows = rowsFor([{}, { sweepHeadingDeg: 90 }]);
+    const out = toPayload({ rows, existingPastureId: null, pastureName: "" });
+    if ("error" in out) throw new Error(out.error);
+    expect(Number.isInteger(out.paddocks[0].sweepLengthFt)).toBe(true);
+  });
+
+  it("measures the same distance either way along the same axis", () => {
+    const east = toPayload({ rows: rowsFor([{}, { sweepHeadingDeg: 90 }]), existingPastureId: null, pastureName: "" });
+    const west = toPayload({ rows: rowsFor([{}, { sweepHeadingDeg: 270 }]), existingPastureId: null, pastureName: "" });
+    if ("error" in east || "error" in west) throw new Error("payload");
+    expect(east.paddocks[0].sweepLengthFt).toBe(west.paddocks[0].sweepLengthFt);
   });
 
   it("rounds acres to the thousandth rather than shipping float noise", () => {
@@ -370,5 +407,73 @@ describe("what gets sent", () => {
     const rows = rowsFor([{}, { name: "Same" }, { name: "same" }]);
     const out = toPayload({ rows, existingPastureId: null, pastureName: "" });
     expect("error" in out && out.error).toContain("Two paddocks are both called Same");
+  });
+});
+
+describe("the axis a shape is longest in", () => {
+  const shapeNamed = (n: string) => parseKml(FARM).find((s) => s.name === n)!;
+
+  it("finds the long axis of a unit swept east–west", () => {
+    const p1 = shapeNamed("Paddock 1");
+    const axis = longAxis(p1)!;
+    expect(nearestCompassDeg(axis.deg) % 180).toBe(90);
+    // 044 measured 533 ft across it along due west, by hand, off this ring.
+    expect(axis.lengthFt).toBeGreaterThan(520);
+    expect(axis.lengthFt).toBeLessThan(560);
+  });
+
+  it("does not point across the corner of a rectangle", () => {
+    // The trap this replaced: a 420 × 200 unit projects 438 ft onto its own
+    // diagonal — more than the 420 along its long side — so "the widest
+    // projection" points north-east on a field that plainly runs east–west.
+    // Every one of this farm's near-rectangular units was reported that way.
+    const box = kml(
+      polygon("Box", [
+        "-88.41335974,42.87778163", "-88.41335974,42.87833348",
+        "-88.41491083,42.87833348", "-88.41492868,42.87778163",
+        "-88.41335974,42.87778163",
+      ].join(" ")),
+    );
+    const axis = longAxis(parseKml(box)[0])!;
+    expect(nearestCompassDeg(axis.deg) % 180).toBe(90);
+  });
+
+  it("reports the distance across along the axis it names", () => {
+    for (const name of ["Paddock 1", "Paddock 2", "Paddock 4", "Farm perimeter"]) {
+      const shape = shapeNamed(name);
+      const axis = longAxis(shape)!;
+      expect(`${name}: ${axis.lengthFt.toFixed(1)}`).toBe(
+        `${name}: ${sweepLengthFtAlong(shape, axis.deg)!.toFixed(1)}`,
+      );
+    }
+  });
+
+  it("names an axis at least as long as the shape is across its narrow way", () => {
+    for (const name of ["Paddock 1", "Paddock 2", "Paddock 4"]) {
+      const shape = shapeNamed(name);
+      const axis = longAxis(shape)!;
+      const across = sweepLengthFtAlong(shape, (axis.deg + 90) % 180)!;
+      expect(`${name} long >= narrow`).toBe(
+        axis.lengthFt >= across ? `${name} long >= narrow` : `${name} got it backwards`,
+      );
+    }
+  });
+
+  it("offers both ends of it, because the drawing cannot say which gate you use", () => {
+    const axis = longAxis(shapeNamed("Paddock 1"))!;
+    expect(Math.abs(axis.oppositeDeg - axis.deg)).toBe(180);
+  });
+
+  it("measures across a shape along whatever heading it is given", () => {
+    const p1 = shapeNamed("Paddock 1");
+    const across = sweepLengthFtAlong(p1, 270)!;
+    const along = sweepLengthFtAlong(p1, 0)!;
+    // Wider east–west than north–south, which is what makes it a sweep unit.
+    expect(across).toBeGreaterThan(along);
+  });
+
+  it("has nothing to say about a line or a marker", () => {
+    expect(longAxis(shapeNamed("Interior fence"))).toBeNull();
+    expect(sweepLengthFtAlong(shapeNamed("Water tank"), 90)).toBeNull();
   });
 });

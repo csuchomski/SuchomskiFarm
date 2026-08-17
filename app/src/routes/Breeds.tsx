@@ -199,7 +199,7 @@ export default function Breeds() {
 
           <div style={{ margin: "12px 0" }}>
             <Callout>
-              Due dates on <Link to="/breedings">Breedings</Link> count forward from the service by the gestation of
+              Due dates on <Link to="/breeding?tab=breedings">Breedings</Link> count forward from the service by the gestation of
               the dam's breed — weighted across her composition if she's a cross. Setting a figure here changes it for
               this farm only; the breed's own default is left alone.
             </Callout>

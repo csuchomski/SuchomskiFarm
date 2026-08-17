@@ -59,6 +59,16 @@
   flex: 1;
 }
 
+/* Settings belongs to no section, and directly under the last item of Books
+   it read as though it were one — the flex spacer above collapses to nothing
+   whenever the rail is taller than the window, which on this farm is always.
+   A rule of its own says "not part of that" at any height. */
+.rail__detached {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+
 .rail__footer-link {
   padding: 12px 16px;
   font-size: 13px;

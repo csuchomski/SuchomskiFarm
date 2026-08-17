@@ -151,7 +151,7 @@ export default function Genetics() {
 
           {sires.length === 0 && (
             <Callout>
-              No sires on file. Add one from <Link to="/sires">Sires</Link> — an AI bull you only buy straws from
+              No sires on file. Add one from <Link to="/breeding">Sires</Link> — an AI bull you only buy straws from
               counts, and only needs a name and a birth date.
             </Callout>
           )}

@@ -1,4 +1,6 @@
-/* ── Grazing records: four pages under one heading ─────────────────────── */
+/* ── Several pages under one heading ───────────────────────────────────
+   Shared by every folded page: Grazing records, Animals, Milking,
+   Breeding, Settings. See TabbedSections.tsx. */
 
 .gr-tabs {
   display: flex;

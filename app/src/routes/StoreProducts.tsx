@@ -567,7 +567,7 @@ export default function StoreProducts() {
                   {lactatingCows.length === 0 ? (
                     <p style={{ fontSize: 13, color: "var(--ink-muted)" }}>
                       No cow has an open lactation, so there's nobody to attribute this milk to. Record a freshening
-                      from <Link to="/lactations">Lactations</Link> and she'll appear here.
+                      from <Link to="/milking?tab=lactations">Lactations</Link> and she'll appear here.
                     </p>
                   ) : (
                     <>

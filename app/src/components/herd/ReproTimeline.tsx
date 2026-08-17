@@ -74,7 +74,7 @@ export function ReproTimeline({
 
       {nothingYet ? (
         <Callout>
-          Nothing bred or calved for her yet. A service logged on <Link to="/breedings">Breedings</Link> starts the
+          Nothing bred or calved for her yet. A service logged on <Link to="/breeding?tab=breedings">Breedings</Link> starts the
           record; a check and a calving fill it in.
         </Callout>
       ) : (
@@ -116,7 +116,7 @@ export function ReproTimeline({
                   attach it
                 </button>
               ) : (
-                <>Attach it on <Link to="/breedings">Breedings</Link>.</>
+                <>Attach it on <Link to="/breeding?tab=breedings">Breedings</Link>.</>
               )}{" "}
               The calf's sire follows, and its breeds if both parents have them on file.
             </p>

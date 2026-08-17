@@ -821,7 +821,7 @@ export default function Breedings() {
 
           {cows.length === 0 ? (
             <Callout>
-              Nothing logged yet. Straws are added and counted on <Link to="/sires">Sires</Link>; logging a breeding
+              Nothing logged yet. Straws are added and counted on <Link to="/breeding">Sires</Link>; logging a breeding
               here is what takes one out of the tank.
             </Callout>
           ) : (

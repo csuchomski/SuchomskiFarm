@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { groupsForModules, topLevel, type NavItem } from "./nav";
+import { alerts, groupsForModules, settings, topLevel, type NavItem } from "./nav";
 import { useWorkspace } from "../../lib/workspace";
 import "./rail.css";
 
@@ -29,6 +29,9 @@ export function Rail() {
   return (
     <aside className="rail">
       <RailRow item={topLevel} />
+      {/* Beside Today rather than inside Herd: both answer "what does today
+          need", which is a different question from what a subject holds. */}
+      <RailRow item={alerts} />
 
       {loading && (
         <div className="eyebrow rail__heading" style={{ color: "var(--ink-faint)" }}>
@@ -46,6 +49,11 @@ export function Rail() {
       ))}
 
       <div className="rail__spacer" />
+      {/* After the sections and before the shop link — configuration is not
+          a subject you work in, so it does not belong among them. */}
+      <div className="rail__detached">
+        <RailRow item={settings} />
+      </div>
       <NavLink to="/shop" className="rail__footer-link">
         Farm store ↗
       </NavLink>

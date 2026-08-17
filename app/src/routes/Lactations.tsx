@@ -228,7 +228,7 @@ export default function Lactations() {
                 ? `${beefFemales[0].barn_name ?? `Tag ${beefFemales[0].ear_tag}`} is a beef cow and isn't counted here`
                 : `${beefFemales.length} beef females aren't counted here`}{" "}
               — they raise their calves rather than being milked. Their calvings are on{" "}
-              <Link to="/calvings">Calvings</Link>, and each one's breeding record is on her own page. Change a cow's
+              <Link to="/breeding?tab=calvings">Calvings</Link>, and each one's breeding record is on her own page. Change a cow's
               purpose on her record if that's wrong.
             </p>
           )}

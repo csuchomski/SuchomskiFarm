@@ -1,6 +1,5 @@
 import { HashRouter, Route, Routes } from "react-router-dom";
 import Home from "./routes/Home";
-import Animals from "./routes/Animals";
 import AnimalRecord from "./routes/AnimalRecord";
 import Lactations from "./routes/Lactations";
 import Milkings from "./routes/Milkings";
@@ -18,6 +17,10 @@ import GrazingPlanPage from "./routes/GrazingPlan";
 import GrazingRecordPage from "./routes/GrazingRecord";
 import MovePage from "./routes/Move";
 import GrazingRecordsPage from "./routes/GrazingRecords";
+import AnimalsPage from "./routes/AnimalsPage";
+import MilkingPage from "./routes/MilkingPage";
+import BreedingPage from "./routes/BreedingPage";
+import SettingsPage from "./routes/Settings";
 import MobsPage from "./routes/Mobs";
 import PaymentRecordPage from "./routes/PaymentRecord";
 import CalvingsPage from "./routes/Calvings";
@@ -52,13 +55,18 @@ export default function App() {
               {/* One adaptive home: farm businesses get Today, everything
                   else gets Overview. See routes/Home.tsx. */}
               <Route path="/" element={<Home />} />
+              {/* Signed in but not module-gated: settings are the reference
+                  data any business configures, herd or not. */}
+              <Route path="/settings" element={<SettingsPage />} />
               {/* Everything below is module-gated — switching to a business
                   without the module bounces back to "/" rather than leaving
                   you on another business's screen. */}
               <Route element={<RequireModule />}>
                 <Route path="/alerts" element={<AlertsPage />} />
-                <Route path="/animals" element={<Animals />} />
+                <Route path="/animals" element={<AnimalsPage />} />
                 <Route path="/animals/:tag" element={<AnimalRecord />} />
+                <Route path="/milking" element={<MilkingPage />} />
+                <Route path="/breeding" element={<BreedingPage />} />
                 <Route path="/lactations" element={<Lactations />} />
                 <Route path="/milkings" element={<Milkings />} />
                 <Route path="/genetics" element={<Genetics />} />

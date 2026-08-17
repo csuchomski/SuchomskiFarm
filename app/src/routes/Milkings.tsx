@@ -204,7 +204,7 @@ export default function Milkings() {
           ) : noLactationsYet ? (
             <Callout>
               No cow has an open lactation, so there's nobody to record milk against. Record a freshening on a cow's
-              record — or from <Link to="/lactations">Lactations</Link> — and she'll appear here.
+              record — or from <Link to="/milking?tab=lactations">Lactations</Link> — and she'll appear here.
             </Callout>
           ) : milking.length === 0 ? (
             <Callout>
@@ -297,7 +297,7 @@ export default function Milkings() {
           {modules.includes("store") && (
             <p style={{ fontSize: 13, color: "var(--ink-muted)", paddingTop: 24 }}>
               Milk recorded here appears in <Link to="/store/products">Store → Products</Link>, and counts toward each
-              cow's lactation on <Link to="/lactations">Lactations</Link>.
+              cow's lactation on <Link to="/milking?tab=lactations">Lactations</Link>.
             </p>
           )}
         </>

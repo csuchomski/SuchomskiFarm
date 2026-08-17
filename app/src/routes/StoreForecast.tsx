@@ -193,7 +193,7 @@ export default function StoreForecast() {
                 <Callout>
                   Nothing has been added to stock for {product.name} in the last fortnight, so there's no production
                   rate to project from. This shows what happens if nothing more comes in. Record milkings on{" "}
-                  <Link to="/milkings">Milkings</Link>, or set a weekly figure on the product.
+                  <Link to="/milking">Milkings</Link>, or set a weekly figure on the product.
                 </Callout>
               )}
 

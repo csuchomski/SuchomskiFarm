@@ -249,7 +249,7 @@ export default function AnimalRecord() {
               nothing, because it used to be here and this is where you'd
               look. */}
           <p style={{ fontSize: 13, color: "var(--ink-muted)", marginBottom: 16 }}>
-            Her services, seasons and due dates are on <Link to="/breedings">Breedings</Link>.
+            Her services, seasons and due dates are on <Link to="/breeding?tab=breedings">Breedings</Link>.
           </p>
 
           {breeds.length > 0 ? (

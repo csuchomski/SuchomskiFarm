@@ -14,6 +14,16 @@ export interface NavGroup {
 
 export const topLevel: NavItem = { label: "Today", to: "/" };
 
+/** Above the sections, beside Today, because it is the same kind of thing:
+ * what today needs rather than what a subject holds. It was the first item
+ * under Herd, which buried a daily page inside a subject heading. */
+export const alerts: NavItem = { label: "Alerts", to: "/alerts" };
+
+/** Below every section. Reference data the rest of the app picks from —
+ * not part of any module, because a business with no herd still configures
+ * things. */
+export const settings: NavItem = { label: "Settings", to: "/settings" };
+
 /** Every group the app knows how to render, across all business types. What
  * a given business actually sees is the intersection of this and its
  * modules — a rental business has no Herd, a farm has no Properties. */
@@ -21,20 +31,24 @@ export const allGroups: NavGroup[] = [
   {
     module: "herd",
     heading: "Herd",
+    /**
+     * Eleven items became three subjects.
+     *
+     * Genetics folded into Animals, Lactations into Milking, and Sires and
+     * Calvings into Breeding — in each case the pages were different views
+     * of one subject rather than different subjects, and the rail was
+     * listing the views.
+     *
+     * Four things left rather than folded. Alerts went up beside Today,
+     * being a daily job rather than a subject. Depreciation went to Books,
+     * where the tax work is. Breeds went to Settings, being a table edited
+     * twice a year. And Health was never built — an inert label with no
+     * route, promising a page that does not exist.
+     */
     items: [
-      // First in the group on purpose: it is the only page that says what
-      // needs doing rather than what happened.
-      { label: "Alerts", to: "/alerts" },
       { label: "Animals", to: "/animals" },
-      { label: "Lactations", to: "/lactations" },
-      { label: "Milkings", to: "/milkings" },
-      { label: "Genetics", to: "/genetics" },
-      { label: "Sires", to: "/sires" },
-      { label: "Breedings", to: "/breedings" },
-      { label: "Calvings", to: "/calvings" },
-      { label: "Breeds", to: "/breeds" },
-      { label: "Depreciation", to: "/depreciation" },
-      { label: "Health" },
+      { label: "Milking", to: "/milking" },
+      { label: "Breeding", to: "/breeding" },
     ],
   },
   {
@@ -102,6 +116,10 @@ export const allGroups: NavGroup[] = [
       { label: "Balance sheet", to: "/books/balance-sheet" },
       { label: "Reports", to: "/books/reports" },
       { label: "Taxes", to: "/books/taxes" },
+      // Cattle depreciation. It sat under Herd, which is where the animals
+      // are — but what it produces is a tax figure, and this is where the
+      // rest of that work happens.
+      { label: "Depreciation", to: "/depreciation" },
     ],
   },
 ];

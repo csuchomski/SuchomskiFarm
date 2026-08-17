@@ -86,7 +86,7 @@ export default function Alerts() {
               <Callout>
                 Nothing outstanding. Every cow is either carrying, inside her waiting period, or has nothing on file
                 to be late about — and a cow with nothing on file is quiet here rather than wrong. Log a service on{" "}
-                <Link to="/breedings">Breedings</Link> and this page starts watching it.
+                <Link to="/breeding?tab=breedings">Breedings</Link> and this page starts watching it.
               </Callout>
             </div>
           ) : (

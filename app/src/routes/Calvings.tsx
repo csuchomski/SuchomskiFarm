@@ -348,7 +348,7 @@ export default function Calvings() {
                   {herServices.length === 0 ? (
                     <p style={{ fontSize: 13, color: "var(--ink-muted)" }}>
                       No breeding logged for her before this date, so the calf gets no sire. Log one on{" "}
-                      <Link to="/breedings">Breedings</Link> first if you know it.
+                      <Link to="/breeding?tab=breedings">Breedings</Link> first if you know it.
                     </p>
                   ) : (
                     <>
@@ -585,7 +585,7 @@ export default function Calvings() {
           {calvings.length === 0 ? (
             <Callout>
               Nothing recorded yet. A calving is what closes out a service logged on{" "}
-              <Link to="/breedings">Breedings</Link>.
+              <Link to="/breeding?tab=breedings">Breedings</Link>.
             </Callout>
           ) : (
             <>
@@ -651,7 +651,7 @@ export default function Calvings() {
               <p style={{ fontSize: 13, color: "var(--ink-muted)", paddingTop: 16 }}>
                 A live calf becomes an animal on <Link to="/animals">Animals</Link>, born on the farm, with its dam
                 and the sire from the breeding behind this calving. A dairy dam's lactation opens here too — see{" "}
-                <Link to="/lactations">Lactations</Link>.
+                <Link to="/milking?tab=lactations">Lactations</Link>.
               </p>
             </>
           )}

@@ -2,6 +2,7 @@ import { OpsShell } from "../components/shell/OpsShell";
 import { useWorkspace } from "../lib/workspace";
 import Today from "./Today";
 import Overview from "./Overview";
+import StartFarm from "./StartFarm";
 
 /**
  * One route, two homes. `/` stays a single path so the rail's Today link and
@@ -13,7 +14,7 @@ import Overview from "./Overview";
  * module should get the same screen as anything else without one.
  */
 export default function Home() {
-  const { modules, loading, error, business } = useWorkspace();
+  const { modules, loading, error, business, reload } = useWorkspace();
 
   if (loading) {
     return (
@@ -31,15 +32,12 @@ export default function Home() {
     );
   }
 
-  if (!business) {
-    return (
-      <OpsShell>
-        <p style={{ fontSize: 14, color: "var(--ink-muted)", padding: "24px 8px" }}>
-          You're signed in, but you're not a member of any business yet.
-        </p>
-      </OpsShell>
-    );
-  }
+  // A member of nothing is almost always somebody who has just made an
+  // account, so this is where a farm gets started rather than where the app
+  // tells them there is nothing here. `reload` rather than a redirect: the
+  // workspace is what changed, and it has to be asked again before any route
+  // renders anything useful.
+  if (!business) return <StartFarm onCreated={reload} />;
 
   return modules.includes("herd") ? <Today /> : <Overview />;
 }

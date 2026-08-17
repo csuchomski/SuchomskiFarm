@@ -31,6 +31,10 @@ export interface WorkspaceState {
   userId: string | null;
   migrated: boolean;
   setBusinessId: (id: number) => void;
+  /** Load it all again. For the one moment the workspace changes underneath
+   * the app rather than because the session did — starting a farm, which
+   * turns "a member of nothing" into a workspace without any sign-in. */
+  reload: () => void;
 }
 
 /** Used until business_type_modules exists. Mirrors what migration 004 seeds. */
@@ -59,7 +63,7 @@ export const missingRelation = (message: string) =>
   /does not exist|schema cache|not find the table|relation .* does not exist/i.test(message);
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<Omit<WorkspaceState, "setBusinessId">>({
+  const [state, setState] = useState<Omit<WorkspaceState, "setBusinessId" | "reload">>({
     loading: true,
     error: null,
     businesses: [],
@@ -79,6 +83,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, String(id));
     setSelectedId(id);
   }, []);
+
+  // Bumping this re-runs the loader. A counter rather than a flag, so two
+  // reloads in a row are two reloads.
+  const [nonce, setNonce] = useState(0);
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
 
   /**
    * The workspace follows the session rather than asking for it once.
@@ -158,9 +167,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [selectedId, userId, authLoading]);
+  }, [selectedId, userId, authLoading, nonce]);
 
-  const value = useMemo<WorkspaceState>(() => ({ ...state, setBusinessId }), [state, setBusinessId]);
+  const value = useMemo<WorkspaceState>(
+    () => ({ ...state, setBusinessId, reload }),
+    [state, setBusinessId, reload],
+  );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

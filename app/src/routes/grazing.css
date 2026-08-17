@@ -25,6 +25,9 @@
 .grz-form__actions {
   display: flex;
   gap: 8px;
+  /* Wraps, or the first button is pushed out of the form and off the screen.
+     Three actions at 390px do not fit on one line. */
+  flex-wrap: wrap;
   justify-content: flex-end;
   padding-top: 14px;
 }

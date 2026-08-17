@@ -97,7 +97,7 @@ const paddocks = [1, 2, 3, 4, 5].map(paddock);
 // Two of the five sit on a named pasture; the rest predate pastures, which is
 // the state a farm is in the day after migration 052 runs.
 const pastures: Pasture[] = [
-  { id: "past-1", name: "Home place", code: "HOME", acres: 62.5, notes: null, active: true },
+  { id: "past-1", name: "Home place", code: "HOME", acres: 62.5, notes: null, active: true, boundary: null },
 ];
 const events: GrazingEvent[] = [];
 const members: GrazingGroupMember[] = [

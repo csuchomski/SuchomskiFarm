@@ -52,6 +52,9 @@ export interface Pasture {
   acres: number | null;
   notes: string | null;
   active: boolean;
+  /** GeoJSON as stored, unparsed. Written by the KML import (053), never by
+   *  the edit form — see the migration for why they are kept apart. */
+  boundary: unknown | null;
 }
 
 export interface Paddock {
@@ -588,7 +591,7 @@ export async function fetchPaddocks(farmId: string): Promise<Paddock[]> {
 export async function fetchPastures(farmId: string): Promise<Pasture[]> {
   const { data, error } = await herdSchema()
     .from("pastures")
-    .select("id, name, code, acres, notes, active")
+    .select("id, name, code, acres, notes, active, boundary")
     .eq("farm_id", farmId)
     .is("deleted_at", null)
     .order("name");
@@ -601,6 +604,7 @@ export async function fetchPastures(farmId: string): Promise<Pasture[]> {
     acres: num(r.acres),
     notes: (r.notes as string) ?? null,
     active: Boolean(r.active),
+    boundary: r.boundary ?? null,
   }));
 }
 
@@ -1308,6 +1312,29 @@ export async function savePaddock(
   });
   if (error) throw new Error(error.message);
   return data as string;
+}
+
+/**
+ * A pasture and its paddocks from a drawn file, in one transaction.
+ *
+ * All or nothing (migration 053). A name clash on the last paddock leaves the
+ * farm exactly as it was, rather than half a map and an error message.
+ *
+ * `payload` is built by `toPayload` in lib/kml.ts from the choices confirmed
+ * on the review screen — the client never sends what the file said, only what
+ * somebody looked at and agreed to.
+ */
+export async function importGround(
+  farmId: string,
+  payload: unknown,
+): Promise<{ pastureId: string; paddocks: number }> {
+  const { data, error } = await herdSchema().rpc("import_ground", {
+    p_farm_id: farmId,
+    p_payload: payload,
+  });
+  if (error) throw new Error(error.message);
+  const out = (data ?? {}) as { pastureId?: string; paddocks?: number };
+  return { pastureId: out.pastureId ?? "", paddocks: out.paddocks ?? 0 };
 }
 
 /**

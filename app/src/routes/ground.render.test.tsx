@@ -40,7 +40,7 @@ vi.mock("../lib/auth", () => ({
 }));
 
 const pasture = (over: Partial<Pasture> & { id: string; name: string }): Pasture => ({
-  code: null, acres: null, notes: null, active: true, ...over,
+  code: null, acres: null, notes: null, active: true, boundary: null, ...over,
 });
 
 const paddock = (over: Partial<Paddock> & { id: string; name: string }): Paddock => ({

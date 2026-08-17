@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Callout, GridRow, Pill, StatTile } from "../components/ui";
+import { KmlImport } from "../components/herd/KmlImport";
 import { useWorkspace } from "../lib/workspace";
 import {
   deletePaddock,
@@ -136,6 +137,7 @@ export default function Ground() {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [pastureForm, setPastureForm] = useState<PastureForm | null>(null);
   const [paddockForm, setPaddockForm] = useState<PaddockForm | null>(null);
+  const [importing, setImporting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -343,7 +345,7 @@ export default function Ground() {
             </Callout>
           </div>
 
-          {!readOnly && pastureForm === null && paddockForm === null && (
+          {!readOnly && pastureForm === null && paddockForm === null && !importing && (
             <div className="gnd-actions">
               <Button variant="filled" onClick={() => setPastureForm(blankPasture())}>
                 Add a pasture
@@ -351,7 +353,26 @@ export default function Ground() {
               {pastures.length > 0 && (
                 <Button onClick={() => setPaddockForm(blankPaddock(pastures[0].id))}>Add a paddock</Button>
               )}
+              {/* Second, not first: typing one field beats reading a review
+                  screen when there is one field's worth of ground to add. It
+                  earns its place on a farm that already has the place drawn. */}
+              <Button onClick={() => { setImporting(true); setError(null); setNote(null); }}>
+                Import from a KML
+              </Button>
             </div>
+          )}
+
+          {importing && farmId !== null && (
+            <KmlImport
+              farmId={farmId}
+              pastures={pastures}
+              onCancel={() => setImporting(false)}
+              onImported={(said) => {
+                setImporting(false);
+                setNote(said);
+                void refresh();
+              }}
+            />
           )}
 
           {pastureForm !== null && (

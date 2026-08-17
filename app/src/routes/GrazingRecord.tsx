@@ -285,7 +285,7 @@ export default function GrazingRecord() {
         title="Annual record"
         actions={
           <>
-            <Link to="/grazing" className="rot-back mono">← the board</Link>
+            <Link to="/grazing/records?tab=paddocks" className="rot-back mono">← the board</Link>
             <Button onClick={() => window.print()} disabled={load.state !== "ok"}>Print</Button>
           </>
         }

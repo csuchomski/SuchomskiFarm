@@ -448,7 +448,7 @@ export default function Move() {
             : "Herd"
         }
         title="Move"
-        actions={<Link to="/grazing" className="rot-back mono">← the board</Link>}
+        actions={<Link to="/grazing/records?tab=paddocks" className="rot-back mono">← the board</Link>}
       />
 
       {error && <div style={{ paddingTop: 16 }}><Callout tone="dashed">{error}</Callout></div>}

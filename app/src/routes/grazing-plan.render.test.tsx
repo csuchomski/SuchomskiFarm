@@ -37,6 +37,7 @@ vi.mock("../lib/auth", () => ({
 const paddock = (n: number): Paddock => ({
   id: `p${n}`, name: `Paddock ${n}`, code: `P${n}`,
   acresMeasured: 1.97, acresGrazable: 1.97,
+  pastureId: null,
   unitType: "permanent", sweepHeadingDeg: 270, sweepLengthFt: 424, rotationOrder: null,
   seedingDate: null, fenceType: null, ecologicalSite: null, soilMapUnit: null,
   noxiousSpecies: null, noxiousExtent: null,

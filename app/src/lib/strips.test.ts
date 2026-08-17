@@ -34,6 +34,7 @@ const p3: Paddock = {
   code: "P3",
   acresMeasured: 1.91,
   acresGrazable: 1.91,
+  pastureId: null,
   unitType: "permanent",
   sweepHeadingDeg: 270,
   sweepLengthFt: 400, rotationOrder: null,

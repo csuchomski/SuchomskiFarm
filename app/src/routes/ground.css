@@ -1,0 +1,154 @@
+/* Settings → Ground. The form styles come from grazing.css; what is here is
+   the pasture-and-its-paddocks shape, which nothing else has. */
+
+.gnd-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 16px 0 20px;
+}
+
+.gnd-pasture {
+  margin-top: 28px;
+}
+
+/* The rule sits above the name, so a pasture reads as a heading with its
+   ground under it rather than as one more row in a list. */
+.gnd-pasture__head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--ink-faint);
+  padding: 12px 0 10px;
+}
+
+.gnd-pasture__name {
+  font-size: 22px;
+  font-weight: 400;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.gnd-pasture__sub {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin: 4px 0 0;
+}
+
+.gnd-pasture__notes {
+  font-size: 13px;
+  color: var(--ink-faint);
+  margin: 4px 0 0;
+  max-width: 60ch;
+}
+
+.gnd-pasture__acts,
+.gnd-row-acts {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Row actions sit under the name in a grid cell, where the 14px gap above is
+   too tight to hit with a thumb. */
+.gnd-row-acts .link-button {
+  min-height: 32px;
+}
+
+.gnd-danger {
+  color: var(--red);
+}
+
+.gnd-code {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.gnd-dim {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.gnd-quiet {
+  font-size: 14px;
+  color: var(--ink-muted);
+  padding: 16px 8px;
+}
+
+.gnd-error {
+  font-size: 13px;
+  color: var(--red);
+  padding: 12px 0;
+}
+
+.gnd-note {
+  font-size: 13px;
+  color: var(--herd-green);
+  padding: 12px 0;
+}
+
+/* What the server said when it refused to remove ground with history on it,
+   and the way out. Ochre: a warning about the record, not a failure. */
+.gnd-stuck {
+  border-left: 2px solid var(--ochre);
+  background: var(--paper-tint);
+  padding: 12px 14px;
+  margin: 2px 0 10px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.gnd-stuck p {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 60ch;
+}
+
+.gnd-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  font-size: 14px;
+  min-height: 44px;
+}
+
+.gnd-check input {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  accent-color: var(--herd-green);
+}
+
+@media (max-width: 640px) {
+  .gnd-pasture__acts {
+    gap: 16px;
+  }
+
+  .gnd-stuck {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* The two columns GridRow drops on a phone, said under the name instead.
+   The strip setup is the reason to open this page from the gateway, so
+   losing it below 640px would be losing the point of the row. */
+.gnd-onsmall {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .gnd-onsmall {
+    display: block;
+    font-size: 12.5px;
+    margin-top: 2px;
+  }
+}

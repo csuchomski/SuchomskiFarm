@@ -10,6 +10,7 @@ import type {
   GrazingGroup,
   GrazingGroupMember,
   Paddock,
+  Pasture,
   PlanPaddockTarget,
 } from "../lib/grazing";
 
@@ -42,6 +43,8 @@ const paddock = (n: number): Paddock => ({
   code: `P${n}`,
   acresMeasured: 1.91,
   acresGrazable: 1.91,
+  // Paddocks 1 and 2 are on the home place; 3, 4 and 5 predate pastures.
+  pastureId: n <= 2 ? "past-1" : null,
   unitType: "permanent",
   sweepHeadingDeg: n === 5 ? 0 : n % 2 === 0 ? 90 : 270,
   sweepLengthFt: 400, rotationOrder: null,
@@ -91,6 +94,11 @@ const event = (over: Partial<GrazingEvent> & { id: string; paddockId: string }):
 });
 
 const paddocks = [1, 2, 3, 4, 5].map(paddock);
+// Two of the five sit on a named pasture; the rest predate pastures, which is
+// the state a farm is in the day after migration 052 runs.
+const pastures: Pasture[] = [
+  { id: "past-1", name: "Home place", code: "HOME", acres: 62.5, notes: null, active: true },
+];
 const events: GrazingEvent[] = [];
 const members: GrazingGroupMember[] = [
   { id: "m1", groupId: "mob", animalId: "a1", joinedOn: "2026-08-13", leftOn: null },
@@ -114,6 +122,7 @@ vi.mock("../lib/grazing", async (importOriginal) => {
   return {
     ...actual,
     fetchPaddocks: vi.fn(async () => paddocks),
+    fetchPastures: vi.fn(async () => pastures),
     fetchGrazingGroups: vi.fn(async () => [mob]),
     fetchGrazingEvents: vi.fn(async () => events),
     fetchForageRemovals: vi.fn(async () => removals),

@@ -34,9 +34,32 @@ import { asPolygonRing, frameFor, sliceAcres, toLocal } from "./pasture-map";
  * are both real management units, and neither has a fence on the map. */
 export type PaddockUnitType = "permanent" | "temporary" | "virtual";
 
+/**
+ * A piece of land. Migration 052.
+ *
+ * The level between the farm and the paddock: the home place, the rented
+ * forty. A farm with one block never needed it; a farm with two has no other
+ * way to say which block a paddock is on.
+ *
+ * `acres` is what the deed says, and is deliberately not the sum of its
+ * paddocks' acres — that sum is what is fenced and grazable, and the
+ * difference between the two is the lane, the woods and the pond.
+ */
+export interface Pasture {
+  id: string;
+  name: string;
+  code: string | null;
+  acres: number | null;
+  notes: string | null;
+  active: boolean;
+}
+
 export interface Paddock {
   id: string;
   name: string;
+  /** Which piece of land it is on. Null for a paddock recorded before
+   * pastures existed — shown as unassigned rather than guessed at. */
+  pastureId: string | null;
   code: string | null;
   acresMeasured: number | null;
   acresGrazable: number | null;
@@ -524,7 +547,7 @@ export async function fetchPaddocks(farmId: string): Promise<Paddock[]> {
   const { data, error } = await herdSchema()
     .from("paddocks")
     .select(
-      "id, name, code, acres_measured, acres_grazable, unit_type, sweep_heading_deg, sweep_length_ft, rotation_order, seeding_date, fence_type, ecological_site, soil_map_unit, noxious_species, noxious_extent, sensitive_riparian, sensitive_wetland, sensitive_habitat, sensitive_karst, sensitive_high_erosion, heavy_use_notes, boundary, active, notes",
+      "id, name, pasture_id, code, acres_measured, acres_grazable, unit_type, sweep_heading_deg, sweep_length_ft, rotation_order, seeding_date, fence_type, ecological_site, soil_map_unit, noxious_species, noxious_extent, sensitive_riparian, sensitive_wetland, sensitive_habitat, sensitive_karst, sensitive_high_erosion, heavy_use_notes, boundary, active, notes",
     )
     .eq("farm_id", farmId)
     .is("deleted_at", null)
@@ -534,6 +557,7 @@ export async function fetchPaddocks(farmId: string): Promise<Paddock[]> {
   return (data ?? []).map((r: Record<string, unknown>) => ({
     id: r.id as string,
     name: r.name as string,
+    pastureId: (r.pasture_id as string) ?? null,
     code: (r.code as string) ?? null,
     acresMeasured: num(r.acres_measured),
     acresGrazable: num(r.acres_grazable),
@@ -558,6 +582,25 @@ export async function fetchPaddocks(farmId: string): Promise<Paddock[]> {
     boundary: r.boundary ?? null,
     active: Boolean(r.active),
     notes: (r.notes as string) ?? null,
+  }));
+}
+
+export async function fetchPastures(farmId: string): Promise<Pasture[]> {
+  const { data, error } = await herdSchema()
+    .from("pastures")
+    .select("id, name, code, acres, notes, active")
+    .eq("farm_id", farmId)
+    .is("deleted_at", null)
+    .order("name");
+  if (error) throw new Error(`herd.pastures: ${error.message}`);
+
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    name: r.name as string,
+    code: (r.code as string) ?? null,
+    acres: num(r.acres),
+    notes: (r.notes as string) ?? null,
+    active: Boolean(r.active),
   }));
 }
 
@@ -1182,6 +1225,102 @@ export async function deleteMove(farmId: string, eventId: string): Promise<void>
     p_farm_id: farmId,
     p_event_id: eventId,
   });
+  if (error) throw new Error(error.message);
+}
+
+// ─── the ground itself ─────────────────────────────────────────────────
+//
+// Adding and editing land, as against recording what happened on it. All
+// four go through RPCs (migration 052) rather than table writes, because the
+// rules are not things a form can be trusted to keep: which farm a pasture
+// belongs to, that a name is not already taken, and above all that ground the
+// herd has been on is retired rather than removed.
+
+export interface PastureEdit {
+  name: string;
+  code: string | null;
+  acres: number | null;
+  notes: string | null;
+  active: boolean;
+}
+
+/** Add one when `id` is null, change it when it isn't. Returns its id. */
+export async function savePasture(
+  farmId: string,
+  id: string | null,
+  edit: PastureEdit,
+): Promise<string> {
+  const { data, error } = await herdSchema().rpc("save_pasture", {
+    p_farm_id: farmId,
+    p_id: id,
+    p_name: edit.name,
+    p_code: edit.code,
+    p_acres: edit.acres,
+    p_notes: edit.notes,
+    p_active: edit.active,
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+/** Refuses while it still holds paddocks, and says how many. */
+export async function deletePasture(farmId: string, id: string): Promise<void> {
+  const { error } = await herdSchema().rpc("delete_pasture", { p_farm_id: farmId, p_id: id });
+  if (error) throw new Error(error.message);
+}
+
+export interface PaddockEdit {
+  name: string;
+  pastureId: string | null;
+  code: string | null;
+  acresMeasured: number | null;
+  acresGrazable: number | null;
+  unitType: PaddockUnitType;
+  rotationOrder: number | null;
+  /** A heading is what makes it strippable — see `isSwept`. */
+  sweepHeadingDeg: number | null;
+  sweepLengthFt: number | null;
+  fenceType: string | null;
+  notes: string | null;
+  active: boolean;
+}
+
+export async function savePaddock(
+  farmId: string,
+  id: string | null,
+  edit: PaddockEdit,
+): Promise<string> {
+  const { data, error } = await herdSchema().rpc("save_paddock", {
+    p_farm_id: farmId,
+    p_id: id,
+    p_name: edit.name,
+    p_pasture_id: edit.pastureId,
+    p_code: edit.code,
+    p_acres_measured: edit.acresMeasured,
+    p_acres_grazable: edit.acresGrazable,
+    p_unit_type: edit.unitType,
+    p_rotation_order: edit.rotationOrder,
+    p_sweep_heading_deg: edit.sweepHeadingDeg,
+    p_sweep_length_ft: edit.sweepLengthFt,
+    p_fence_type: edit.fenceType,
+    p_notes: edit.notes,
+    p_active: edit.active,
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+/**
+ * Remove a paddock outright.
+ *
+ * Only possible while nothing has been recorded on it. Once the herd has been
+ * there the moves name it, and the payment record prints that name against
+ * every strip — so the server refuses, and the answer is to retire it
+ * (`active: false`) instead, which takes it off the board and out of the
+ * rotation while the record still reads back.
+ */
+export async function deletePaddock(farmId: string, id: string): Promise<void> {
+  const { error } = await herdSchema().rpc("delete_paddock", { p_farm_id: farmId, p_id: id });
   if (error) throw new Error(error.message);
 }
 

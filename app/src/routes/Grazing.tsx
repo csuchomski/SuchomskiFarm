@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, GridRow, Pill } from "../components/ui";
 import { useWorkspace } from "../lib/workspace";
@@ -12,6 +12,7 @@ import {
   fetchGroupMembers,
   fetchLatestWeights,
   fetchPaddocks,
+  fetchPastures,
   fetchPlanPaddockTargets,
   fetchActivePlan,
   isSwept,
@@ -29,6 +30,7 @@ import {
   type GrazingGroup,
   type GrazingGroupMember,
   type Paddock,
+  type Pasture,
   type PlanPaddockTarget,
 } from "../lib/grazing";
 import "./grazing.css";
@@ -54,6 +56,7 @@ type Load =
   | {
       state: "ok";
       paddocks: Paddock[];
+      pastures: Pasture[];
       groups: GrazingGroup[];
       events: GrazingEvent[];
       removals: ForageRemoval[];
@@ -89,8 +92,9 @@ export default function Grazing() {
       setLoad({ state: "error", message: "No farm on this business." });
       return;
     }
-    const [paddocks, groups, events, removals, availability, members, weights, plan] = await Promise.all([
+    const [paddocks, pastures, groups, events, removals, availability, members, weights, plan] = await Promise.all([
       fetchPaddocks(farmId),
+      fetchPastures(farmId),
       fetchGrazingGroups(farmId),
       fetchGrazingEvents(farmId),
       fetchForageRemovals(farmId),
@@ -101,7 +105,7 @@ export default function Grazing() {
     ]);
     const targets = plan ? await fetchPlanPaddockTargets(plan.id) : [];
     setLoad({
-      state: "ok", paddocks, groups, events, removals, availability, members, weights,
+      state: "ok", paddocks, pastures, groups, events, removals, availability, members, weights,
       targets, plan, hasPlan: plan !== null,
     });
   }, [farmId]);
@@ -197,6 +201,11 @@ export default function Grazing() {
                 <br />
                 <span style={{ fontSize: 12.5, color: "var(--ink-muted)" }}>
                   {[
+                    // Which piece of land it is on. Named on the row rather
+                    // than grouped by, because grouping would break the one
+                    // thing this board is for: rest descending, so the next
+                    // paddock to graze is the top row.
+                    pastureNameOf(r.paddock, load.state === "ok" ? load.pastures : EMPTY_PASTURES),
                     r.paddock.acresGrazable !== null ? `${r.paddock.acresGrazable} ac` : null,
                     r.occupant ? `in ${r.occupant.days} day${r.occupant.days === 1 ? "" : "s"}` : null,
                     load.state === "ok" && isSwept(r.paddock)
@@ -240,7 +249,15 @@ export default function Grazing() {
 
           {rows.length === 0 && (
             <p style={{ fontSize: 14, color: "var(--ink-muted)", padding: "16px 8px" }}>
-              No paddocks on file.
+              No paddocks on file. Add the ground in <Link to="/settings?tab=ground">Settings → Ground</Link> —
+              a pasture first, then the paddocks on it.
+            </p>
+          )}
+
+          {rows.length > 0 && (
+            <p style={{ fontSize: 13, color: "var(--ink-faint)", padding: "14px 8px 0" }}>
+              This board reads. To add a paddock, move one to another pasture or retire one, go to{" "}
+              <Link to="/settings?tab=ground">Settings → Ground</Link>.
             </p>
           )}
 
@@ -319,6 +336,15 @@ function bandFill(restDays: number | null, occupied: boolean): string {
   if (restDays >= 7) return "#cfd3bd";
   return "#e4e2d5";
 }
+
+/** Null for a paddock recorded before pastures existed — the row then reads
+ *  exactly as it did before, rather than saying "no pasture" at every line. */
+function pastureNameOf(paddock: Paddock, pastures: Pasture[]): string | null {
+  if (paddock.pastureId === null) return null;
+  return pastures.find((p) => p.id === paddock.pastureId)?.name ?? null;
+}
+
+const EMPTY_PASTURES: Pasture[] = [];
 
 function acresOf(paddocks: Paddock[]): number {
   return paddocks

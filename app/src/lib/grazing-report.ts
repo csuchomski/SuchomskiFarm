@@ -1,3 +1,4 @@
+import { localDay } from "./local-time";
 import { stripAcres, type GrazingEvent, type GrazingGroup, type Paddock } from "./grazing";
 
 /**
@@ -31,7 +32,9 @@ export interface ReportRow {
   sweptTo: number | null;
 }
 
-const dayOf = (iso: string): string => iso.slice(0, 10);
+/** The day a move happened, on the farm's own calendar. Not the UTC date —
+ *  see `localDay`; an evening move is filed under tomorrow without this. */
+const dayOf = localDay;
 
 /**
  * A number for every strip on the farm, stable for good.

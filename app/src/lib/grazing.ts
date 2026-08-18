@@ -1068,6 +1068,35 @@ export async function addToGroup(input: {
   return (data as { id: string }).id;
 }
 
+/**
+ * Put an animal in a mob, move her between two, or take her out of all of them.
+ *
+ * One statement (migration 055), where the client would need two: close the
+ * membership she has, open the one she is going to. Between those she belongs
+ * to nothing, and if the second write failed she would stay that way quietly
+ * until a head count came out wrong. Dragging a row between mobs does this
+ * often enough that it had to stop being two.
+ *
+ * `null` takes her out of every mob without putting her in another. Setting
+ * the mob she is already in does nothing at all, rather than writing a
+ * departure and an arrival on the same day — which reads like she went
+ * somewhere and came back.
+ */
+export async function setAnimalMob(
+  farmId: string,
+  animalId: string,
+  groupId: string | null,
+  on?: string,
+): Promise<void> {
+  const { error } = await herdSchema().rpc("set_animal_mob", {
+    p_farm_id: farmId,
+    p_animal_id: animalId,
+    p_group_id: groupId,
+    p_on: on ?? null,
+  });
+  if (error) throw new Error(error.message);
+}
+
 /** Take her out, as of a day. The row stays — see above. */
 export async function removeFromGroup(
   farmId: string,

@@ -146,3 +146,61 @@
     display: none;
   }
 }
+
+/* ── mobs, as the outer grouping ─────────────────────────────────────── */
+
+/* Heavier than the dairy/beef heading below it, because it is the outer of
+   two and they sit within a few rows of each other. */
+.animals-mob {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--ink-faint);
+  padding: 16px 4px 6px;
+  margin-top: 8px;
+}
+
+.animals-mob__name {
+  font-size: 20px;
+}
+
+.animals-mob__count {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+/* The invitation only appears where dragging is possible at all, and changes
+   to an instruction once something is in the air. */
+.animals-mob__hint {
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+
+/* Where the animal will land. Green rather than a dotted outline: the row
+   heights here are small and an outline reads as an error. */
+.animals-mob--over {
+  background: var(--paper-tint);
+  border-top-color: var(--herd-green);
+  box-shadow: inset 0 2px 0 var(--herd-green);
+}
+
+.animals-move-error {
+  font-size: 13px;
+  color: var(--red);
+  padding: 10px 4px;
+}
+
+/* A row being dragged. `display: contents` on the link means the cursor
+   feedback has to come from the cells themselves. */
+[draggable="true"] {
+  cursor: grab;
+}
+
+/* Said once, above the list, rather than on every mob heading. */
+.animals-drag-note {
+  font-size: 12.5px;
+  color: var(--ink-faint);
+  padding: 10px 4px 0;
+  max-width: 68ch;
+}

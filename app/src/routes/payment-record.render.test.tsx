@@ -6,7 +6,7 @@ import type { GrazingEvent, GrazingGroup, Paddock } from "../lib/grazing";
 import { REAL_ACRES, REAL_BOUNDARIES, REAL_SWEEP } from "../lib/__fixtures__/farm-geometry";
 
 /**
- * Grazing → Payment record.
+ * Grazing → the grazing record (the NRCS 528 payment record form).
  *
  * The conservationist's form, filled from the moves. What matters is that the
  * table and the drawing agree — the number in a row is the number on the

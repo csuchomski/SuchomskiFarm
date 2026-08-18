@@ -14,13 +14,27 @@ import {
 } from "../lib/herd";
 import { AnimalForm } from "../components/herd/AnimalForm";
 import { breedingCell, fetchAlertInputs, statusOf, type AlertInputs } from "../lib/alerts";
+import {
+  fetchGrazingGroups,
+  fetchGroupMembers,
+  setAnimalMob,
+  type GrazingGroup,
+  type GrazingGroupMember,
+} from "../lib/grazing";
 import { useWorkspace } from "../lib/workspace";
 import "./animals.css";
 
 type Fetch =
   | { state: "loading" }
   | { state: "error"; message: string }
-  | { state: "ok"; rows: RealAnimal[]; breeds: Map<string, BreedShare[]>; repro: AlertInputs | null };
+  | {
+      state: "ok";
+      rows: RealAnimal[];
+      breeds: Map<string, BreedShare[]>;
+      repro: AlertInputs | null;
+      mobs: GrazingGroup[];
+      members: GrazingGroupMember[];
+    };
 
 type SortKey = "name" | "tag" | "age" | "class";
 
@@ -45,6 +59,11 @@ export default function Animals() {
   const [purposeFilter, setPurposeFilter] = useState<"all" | "dairy" | "beef">("all");
   const [showInactive, setShowInactive] = useState(false);
   const [sort, setSort] = useState<SortKey>("name");
+  const [nonce, setNonce] = useState(0);
+  /** The animal under the cursor, and any error a move came back with. */
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,14 +73,19 @@ export default function Animals() {
       // The breeding column needs her whole repro record. Null when there is
       // no farm — the column then reads "—" rather than the page failing.
       const repro = farmId ? await fetchAlertInputs(farmId, new Date().toISOString().slice(0, 10)) : null;
-      if (!cancelled) setResult({ state: "ok", rows, breeds, repro });
+      // The mob is the unit the farm actually works in — what gets moved, what
+      // gets counted at the gate — so it is what this list is grouped by.
+      const [mobs, members] = farmId
+        ? await Promise.all([fetchGrazingGroups(farmId), fetchGroupMembers(farmId)])
+        : [[] as GrazingGroup[], [] as GrazingGroupMember[]];
+      if (!cancelled) setResult({ state: "ok", rows, breeds, repro, mobs, members });
     })().catch(
       (err) => !cancelled && setResult({ state: "error", message: err instanceof Error ? err.message : String(err) }),
     );
     return () => {
       cancelled = true;
     };
-  }, [farmId]);
+  }, [farmId, nonce]);
 
   // `rows` is everything fetched, including reference bulls — the add/edit
   // form needs them so a calf can be given an AI sire. The list itself shows
@@ -71,6 +95,15 @@ export default function Animals() {
   const all = useMemo(() => herdOnly(rows), [rows]);
   const breeds = result.state === "ok" ? result.breeds : EMPTY_BREEDS;
   const repro = result.state === "ok" ? result.repro : null;
+  const mobs = result.state === "ok" ? result.mobs : EMPTY_MOBS;
+  const members = result.state === "ok" ? result.members : EMPTY_MEMBERS;
+
+  /** Which mob each animal is in now. A closed membership is history. */
+  const mobOf = useMemo(() => {
+    const by = new Map<string, string>();
+    for (const m of members) if (m.leftOn === null) by.set(m.animalId, m.groupId);
+    return by;
+  }, [members]);
 
   // Classes come from the data, so a class nobody anticipated still gets a
   // filter rather than being invisible.
@@ -112,14 +145,68 @@ export default function Animals() {
   // one of them. `isMilked` is the same predicate the chips, the counts and
   // the lactation pages use, so a dual-purpose cow lands under Dairy on every
   // screen — and her row still says "dual".
-  const groups = useMemo(() => {
-    const dairy = visible.filter(isMilked);
-    const beef = visible.filter((a) => !isMilked(a));
+  const moveToMob = async (animalId: string, groupId: string | null) => {
+    if (!farmId) return;
+    setDragging(null);
+    setMoveError(null);
+    try {
+      await setAnimalMob(farmId, animalId, groupId);
+      setNonce((n) => n + 1);
+    } catch (err) {
+      setMoveError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const sides = (rows: RealAnimal[]) => {
+    const dairy = rows.filter(isMilked);
+    const beef = rows.filter((a) => !isMilked(a));
     return [
-      { key: "dairy", label: "Dairy", rows: dairy, note: dairy.some((a) => a.purpose === "dual") ? "milked, including dual-purpose" : "milked" },
+      {
+        key: "dairy",
+        label: "Dairy",
+        rows: dairy,
+        note: dairy.some((a) => a.purpose === "dual") ? "milked, including dual-purpose" : "milked",
+      },
       { key: "beef", label: "Beef", rows: beef, note: "raising their calves" },
     ].filter((g) => g.rows.length > 0);
-  }, [visible]);
+  };
+
+  /**
+   * Mob first, then the two sides of the herd inside it.
+   *
+   * The mob is what the farm works in — the thing that gets moved and counted
+   * at the gate — so it is the outer heading. Dairy and beef stay, because a
+   * milked cow and a suckler are run differently whichever mob they are in,
+   * but they are now a division *within* a mob rather than the whole shape of
+   * the page.
+   *
+   * Animals in no mob come last, under a heading that says so. On a farm with
+   * one mob and nobody outside it there is nothing to head, and the list reads
+   * exactly as it did before.
+   */
+  const groups = useMemo(() => {
+    const byMob = new Map<string, RealAnimal[]>();
+    for (const a of visible) {
+      const key = mobOf.get(a.id) ?? "";
+      const list = byMob.get(key);
+      if (list) list.push(a);
+      else byMob.set(key, [a]);
+    }
+    const named = mobs
+      .filter((m) => (byMob.get(m.id)?.length ?? 0) > 0)
+      .map((m) => ({ mobId: m.id, mobName: m.name, rows: byMob.get(m.id) ?? [] }));
+    const loose = byMob.get("") ?? [];
+    return [
+      ...named,
+      ...(loose.length > 0 ? [{ mobId: null, mobName: "Not in a mob", rows: loose }] : []),
+    ].map((g) => ({ ...g, sides: sides(g.rows) }));
+  }, [visible, mobs, mobOf]);
+
+  /** A heading earns its place once there is more than one thing to head. A
+   *  farm with one mob and nobody outside it reads as it always did. */
+  const showMobs = groups.length > 1;
+  /** Nowhere to drag an animal to until there are two mobs. */
+  const canDrag = mobs.filter((m) => m.active).length > 1;
 
   return (
     <OpsShell>
@@ -143,6 +230,7 @@ export default function Animals() {
             herd={rows}
             farmId={farmId}
             onCancel={() => setAdding(false)}
+            mobs={mobs}
             onSaved={(saved) => {
               setAdding(false);
               // Straight to the new animal's record — the next thing you
@@ -222,20 +310,77 @@ export default function Animals() {
             <span className="text-right hide-sm">Age</span>
           </GridRow>
 
+          {canDrag && (
+            <p className="animals-drag-note">
+              Drag an animal onto another mob to move her, or open her record and change the mob
+              there.
+            </p>
+          )}
+
+          {moveError !== null && <p className="animals-move-error">{moveError}</p>}
+
           {groups.map((group) => (
-            <Fragment key={group.key}>
-              {/* Only when both sides are on screen. One heading over the
-                  whole list would be labelling something the chips above
-                  already said. */}
-              {groups.length > 1 && (
-                <div className="animals-group">
-                  <span className="serif animals-group__name">{group.label}</span>
-                  <span className="mono animals-group__count">{group.rows.length}</span>
-                  <span className="animals-group__note">{group.note}</span>
+            <Fragment key={group.mobId ?? "loose"}>
+              {/* The mob heading is also where a dragged animal is dropped.
+                  Dropping is the quick way; the slow way — editing the animal
+                  and picking a mob — is still there, and is the one that works
+                  without a pointer. */}
+              {showMobs && (
+                <div
+                  className={`animals-mob ${over === (group.mobId ?? "loose") ? "animals-mob--over" : ""}`}
+                  onDragOver={(e) => {
+                    if (dragging === null) return;
+                    e.preventDefault();
+                    setOver(group.mobId ?? "loose");
+                  }}
+                  onDragLeave={() => setOver(null)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setOver(null);
+                    if (dragging !== null) void moveToMob(dragging, group.mobId);
+                  }}
+                >
+                  <span className="serif animals-mob__name">{group.mobName}</span>
+                  <span className="mono animals-mob__count">{group.rows.length}</span>
+                  {/* Only while something is in the air. Repeated on every
+                      heading it was three copies of the same sentence, which
+                      is how a page starts reading like a manual. */}
+                  {canDrag && dragging !== null && (
+                    <span className="animals-mob__hint">drop to move her here</span>
+                  )}
                 </div>
               )}
-              {group.rows.map((a) => (
-                <Link key={a.id} to={`/animals/${a.ear_tag}`} style={{ color: "inherit", display: "contents" }}>
+
+              {group.sides.map((side) => (
+                <Fragment key={side.key}>
+                  {/* Only when both sides are on screen. One heading over the
+                      whole list would be labelling something the chips above
+                      already said. */}
+                  {group.sides.length > 1 && (
+                    <div className="animals-group">
+                      <span className="serif animals-group__name">{side.label}</span>
+                      <span className="mono animals-group__count">{side.rows.length}</span>
+                      <span className="animals-group__note">{side.note}</span>
+                    </div>
+                  )}
+              {side.rows.map((a) => (
+                <Link
+                  key={a.id}
+                  to={`/animals/${a.ear_tag}`}
+                  style={{ color: "inherit", display: "contents" }}
+                  draggable={canDrag}
+                  onDragStart={(e) => {
+                    // A link drags its URL by default, which drops as a
+                    // navigation rather than a move.
+                    e.dataTransfer.setData("text/plain", a.id);
+                    e.dataTransfer.effectAllowed = "move";
+                    setDragging(a.id);
+                  }}
+                  onDragEnd={() => {
+                    setDragging(null);
+                    setOver(null);
+                  }}
+                >
                   <GridRow cols={COLS} mobileCols={COLS_SM} as="body" highlight={a.status !== "active"}>
                     <EarTag tag={a.ear_tag} accent="herd" />
                     <span style={{ minWidth: 0 }}>
@@ -263,6 +408,8 @@ export default function Animals() {
                     </span>
                   </GridRow>
                 </Link>
+              ))}
+                </Fragment>
               ))}
             </Fragment>
           ))}
@@ -319,6 +466,8 @@ function NextBreeding({ animal, repro }: { animal: RealAnimal; repro: AlertInput
 // a fresh empty literal.
 const EMPTY_ANIMALS: RealAnimal[] = [];
 const EMPTY_BREEDS: Map<string, BreedShare[]> = new Map();
+const EMPTY_MOBS: GrazingGroup[] = [];
+const EMPTY_MEMBERS: GrazingGroupMember[] = [];
 
 function nameOf(a: RealAnimal) {
   return a.barn_name ?? `Tag ${a.ear_tag}`;

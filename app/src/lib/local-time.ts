@@ -20,6 +20,29 @@ export function toLocalInput(iso: string): string {
 }
 
 /**
+ * The calendar day an instant falls on, where the farmer is standing.
+ *
+ * `iso.slice(0, 10)` looks like this and is not: it reads the *UTC* day off
+ * the front of the stored string, so a move logged at ten past eight on a
+ * summer evening in Wisconsin — five hours behind UTC — is filed under
+ * tomorrow. The payment record printed a move made on the 17th as the 18th,
+ * and two moves made on the same day landed on two different dates.
+ *
+ * Same construction as `toLocalInput` and for the same reason: the parts have
+ * to be read off in local time and assembled, never routed through
+ * `toISOString()`.
+ */
+export function localDay(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** Today, as the farm's calendar has it. */
+export const todayLocal = (): string => localDay(new Date().toISOString());
+
+/**
  * Back the other way. `new Date("2026-08-14T07:30")` — no zone — is already
  * read as local time by every browser, so this is only a guard against a
  * half-typed date, which `<input type="datetime-local">` will hand over

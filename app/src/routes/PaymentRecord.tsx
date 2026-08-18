@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { todayLocal } from "../lib/local-time";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout } from "../components/ui";
 import { useWorkspace } from "../lib/workspace";
@@ -27,7 +28,12 @@ import { useMapScale } from "../lib/use-map-scale";
 import "./grazing.css";
 
 /**
- * Grazing → Payment record.
+ * Grazing → the grazing record.
+ *
+ * Named "Payment record" until the farm asked for it to say what it is. The
+ * file and the library keep the old name on purpose: the *form* is the NRCS
+ * 528 payment record, and that is what a conservationist calls it, so the
+ * code goes on saying so while the screen says what a farmer calls it.
  *
  * The conservationist's form, filled from the moves. Its columns — pasture,
  * acres, livestock type and number, date in, forage height in, date out,
@@ -51,10 +57,12 @@ type Load =
 
 const WIDTH = 720;
 
-const today = () => new Date().toISOString().slice(0, 10);
+/** Today and the first of the month, on the wall calendar rather than in UTC.
+ *  Pulled up after seven on a summer evening, `toISOString()` would offer
+ *  tomorrow as the end of the range and skip a day at the start of a month. */
+const today = () => todayLocal();
 
-/** The first of the month, which is the window most of these get pulled for. */
-const monthStart = () => `${new Date().toISOString().slice(0, 7)}-01`;
+const monthStart = () => `${todayLocal().slice(0, 7)}-01`;
 
 const shortDate = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
@@ -144,7 +152,7 @@ export default function PaymentRecord() {
     <OpsShell>
       <PageHeader
         eyebrow={business?.name ?? "Grazing"}
-        title="Payment record"
+        title="Grazing Records"
         actions={<Button variant="filled" onClick={() => window.print()}>Print</Button>}
       />
 

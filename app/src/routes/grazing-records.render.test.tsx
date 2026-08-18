@@ -66,6 +66,9 @@ vi.mock("../lib/grazing", async (importOriginal) => {
   return {
     ...actual,
     fetchPaddocks, fetchGrazingEvents, fetchGrazingGroups, fetchForageRemovals,
+    // Mocked so the Paddocks tab does not fall through to the live client and
+    // sit in "Loading…" for as long as that takes to give up.
+    fetchPastures: vi.fn(async () => []),
     fetchForageAvailability: vi.fn(async () => []),
     fetchGroupMembers: vi.fn(async () => []),
     fetchLatestWeights: vi.fn(async () => new Map()),
@@ -102,7 +105,7 @@ describe("four pages under one heading", () => {
     await mount();
     expect(tabs()).toEqual(["Report", "Rounds", "Paddocks", "Mobs"]);
     expect(document.querySelector(".gr-tab--on")!.textContent).toBe("Report");
-    expect(screen.getByText("Payment record")).toBeTruthy();
+    expect(screen.getByText("Grazing Records")).toBeTruthy();
   });
 
   it("keeps the Print button, which lives in a header this page nearly hid", async () => {

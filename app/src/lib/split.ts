@@ -147,31 +147,57 @@ export function splitByFences(outer: LonLat[], fences: LonLat[][]): SplitResult 
 
   // ── pull the loose ends shut ──────────────────────────────────────────
   //
-  // Measured against every other piece of geometry but never the fence's own,
-  // and always against the original positions, so one snap cannot chase
-  // another around.
+  // Done in passes, because the targets move too. Snapping a fence onto its
+  // neighbour and then snapping that neighbour onto the boundary leaves the
+  // first one a millimetre off what it was aimed at — far too little to see
+  // and far too much to intersect, so the fence silently stops dividing. On
+  // the farm this was written against, that cost a paddock: three fences all
+  // reaching, and only two of them cutting.
+  //
+  // Each pass measures against wherever everything is now. Movements shrink
+  // by orders of magnitude per pass, so this settles in two or three; the cap
+  // is there so a pathological file cannot spin.
+  const moved = cuts.map((c) => c.map((p): Local => [p[0], p[1]]));
+  const started = cuts.map((c) => [c[0], c[c.length - 1]].map((p): Local => [p[0], p[1]]));
+
   const othersOf = (skip: number): Seg[] => [
     ...segmentsOf(boundary, true),
-    ...cuts.flatMap((c, j) => (j === skip ? [] : segmentsOf(c, false))),
+    ...moved.flatMap((c, j) => (j === skip ? [] : segmentsOf(c, false))),
   ];
 
-  let snapped = 0;
-  let maxSnapMetres = 0;
-  const moved = cuts.map((c) => c.map((p): Local => [p[0], p[1]]));
-  for (let i = 0; i < cuts.length; i++) {
-    const targets = othersOf(i);
-    for (const idx of [0, cuts[i].length - 1]) {
-      let best: { at: Local; away: number } | null = null;
-      for (const [a, b] of targets) {
-        const got = nearestOn(cuts[i][idx], a, b);
-        if (best === null || got.away < best.away) best = got;
-      }
-      if (best !== null && best.away > EPS && best.away <= SNAP_METRES) {
-        moved[i][idx] = best.at;
-        snapped += 1;
-        maxSnapMetres = Math.max(maxSnapMetres, best.away);
+  for (let pass = 0; pass < 4; pass++) {
+    let worst = 0;
+    for (let i = 0; i < moved.length; i++) {
+      const targets = othersOf(i);
+      for (const idx of [0, moved[i].length - 1]) {
+        let best: { at: Local; away: number } | null = null;
+        for (const [a, b] of targets) {
+          const got = nearestOn(moved[i][idx], a, b);
+          if (best === null || got.away < best.away) best = got;
+        }
+        if (best !== null && best.away > EPS && best.away <= SNAP_METRES) {
+          moved[i][idx] = best.at;
+          worst = Math.max(worst, best.away);
+        }
       }
     }
+    if (worst <= EPS) break;
+  }
+
+  // Reported against where the ends began, not how far the last pass nudged
+  // them — what a farmer wants to know is how far the drawing was out.
+  let snapped = 0;
+  let maxSnapMetres = 0;
+  for (let i = 0; i < moved.length; i++) {
+    [0, moved[i].length - 1].forEach((idx, k) => {
+      const from = started[i][k];
+      const to = moved[i][idx];
+      const away = Math.hypot(from[0] - to[0], from[1] - to[1]);
+      if (away > EPS) {
+        snapped += 1;
+        maxSnapMetres = Math.max(maxSnapMetres, away);
+      }
+    });
   }
 
   // A fence with an end still adrift divides nothing; counted so the screen

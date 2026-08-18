@@ -170,3 +170,68 @@ describe("what it does with less to work with", () => {
     expect(splitByFences([[-88.42, 42.877], [-88.4175, 42.877]], [])).toBeNull();
   });
 });
+
+
+const ST_JAMES: LonLat[] = [
+  [-88.32062922, 42.87596925],
+  [-88.32060514, 42.87867362],
+  [-88.32310040, 42.87875814],
+  [-88.32560159, 42.87755552],
+  [-88.32553733, 42.87549601],
+  [-88.32445188, 42.87549728],
+  [-88.32445579, 42.87374242],
+  [-88.32324175, 42.87366052],
+  [-88.32267065, 42.87459404],
+  [-88.32216414, 42.87600165],
+  [-88.32062922, 42.87596925],
+];
+
+const ST_JAMES_FENCES: LonLat[][] = [
+  [
+    [-88.32216576, 42.87600911],
+    [-88.32216299, 42.87872909],
+  ],
+  [
+    [-88.32446804, 42.87550066],
+    [-88.32445259, 42.87809341],
+  ],
+  [
+    [-88.32446089, 42.87630507],
+    [-88.32216717, 42.87628957],
+  ],
+];
+
+describe("a second farm, and the bug it found", () => {
+  /**
+   * St James on Rocky Ridge: an outline and three fences, none of which quite
+   * touch what they meet — the six ends are out by 0.14 to 1.36 m.
+   *
+   * Snapping was originally a single pass measured against where everything
+   * *started*. That is fine until a fence is aimed at another fence which is
+   * then itself pulled onto the boundary: the first one is left a fraction
+   * off what it was aimed at, which is far too little to see and far too much
+   * to intersect. Here it cost a whole paddock — three fences all reaching,
+   * and only two of them cutting. Passes fix it, and this is the farm that
+   * showed it, so the farm is the test.
+   */
+  it("cuts all three fences, not two of them", () => {
+    const out = splitByFences(ST_JAMES, ST_JAMES_FENCES)!;
+    expect(out.danglingFences).toBe(0);
+    expect(out.regions).toHaveLength(4);
+  });
+
+  it("reports the ends it moved against where they were drawn", () => {
+    const out = splitByFences(ST_JAMES, ST_JAMES_FENCES)!;
+    expect(out.snapped).toBe(6);
+    // The furthest miss in the drawing, not however far the last pass nudged.
+    expect(out.maxSnapMetres).toBeCloseTo(1.36, 1);
+  });
+
+  it("divides the whole 37.89 acres and leaves nothing over", () => {
+    const out = splitByFences(ST_JAMES, ST_JAMES_FENCES)!;
+    const whole = acresOf(ST_JAMES);
+    expect(whole).toBeCloseTo(37.89, 1);
+    expect(out.regions.reduce((a, r) => a + r.acres, 0)).toBeCloseTo(whole, 3);
+    expect(out.regions.map((r) => Number(r.acres.toFixed(2)))).toEqual([11.67, 11.0, 9.42, 5.8]);
+  });
+});

@@ -356,3 +356,100 @@ describe("a line is not ground", () => {
     }
   });
 });
+
+describe("making paddocks out of the fences", () => {
+  /** An outline with one fence straight across it, and no paddocks — the way
+   *  nearly every farm is actually drawn. */
+  const OUTLINE_AND_FENCE = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Rocky Ridge</name>
+<Placemark><name>St James</name><Polygon><outerBoundaryIs><LinearRing><coordinates>
+-88.4200,42.8770 -88.4175,42.8770 -88.4175,42.8788 -88.4200,42.8788 -88.4200,42.8770
+</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+<Placemark><name>Cross fence</name><LineString><coordinates>
+-88.41875,42.87701 -88.41875,42.87879
+</coordinates></LineString></Placemark>
+</Document></kml>`;
+
+  it("offers the division when a file is an outline and fences", async () => {
+    await mount();
+    await drop(OUTLINE_AND_FENCE);
+    expect(screen.getByRole("button", { name: "Divide St James by its 1 fence" })).toBeTruthy();
+  });
+
+  it("does not offer it when the file already has paddocks drawn", async () => {
+    await mount();
+    await drop(FARM);
+    expect(screen.queryByRole("button", { name: /^Divide/ })).toBeNull();
+  });
+
+  it("cuts the pasture into paddocks that can then be named and numbered", async () => {
+    await mount();
+    await drop(OUTLINE_AND_FENCE);
+    fireEvent.click(screen.getByRole("button", { name: "Divide St James by its 1 fence" }));
+    await waitFor(() => expect(screen.getByLabelText("Name for St James 1")).toBeTruthy());
+    expect(screen.getByLabelText("Name for St James 2")).toBeTruthy();
+    // and they behave like any other paddock row
+    expect(screen.getByLabelText("Which way strips run on St James 1")).toBeTruthy();
+    expect(screen.getByLabelText("Number in the round for St James 1")).toBeTruthy();
+  });
+
+  it("says what it did, including the ends it had to pull shut", async () => {
+    await mount();
+    await drop(OUTLINE_AND_FENCE);
+    fireEvent.click(screen.getByRole("button", { name: "Divide St James by its 1 fence" }));
+    await waitFor(() => expect(screen.getByText(/2 paddocks from 1 fence/)).toBeTruthy());
+    // The fence was drawn a metre short at both ends, as hand-drawn ones are.
+    expect(screen.getByText(/loose fence end/)).toBeTruthy();
+  });
+
+  it("imports the regions as real areas with real acres", async () => {
+    await mount();
+    await drop(OUTLINE_AND_FENCE);
+    fireEvent.click(screen.getByRole("button", { name: "Divide St James by its 1 fence" }));
+    await waitFor(() => expect(screen.getByLabelText("Name for St James 1")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Import this ground" }));
+    await waitFor(() => expect(importGround).toHaveBeenCalled());
+
+    const sent = payload();
+    expect(sent.paddocks).toHaveLength(2);
+    for (const p of sent.paddocks) {
+      expect((p.boundary as { type: string }).type).toBe("Polygon");
+      expect(p.acresMeasured).toBeGreaterThan(0);
+    }
+    // the two halves come to the whole
+    const halves = sent.paddocks.reduce((a, p) => a + (p.acresMeasured ?? 0), 0);
+    expect(halves).toBeCloseTo(sent.pasture.acres ?? 0, 1);
+  });
+
+  it("refuses to invent a boundary from a fence that stops halfway", async () => {
+    const stub = OUTLINE_AND_FENCE.replace("-88.41875,42.87879", "-88.41875,42.8779");
+    await mount();
+    await drop(stub);
+    fireEvent.click(screen.getByRole("button", { name: "Divide St James by its 1 fence" }));
+    await waitFor(() => expect(screen.getByText(/don't reach across St James/)).toBeTruthy());
+    expect(screen.queryByLabelText("Name for St James 1")).toBeNull();
+  });
+});
+
+describe("counting what came out of the file", () => {
+  it("keeps saying how many shapes the file held, not how many rows there are", async () => {
+    // Dividing a pasture adds rows the app made up. Counting those as shapes
+    // "in this file" tells the farmer their two-shape drawing had four things
+    // in it.
+    const OUTLINE_AND_FENCE = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Rocky Ridge</name>
+<Placemark><name>St James</name><Polygon><outerBoundaryIs><LinearRing><coordinates>
+-88.4200,42.8770 -88.4175,42.8770 -88.4175,42.8788 -88.4200,42.8788 -88.4200,42.8770
+</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+<Placemark><name>Cross fence</name><LineString><coordinates>
+-88.41875,42.87701 -88.41875,42.87879
+</coordinates></LineString></Placemark>
+</Document></kml>`;
+    await mount();
+    await drop(OUTLINE_AND_FENCE);
+    expect(screen.getByText(/2 shapes in this file/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Divide St James by its 1 fence" }));
+    await waitFor(() => expect(screen.getByLabelText("Name for St James 1")).toBeTruthy());
+    expect(screen.getByText(/2 shapes in this file/)).toBeTruthy();
+  });
+});

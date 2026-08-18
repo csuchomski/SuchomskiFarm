@@ -289,3 +289,26 @@
     margin-top: 6px;
   }
 }
+
+/* The offer to cut a pasture into paddocks along its fences. Ochre-free and
+   quiet: it is a suggestion about how the file is drawn, not a warning. */
+.kml-divide {
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  padding: 14px 16px;
+  margin: 4px 0 16px;
+}
+
+.kml-divide p {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 12px;
+  max-width: 68ch;
+  line-height: 1.5;
+}
+
+.kml-divided {
+  font-size: 13px;
+  color: var(--herd-green);
+  margin: 0 0 12px;
+}

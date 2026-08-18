@@ -325,3 +325,34 @@ describe("names that repeat", () => {
     expect(screen.queryByText(/give them different names/)).toBeNull();
   });
 });
+
+describe("a line is not ground", () => {
+  it("offers a fence line nothing but leaving it out", async () => {
+    // The screen used to offer "A paddock" on the very row it had labelled
+    // "a line, not an area", and a farm was set up with three fence lines as
+    // its paddocks — invisible to every map from the moment they were saved.
+    await mount();
+    await drop(FARM);
+    const pick = screen.getByLabelText("What Interior fence is") as HTMLSelectElement;
+    expect([...pick.options].map((o) => o.value)).toEqual(["skip"]);
+    expect(pick.disabled).toBe(true);
+  });
+
+  it("still offers an area all three", async () => {
+    await mount();
+    await drop(FARM);
+    const pick = screen.getByLabelText("What Untitled Polygon is") as HTMLSelectElement;
+    expect([...pick.options].map((o) => o.value)).toEqual(["pasture", "paddock", "skip"]);
+    expect(pick.disabled).toBe(false);
+  });
+
+  it("never sends a line as ground even so", async () => {
+    await mount();
+    await drop(FARM);
+    fireEvent.click(screen.getByRole("button", { name: "Import this ground" }));
+    await waitFor(() => expect(importGround).toHaveBeenCalled());
+    for (const p of payload().paddocks) {
+      expect((p.boundary as { type: string }).type).toBe("Polygon");
+    }
+  });
+});

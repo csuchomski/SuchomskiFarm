@@ -1,3 +1,4 @@
+import { type Region } from "./split";
 import {
   frameFor,
   ringAcres,
@@ -385,6 +386,35 @@ export function proposeGround(shapes: KmlShape[]): Proposal[] {
       ? { shapeId: s.id, role: "paddock", because: `inside ${biggest.name}` }
       : { shapeId: s.id, role: "skip", because: `outside ${biggest.name}` };
   });
+}
+
+// ─── paddocks from the fences ──────────────────────────────────────────
+
+/**
+ * The regions a pasture is divided into, as shapes the review can carry.
+ *
+ * A farm is drawn the way it is built — an outline with fences across it —
+ * so a file that plainly describes five paddocks arrives as one polygon and
+ * four lines. `splitByFences` turns those into areas; this dresses them as
+ * ordinary shapes so the rest of the screen cannot tell the difference. They
+ * are named, numbered, given a strip direction and imported exactly like a
+ * polygon somebody drew by hand.
+ *
+ * Numbered largest first, which is the order `splitByFences` returns and has
+ * nothing to do with the round — the rotation is asked for separately,
+ * because which paddock you graze first is not a fact about its size.
+ */
+export function regionsAsShapes(pastureName: string, regions: Region[]): KmlShape[] {
+  return regions.map((r, i) => ({
+    id: `region-${i}`,
+    name: `${pastureName} ${i + 1}`,
+    kind: "polygon" as const,
+    folder: `divided from ${pastureName}`,
+    geo: { type: "Polygon" as const, coordinates: [r.ring.map(([lon, lat]) => [lon, lat])] },
+    acres: r.acres,
+    lengthFt: null,
+    points: r.ring,
+  }));
 }
 
 // ─── turning the confirmed choices into a payload ──────────────────────

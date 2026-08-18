@@ -6,12 +6,14 @@ import {
   nearestCompassDeg,
   parseKml,
   proposeGround,
+  regionsAsShapes,
   sweepLengthFtAlong,
   toPayload,
   type ImportRow,
   type KmlShape,
   type Role,
 } from "../../lib/kml";
+import { splitByFences } from "../../lib/split";
 import { importGround, SWEEP_HEADINGS, type Pasture } from "../../lib/grazing";
 
 /**
@@ -63,7 +65,16 @@ const rolesFor = (kind: KmlShape["kind"]): { value: Role; label: string }[] =>
 
 type Stage =
   | { at: "picking" }
-  | { at: "reviewing"; rows: ImportRow[]; because: Map<string, string>; fileName: string; dropped: number };
+  | {
+      at: "reviewing";
+      rows: ImportRow[];
+      because: Map<string, string>;
+      fileName: string;
+      /** How many shapes the *file* held. Distinct from `rows.length`, which
+       *  grows when the pasture is divided — otherwise a file of four shapes
+       *  reports seven the moment its fences are used. */
+      fromFile: number;
+    };
 
 const measure = (s: KmlShape): string => {
   if (s.acres !== null) return `${s.acres.toFixed(2)} ac`;
@@ -111,6 +122,7 @@ export function KmlImport({
   const [pastureName, setPastureName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [divided, setDivided] = useState<string | null>(null);
 
   const take = async (file: File | undefined) => {
     if (file === undefined) return;
@@ -130,7 +142,8 @@ export function KmlImport({
       }));
       const pasture = rows.find((r) => r.role === "pasture");
       setPastureName(pasture?.name ?? "");
-      setStage({ at: "reviewing", rows, because, fileName: file.name, dropped: 0 });
+      setDivided(null);
+      setStage({ at: "reviewing", rows, because, fileName: file.name, fromFile: rows.length });
     } catch (err) {
       // A KmlError is a sentence written for a farmer; anything else is not,
       // so it gets a sentence of its own rather than being shown raw.
@@ -224,11 +237,80 @@ export function KmlImport({
     );
   }
 
-  const { rows, because, fileName } = stage;
+  const { rows, because, fileName, fromFile } = stage;
   const asPasture = rows.find((r) => r.role === "pasture") ?? null;
   const asPaddocks = rows.filter((r) => r.role === "paddock");
   const intoExisting = existingPastureId !== "";
   const totalAcres = asPaddocks.reduce((sum, r) => sum + (r.shape.acres ?? 0), 0);
+
+  // Fences drawn as lines, which is how nearly everybody draws a farm.
+  const fences = rows.filter((r) => r.shape.kind === "line");
+  const canDivide = asPasture !== null && fences.length > 0 && asPaddocks.length === 0;
+
+  /**
+   * Make paddocks out of the fences.
+   *
+   * The regions arrive as ordinary polygon rows, so from here they are named,
+   * numbered and given a strip direction exactly like a shape somebody drew
+   * closed by hand. The fence rows stay where they are — they are what did
+   * the dividing, not what is being imported.
+   */
+  const divide = () => {
+    if (asPasture === null) return;
+    const out = splitByFences(
+      asPasture.shape.points,
+      fences.map((f) => f.shape.points),
+    );
+    if (out === null) {
+      setError("That pasture outline can't be measured, so it can't be divided.");
+      return;
+    }
+    if (out.regions.length < 2) {
+      setError(
+        out.danglingFences > 0
+          ? `Those fences don't reach across ${asPasture.name}, so they divide it into nothing. A fence has to meet the boundary or another fence at both ends.`
+          : `Nothing in this file divides ${asPasture.name}.`,
+      );
+      return;
+    }
+
+    const made = regionsAsShapes(pastureName.trim() || asPasture.name, out.regions);
+    setError(null);
+    setDivided(
+      [
+        `${out.regions.length} paddocks from ${fences.length} fence${fences.length === 1 ? "" : "s"}`,
+        out.snapped > 0
+          ? `${out.snapped} loose fence end${out.snapped === 1 ? "" : "s"} pulled shut, the furthest by ${out.maxSnapMetres.toFixed(2)} m`
+          : null,
+        out.danglingFences > 0
+          ? `${out.danglingFences} fence${out.danglingFences === 1 ? "" : "s"} reached nothing and divided nothing`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    );
+    setStage((st) =>
+      st.at !== "reviewing"
+        ? st
+        : {
+            ...st,
+            rows: [
+              ...st.rows,
+              ...made.map((shape) => ({
+                shape,
+                role: "paddock" as Role,
+                name: shape.name,
+                rotationOrder: null,
+                sweepHeadingDeg: null,
+              })),
+            ],
+            because: new Map([
+              ...st.because,
+              ...made.map((shape): [string, string] => [shape.id, "cut from the fences"]),
+            ]),
+          },
+    );
+  };
 
   // Google Earth calls everything "Untitled Polygon", so a file of five
   // fields routinely arrives with five identical names. Both `toPayload` and
@@ -255,7 +337,7 @@ export function KmlImport({
       </div>
 
       <p className="kml-lede">
-        {rows.length} shape{rows.length === 1 ? "" : "s"} in this file. Each one is measured off the
+        {fromFile} shape{fromFile === 1 ? "" : "s"} in this file. Each one is measured off the
         drawing — check what it made of them before saving.
       </p>
 
@@ -302,6 +384,21 @@ export function KmlImport({
           out — that land is already on file.
         </p>
       )}
+
+      {canDivide && (
+        <div className="kml-divide">
+          <p>
+            This file draws <strong>{asPasture.name}</strong> and {fences.length} fence
+            {fences.length === 1 ? "" : "s"} across it, but no paddocks. That is how most farms are
+            drawn. The fences can be used to cut the pasture into the paddocks they make.
+          </p>
+          <Button onClick={divide}>
+            {`Divide ${asPasture.name} by its ${fences.length} fence${fences.length === 1 ? "" : "s"}`}
+          </Button>
+        </div>
+      )}
+
+      {divided !== null && <p className="kml-divided">{divided}</p>}
 
       <GridRow cols={COLS} mobileCols={COLS_SM} as="header">
         <span>Shape, and what it is</span>

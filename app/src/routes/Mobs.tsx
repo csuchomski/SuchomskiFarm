@@ -340,11 +340,14 @@ export default function Mobs() {
                     {mine.map((m) => {
                       const who = load.animals.find((a) => a.id === m.animalId);
                       const wt = load.weights.get(m.animalId);
+                      // The link below carries the ear tag, not the id:
+                      // /animals/:tag is resolved with `.eq("ear_tag", …)`,
+                      // so an id reaches the record page and matches nothing.
                       return (
                         <GridRow key={m.id} cols={COLS} mobileCols={COLS_SM} as="body">
                           <span>
                             {who ? (
-                              <Link to={`/animals/${who.id}`}>{nameOf(who)}</Link>
+                              <Link to={`/animals/${who.ear_tag}`}>{nameOf(who)}</Link>
                             ) : (
                               <span className="mb-missing">not on file</span>
                             )}

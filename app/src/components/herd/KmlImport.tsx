@@ -45,6 +45,22 @@ const ROLES: { value: Role; label: string }[] = [
   { value: "skip", label: "Leave it out" },
 ];
 
+/**
+ * What a shape is allowed to become.
+ *
+ * **Only an area can be ground.** A fence line and a gate marker are real and
+ * worth drawing one day, but a paddock's boundary is read by `asPolygonRing`,
+ * which returns null for anything that is not a Polygon — so a LineString
+ * saved as a paddock vanishes from every map, measures no acres, and cuts no
+ * strips. It does not fail; it is simply never drawn again.
+ *
+ * This screen used to offer all three roles on every row, including the ones
+ * it had just labelled "a line, not an area", and a farm was set up with
+ * three fence lines as its paddocks and no map to show for it.
+ */
+const rolesFor = (kind: KmlShape["kind"]): { value: Role; label: string }[] =>
+  kind === "polygon" ? ROLES : ROLES.filter((r) => r.value === "skip");
+
 type Stage =
   | { at: "picking" }
   | { at: "reviewing"; rows: ImportRow[]; because: Map<string, string>; fileName: string; dropped: number };
@@ -323,10 +339,11 @@ export function KmlImport({
               <select
                 className="kml-role"
                 value={r.role}
+                disabled={r.shape.kind !== "polygon"}
                 onChange={(e) => setRow(r.shape.id, { role: e.target.value as Role })}
                 aria-label={`What ${r.shape.name} is`}
               >
-                {ROLES.map((o) => (
+                {rolesFor(r.shape.kind).map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>

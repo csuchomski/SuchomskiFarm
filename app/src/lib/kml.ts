@@ -473,6 +473,21 @@ export function toPayload(input: {
     return { error: `One of the paddocks has no name — the file called it "${blank.shape.name}".` };
   }
 
+  // Ground has to be an area. A paddock's boundary is read by
+  // `asPolygonRing`, which returns null for anything else, so a line saved as
+  // a paddock draws on no map, measures no acres and cuts no strips — it just
+  // quietly stops existing. One farm was set up with three fence lines as its
+  // paddocks before this was here.
+  const notAnArea = [...(pasture === null ? [] : [pasture]), ...paddocks].find(
+    (r) => r.shape.kind !== "polygon",
+  );
+  if (notAnArea !== undefined) {
+    const what = notAnArea.shape.kind === "line" ? "a line" : "a marker";
+    return {
+      error: `"${notAnArea.shape.name}" is ${what}, not an area, so it cannot be ground. Fences and gates have to be left out for now.`,
+    };
+  }
+
   // Named as first spelled, not as second: "Two paddocks are both called
   // north strip" when the farmer typed "North strip" reads like the app
   // inventing a name.

@@ -477,3 +477,54 @@ describe("the axis a shape is longest in", () => {
     expect(sweepLengthFtAlong(shapeNamed("Water tank"), 90)).toBeNull();
   });
 });
+
+describe("ground has to be an area", () => {
+  /**
+   * A farm was set up with three fence lines as its paddocks. Nothing failed:
+   * `asPolygonRing` returns null for a LineString, so they were dropped from
+   * the map's projection, measured no acres and cut no strips — and the Move
+   * page, finding no ring anywhere, said there was nothing to draw on.
+   */
+  const rowsOf = (over: Partial<ImportRow>[]) => {
+    const shapes = parseKml(FARM);
+    const proposal = proposeGround(shapes);
+    return shapes.map((s, i) => ({
+      shape: s,
+      role: proposal[i].role,
+      name: s.name,
+      rotationOrder: null,
+      sweepHeadingDeg: null,
+      ...over[i],
+    }));
+  };
+
+  const indexOfShape = (name: string) => parseKml(FARM).findIndex((s) => s.name === name);
+
+  it("refuses a fence line marked as a paddock, and names it", () => {
+    const over: Partial<ImportRow>[] = [];
+    over[indexOfShape("Interior fence")] = { role: "paddock" };
+    const out = toPayload({ rows: rowsOf(over), existingPastureId: null, pastureName: "" });
+    expect("error" in out && out.error).toContain("Interior fence");
+    expect("error" in out && out.error).toContain("a line, not an area");
+  });
+
+  it("refuses a marker marked as a paddock", () => {
+    const over: Partial<ImportRow>[] = [];
+    over[indexOfShape("Water tank")] = { role: "paddock" };
+    const out = toPayload({ rows: rowsOf(over), existingPastureId: null, pastureName: "" });
+    expect("error" in out && out.error).toContain("a marker, not an area");
+  });
+
+  it("refuses a line marked as the pasture", () => {
+    const over: Partial<ImportRow>[] = [];
+    over[indexOfShape("Farm perimeter")] = { role: "skip" };
+    over[indexOfShape("Interior fence")] = { role: "pasture" };
+    const out = toPayload({ rows: rowsOf(over), existingPastureId: null, pastureName: "" });
+    expect("error" in out && out.error).toContain("Interior fence");
+  });
+
+  it("still sends a file whose ground is all areas", () => {
+    const out = toPayload({ rows: rowsOf([]), existingPastureId: null, pastureName: "" });
+    expect("error" in out).toBe(false);
+  });
+});

@@ -10,6 +10,11 @@ import {
   type AttributeOptions,
   type RealAnimal,
 } from "../../lib/herd";
+import {
+  saveGrazingGroup,
+  setAnimalMob,
+  type GrazingGroup,
+} from "../../lib/grazing";
 import "./animal-edit-form.css";
 
 /**
@@ -40,12 +45,18 @@ const BLANK: AnimalEdit = {
   origin: "",
 };
 
+/** The value that means "make one" in the mob picker. Not a uuid, so it can
+ *  never collide with a real mob's id. */
+const NEW_MOB = "+new";
+
 export function AnimalForm({
   animal,
   herd,
   farmId,
   prefill,
   lockedParent,
+  mobs,
+  mobId,
   onSaved,
   onCancel,
 }: {
@@ -59,10 +70,21 @@ export function AnimalForm({
    * read-only rather than a picker, since changing it here would silently
    * detach the calf from the animal you started on. */
   lockedParent?: "dam" | "sire";
+  /** The mobs on this farm, for the picker. Empty is fine — the first animal
+   *  a farm enters can make the mob it goes into. */
+  mobs?: GrazingGroup[];
+  /** Which mob she is in now, if any. */
+  mobId?: string | null;
   onSaved: (saved: RealAnimal, wasCreated: boolean) => void;
   onCancel: () => void;
 }) {
   const creating = !animal;
+
+  // Setting up a herd used to be two jobs in two places: enter the animal
+  // here, then go to Grazing → Mobs and add her to one. A farm could finish
+  // entering twenty head and have no mob to move.
+  const [mob, setMob] = useState<string>(mobId ?? "");
+  const [newMobName, setNewMobName] = useState("");
 
   const [form, setForm] = useState<AnimalEdit>(() =>
     animal
@@ -159,6 +181,10 @@ export function AnimalForm({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSave) return;
+    if (mob === NEW_MOB && newMobName.trim() === "") {
+      setError("The new mob needs a name.");
+      return;
+    }
     setSaving(true);
     setError(null);
     const patch: AnimalEdit = {
@@ -171,6 +197,24 @@ export function AnimalForm({
     };
     try {
       const saved = animal ? await updateAnimal(animal.id, patch) : await createAnimal(farmId!, patch);
+
+      // The mob is written after the animal, because it needs her id. A mob
+      // named on this form is made here too, so the first animal a farm
+      // enters can bring its mob into being with it.
+      let target: string | null = mob === "" ? null : mob;
+      if (mob === NEW_MOB) {
+        target = await saveGrazingGroup(farmId!, {
+          name: newMobName,
+          species: "cattle",
+          class: null,
+          headCountManual: null,
+          avgWeightLbManual: null,
+          active: true,
+          notes: null,
+        });
+      }
+      if (target !== (mobId ?? null)) await setAnimalMob(farmId!, saved.id, target);
+
       onSaved(saved, creating);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -269,6 +313,40 @@ export function AnimalForm({
             ))}
           </select>
         </Field>
+        )}
+      </div>
+
+      {/* The mob, on the form where the animal is entered. A herd is set up
+          one animal at a time, and the mob is the thing that gets moved — so
+          asking here is asking once, in the place somebody already is. */}
+      <div className="animal-form__grid" style={{ marginTop: 12 }}>
+        <Field label="Mob">
+          <select
+            className="animal-form__input"
+            value={mob}
+            onChange={(e) => setMob(e.target.value)}
+            aria-label="Mob"
+          >
+            <option value="">— not in a mob —</option>
+            {(mobs ?? []).filter((g) => g.active || g.id === mobId).map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+            <option value={NEW_MOB}>+ a new mob…</option>
+          </select>
+        </Field>
+
+        {mob === NEW_MOB && (
+          <Field label="Call the mob" required>
+            <input
+              className="animal-form__input"
+              value={newMobName}
+              onChange={(e) => setNewMobName(e.target.value)}
+              placeholder="Main mob"
+              aria-label="Call the mob"
+            />
+          </Field>
         )}
       </div>
 

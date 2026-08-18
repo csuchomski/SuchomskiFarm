@@ -77,6 +77,15 @@ const calvings = [
     presentation: "anterior", retained_placenta: false, is_twin: false, breeding_event_id: null, notes: "" },
 ];
 
+// The Animals page groups by mob, so it fetches them. Mocked empty: these
+// tests are about the two sides of the herd, and an unmocked fetch falls
+// through to the live client and sits in "Loading…".
+vi.mock("../lib/grazing", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/grazing")>()),
+  fetchGrazingGroups: vi.fn(async () => []),
+  fetchGroupMembers: vi.fn(async () => []),
+}));
+
 vi.mock("../lib/herd", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/herd")>()),
   fetchAnimals: vi.fn(async () => animals),

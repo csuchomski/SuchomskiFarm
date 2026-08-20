@@ -66,13 +66,13 @@ vi.mock("../lib/store-data", async (importOriginal) => ({
 type Patch = Parameters<typeof import("../lib/customers").updateCustomer>[1];
 const updateCustomer = vi.fn(async (_id: string, _patch: Patch) => customers[0]);
 const setArchived = vi.fn(async (_id: string, _archived: boolean) => undefined);
-const deleteCustomer = vi.fn(async (_id: string) => undefined);
+const deleteCustomer = vi.fn(async (_id: string, _businessId: number) => undefined);
 
 vi.mock("../lib/customers", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/customers")>()),
   updateCustomer: (id: string, patch: Patch) => updateCustomer(id, patch),
   setArchived: (id: string, archived: boolean) => setArchived(id, archived),
-  deleteCustomer: (id: string) => deleteCustomer(id),
+  deleteCustomer: (id: string, businessId: number) => deleteCustomer(id, businessId),
 }));
 
 afterEach(() => {
@@ -171,7 +171,7 @@ describe("Customer detail", () => {
     expect(deleteCustomer).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Yes, delete" }));
-    await waitFor(() => expect(deleteCustomer).toHaveBeenCalledWith("cust-2"));
+    await waitFor(() => expect(deleteCustomer).toHaveBeenCalledWith("cust-2", 5));
   });
 
   it("says so when the id matches nobody", async () => {

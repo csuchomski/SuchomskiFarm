@@ -67,7 +67,7 @@ export default function StoreSchedules() {
     }
     const [schedules, customers, store] = await Promise.all([
       fetchSchedules(businessId),
-      fetchCustomers(),
+      fetchCustomers(businessId),
       fetchStoreData({ businessId, farmId }),
     ]);
     setLoad({ state: "ok", schedules, customers, products: store.products });

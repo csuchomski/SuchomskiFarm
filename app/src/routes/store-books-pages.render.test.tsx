@@ -51,12 +51,12 @@ const customers = [
     archived_at: null, created_at: "2026-08-08T00:00:00Z", has_login: false },
 ];
 
-type AddPatch = Parameters<typeof import("../lib/customers").addCustomer>[0];
-const addCustomer = vi.fn(async (_p: AddPatch) => "new-id");
+type AddPatch = Parameters<typeof import("../lib/customers").addCustomer>[1];
+const addCustomer = vi.fn(async (_businessId: number, _p: AddPatch) => "new-id");
 
 vi.mock("../lib/customers", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/customers")>()),
-  addCustomer: (p: AddPatch) => addCustomer(p),
+  addCustomer: (businessId: number, p: AddPatch) => addCustomer(businessId, p),
 }));
 
 const orders = [
@@ -427,7 +427,10 @@ describe("Customers page: adding one", () => {
     fireEvent.click(submit);
 
     await waitFor(() => expect(addCustomer).toHaveBeenCalledTimes(1));
-    expect(addCustomer.mock.calls[0][0]).toMatchObject({ first_name: "Gate", email: "", phone: "555-0123" });
+    // The business goes with them. Without it the walk-in lands on a profile
+    // no farm owns, which is how every profile ended up on every farm's list.
+    expect(addCustomer.mock.calls[0][0]).toBe(5);
+    expect(addCustomer.mock.calls[0][1]).toMatchObject({ first_name: "Gate", email: "", phone: "555-0123" });
   });
 
   it("won't add someone with neither a name nor an email", async () => {

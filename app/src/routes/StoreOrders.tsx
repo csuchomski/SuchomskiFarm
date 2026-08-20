@@ -83,7 +83,7 @@ export default function StoreOrders() {
     }
     const [orders, customers, store, methods] = await Promise.all([
       fetchOrders(businessId),
-      fetchCustomers(),
+      fetchCustomers(businessId),
       fetchStoreData({ businessId, farmId }),
       fetchPaymentMethods(),
     ]);

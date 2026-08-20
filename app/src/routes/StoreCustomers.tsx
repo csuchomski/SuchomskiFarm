@@ -56,7 +56,7 @@ export default function StoreCustomers() {
       setLoad({ state: "ok", orders: [], customers: [] });
       return;
     }
-    const [orders, customers] = await Promise.all([fetchOrders(businessId), fetchCustomers()]);
+    const [orders, customers] = await Promise.all([fetchOrders(businessId), fetchCustomers(businessId)]);
     setLoad({ state: "ok", orders, customers });
   }, [businessId]);
 
@@ -183,11 +183,11 @@ export default function StoreCustomers() {
                 <Button
                   variant="filled"
                   size="sm"
-                  disabled={busy || validateCustomer(draft) !== null}
+                  disabled={busy || businessId === null || validateCustomer(draft) !== null}
                   onClick={() => {
                     setBusy(true);
                     setError(null);
-                    addCustomer(draft)
+                    addCustomer(businessId!, draft)
                       .then(async () => {
                         await refresh();
                         setAdding(false);

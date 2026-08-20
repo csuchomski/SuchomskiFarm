@@ -22,9 +22,12 @@ import FarmAndPeople from "./FarmAndPeople";
  * each breed carries on this farm.
  *
  * **Mobs** came from Grazing → Records, which is the page you open to print
- * for the conservationist; a mob editor sitting in it was off-subject. Since
- * an animal is given her mob on the animal form and dragged between mobs on
- * the Animals page, this is only where a mob is *defined*.
+ * for the conservationist; a mob editor sitting in it was off-subject. It is
+ * where a mob is defined — name, species, class — and where the roll is
+ * worked. An animal is also given her mob on the animal form and dragged
+ * between mobs on the Animals page; those two go through `setAnimalMob`,
+ * this page's roll still goes through `addToGroup`/`removeFromGroup`, and
+ * one write path for the two would be better than two.
  *
  * **The grazing plan** was routed and on no rail at all — reachable only by
  * typing the URL. It holds recovery targets, pounds of dry matter per

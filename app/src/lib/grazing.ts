@@ -1024,11 +1024,16 @@ export async function saveGrazingGroup(farmId: string, draft: GroupDraft): Promi
 /**
  * Why she cannot join, or null if she can.
  *
- * A rule rather than a query, because the database does not enforce it: there
- * is no unique index on an open membership, only a check that a leaving date
- * is not before a joining one. Two open rows for one animal would be summed
- * twice by `mobWeight`, quietly making the mob heavier than it is and every
- * strip cut from that figure wider than it should be.
+ * A rule the client states in words the farmer can read. The database does
+ * enforce it now — `grazing_group_members_one_open`, added with migration
+ * 055 — but a unique-index violation arrives as a constraint name, and this
+ * is the sentence that says what to do about it. Two open rows for one animal
+ * would be summed twice by `mobWeight`, quietly making the mob heavier than
+ * it is and every strip cut from that figure wider than it should be.
+ *
+ * It only catches what the page knows. `members` is the list as it was when
+ * the page loaded, so a mob assigned from the animal form in another tab
+ * since then gets past this and is refused by the index instead.
  *
  * A closed membership is no obstacle. She may have been moved between mobs,
  * or sold on and bought back; the old row stays, which is what keeps a head

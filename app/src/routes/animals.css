@@ -177,6 +177,28 @@
   color: var(--ink-faint);
 }
 
+/* The tap way in and out of a mob, on the same heading that takes the drop.
+   Pushed to the end of the line so the mob's name and count stay where the
+   eye scans them. */
+.animals-mob__act {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.animals-mob__pick {
+  /* 16px, like every other select on a page a farmer opens on a phone —
+     anything smaller and Safari zooms the whole page to meet it. */
+  font: 400 16px/1.2 "IBM Plex Sans", sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  padding: 8px 10px;
+  min-height: 44px;
+  max-width: 15rem;
+}
+
 /* Where the animal will land. Green rather than a dotted outline: the row
    heights here are small and an outline reads as an error. */
 .animals-mob--over {

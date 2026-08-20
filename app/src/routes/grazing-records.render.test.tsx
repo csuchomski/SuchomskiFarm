@@ -103,7 +103,9 @@ const openTab = (name: string) =>
 describe("four pages under one heading", () => {
   it("offers the four, and opens on the report without being asked", async () => {
     await mount();
-    expect(tabs()).toEqual(["Report", "Rounds", "Paddocks", "Mobs"]);
+    // Mobs left for Settings: this is the page you print for the
+    // conservationist, and a mob editor sitting in it was off-subject.
+    expect(tabs()).toEqual(["Report", "Rounds", "Paddocks"]);
     expect(document.querySelector(".gr-tab--on")!.textContent).toBe("Report");
     expect(screen.getByText("Grazing Records")).toBeTruthy();
   });

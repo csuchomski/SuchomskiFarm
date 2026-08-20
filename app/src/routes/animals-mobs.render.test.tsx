@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import type { RealAnimal } from "../lib/herd";
@@ -114,6 +114,16 @@ const mount = async () => {
   await waitFor(() => expect(screen.queryByText("Loading herd…")).toBeNull());
 };
 
+/** Every mob heading on the page, in order. */
+const headed = (): string[] =>
+  [...document.querySelectorAll(".animals-mob__name")].map((n) => n.textContent ?? "");
+
+/** A mob heading by name — the drop target and the picker both live on it. */
+const heading = (name: string): HTMLElement =>
+  [...document.querySelectorAll(".animals-mob")].find(
+    (n) => n.querySelector(".animals-mob__name")?.textContent === name,
+  ) as HTMLElement;
+
 /** The block a mob heading opens, up to the next one. */
 const rowsUnder = (mobName: string): string[] => {
   const heads = [...document.querySelectorAll(".animals-mob, .animals-group, .grid-row")];
@@ -151,13 +161,40 @@ describe("the herd, grouped by mob", () => {
     expect(rowsUnder("Not in a mob")).toEqual(expect.arrayContaining(["Bramble", "Juniper"]));
   });
 
-  it("heads nothing on a farm with one mob and nobody outside it", async () => {
-    mobs = [mob("main", "Main mob")];
-    members = herd.map((a) => memberOf(a.id, "main"));
+  it("heads nothing on a farm with no mobs at all", async () => {
+    mobs = [];
+    members = [];
     await mount();
     expect(document.querySelector(".animals-mob")).toBeNull();
     // and the list is still there, reading as it always did
     expect(screen.getByText("Mercy")).toBeTruthy();
+  });
+
+  it("keeps a 'Not in a mob' heading even when everybody is in one", async () => {
+    // Otherwise there is nowhere to put an animal you want out of her mob,
+    // and a farm can get animals into mobs but never back out.
+    mobs = [mob("main", "Main mob")];
+    members = herd.map((a) => memberOf(a.id, "main"));
+    await mount();
+    expect(headed()).toEqual(["Main mob", "Not in a mob"]);
+  });
+
+  it("heads a mob nobody is in yet, so a mob just made can be filled", async () => {
+    members = herd.map((a) => memberOf(a.id, "main"));
+    await mount();
+    expect(headed()).toContain("Weaners");
+  });
+
+  it("heads a retired mob only while somebody is still in it", async () => {
+    mobs = [mob("main", "Main mob"), { ...mob("old", "Last year's weaners"), active: false }];
+    members = [memberOf("a1", "main")];
+    await mount();
+    expect(headed()).not.toContain("Last year's weaners");
+
+    cleanup();
+    members = [memberOf("a1", "main"), memberOf("a2", "old")];
+    await mount();
+    expect(headed()).toContain("Last year's weaners");
   });
 });
 
@@ -198,12 +235,114 @@ describe("moving an animal between mobs", () => {
     await waitFor(() => expect(screen.getByText(/not on this farm/)).toBeTruthy());
   });
 
-  it("offers no dragging on a farm with only one mob, since there is nowhere to drop", async () => {
+  it("drags on a farm with one mob, because in and out is still two places", async () => {
     mobs = [mob("main", "Main mob")];
     members = [memberOf("a1", "main")];
     await mount();
+    expect(screen.getByText("Mercy").closest("a")!.getAttribute("draggable")).toBe("true");
+
     const row = screen.getByText("Mercy").closest("a")!;
-    expect(row.getAttribute("draggable")).toBe("false");
+    fireEvent.dragStart(row, { dataTransfer: { setData: vi.fn(), effectAllowed: "" } });
+    fireEvent.drop(heading("Not in a mob"));
+    await waitFor(() => expect(setAnimalMob).toHaveBeenCalledWith("farm-1", "a1", null));
+  });
+
+  it("puts an animal into a mob nobody is in yet", async () => {
+    members = herd.map((a) => memberOf(a.id, "main"));
+    await mount();
+    const row = screen.getByText("Juniper").closest("a")!;
+    fireEvent.dragStart(row, { dataTransfer: { setData: vi.fn(), effectAllowed: "" } });
+    fireEvent.drop(heading("Weaners"));
+    await waitFor(() => expect(setAnimalMob).toHaveBeenCalledWith("farm-1", "a3", "weaners"));
+  });
+
+  it("takes no drops into a retired mob", async () => {
+    mobs = [mob("main", "Main mob"), { ...mob("old", "Last year's weaners"), active: false }];
+    members = [memberOf("a1", "main"), memberOf("a2", "old")];
+    await mount();
+    const row = screen.getByText("Mercy").closest("a")!;
+    fireEvent.dragStart(row, { dataTransfer: { setData: vi.fn(), effectAllowed: "" } });
+    fireEvent.drop(heading("Last year's weaners"));
+    expect(setAnimalMob).not.toHaveBeenCalled();
+  });
+
+  it("still lets an animal out of a retired mob", async () => {
+    mobs = [mob("main", "Main mob"), { ...mob("old", "Last year's weaners"), active: false }];
+    members = [memberOf("a1", "main"), memberOf("a2", "old")];
+    await mount();
+    const row = screen.getByText("Bramble").closest("a")!;
+    fireEvent.dragStart(row, { dataTransfer: { setData: vi.fn(), effectAllowed: "" } });
+    fireEvent.drop(heading("Not in a mob"));
+    await waitFor(() => expect(setAnimalMob).toHaveBeenCalledWith("farm-1", "a2", null));
+  });
+});
+
+describe("the same three jobs without a pointer", () => {
+  /* Drag and drop does not happen on a phone — a touch never fires
+     dragstart — and the barn is where this page gets opened. Every heading
+     that takes a drop carries a picker that does the same job by tap. */
+
+  const pick = (mobName: string, label: string, value: string) => {
+    fireEvent.click(within(heading(mobName)).getByRole("button", { name: label }));
+    fireEvent.change(within(heading(mobName)).getByRole("combobox"), { target: { value } });
+  };
+
+  it("adds an animal to a mob", async () => {
+    await mount();
+    pick("Weaners", "add an animal to Weaners", "a2");
+    await waitFor(() => expect(setAnimalMob).toHaveBeenCalledWith("farm-1", "a2", "weaners"));
+  });
+
+  it("takes an animal out of every mob", async () => {
+    await mount();
+    pick("Not in a mob", "take an animal out of her mob", "a1");
+    await waitFor(() => expect(setAnimalMob).toHaveBeenCalledWith("farm-1", "a1", null));
+  });
+
+  it("says which mob each candidate is in now, so the wrong cow is not moved", async () => {
+    await mount();
+    fireEvent.click(within(heading("Weaners")).getByRole("button", { name: "add an animal to Weaners" }));
+    const options = [...within(heading("Weaners")).getByRole("combobox").querySelectorAll("option")]
+      .map((o) => o.textContent);
+    expect(options).toEqual(["Which one…", "Bramble · Main mob", "Mercy · Main mob"]);
+  });
+
+  it("offers only animals who are in a mob when taking one out", async () => {
+    members = [memberOf("a1", "main")];
+    await mount();
+    fireEvent.click(
+      within(heading("Not in a mob")).getByRole("button", { name: "take an animal out of her mob" }),
+    );
+    const options = [...within(heading("Not in a mob")).getByRole("combobox").querySelectorAll("option")]
+      .map((o) => o.textContent);
+    expect(options).toEqual(["Which one…", "Mercy · Main mob"]);
+  });
+
+  it("offers nothing to take out when nobody is in a mob", async () => {
+    members = [];
+    await mount();
+    expect(
+      within(heading("Not in a mob")).queryByRole("button", { name: "take an animal out of her mob" }),
+    ).toBeNull();
+  });
+
+  it("backs out without moving anybody", async () => {
+    await mount();
+    fireEvent.click(within(heading("Weaners")).getByRole("button", { name: "add an animal to Weaners" }));
+    fireEvent.click(within(heading("Weaners")).getByRole("button", { name: "cancel" }));
+    expect(within(heading("Weaners")).queryByRole("combobox")).toBeNull();
+    expect(setAnimalMob).not.toHaveBeenCalled();
+  });
+
+  it("offers the whole herd, not just what the search box left on screen", async () => {
+    // Picking by name is an explicit choice. Offering only the filtered list
+    // would look like animals had gone missing.
+    await mount();
+    fireEvent.change(screen.getByLabelText("Search animals"), { target: { value: "Mercy" } });
+    fireEvent.click(within(heading("Weaners")).getByRole("button", { name: "add an animal to Weaners" }));
+    const options = [...within(heading("Weaners")).getByRole("combobox").querySelectorAll("option")]
+      .map((o) => o.textContent);
+    expect(options).toContain("Bramble · Main mob");
   });
 });
 

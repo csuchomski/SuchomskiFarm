@@ -324,6 +324,7 @@ describe("where it lives", () => {
       "Breeds",
       "Accounts",
       "Schedules",
+      "Payments",
       "Farm & people",
     ]);
     // Opening Settings lands on the ground rather than on the breed list.

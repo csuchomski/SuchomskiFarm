@@ -8,6 +8,7 @@ import Mobs from "./Mobs";
 import BooksAccounts from "./BooksAccounts";
 import StoreSchedules from "./StoreSchedules";
 import FarmAndPeople from "./FarmAndPeople";
+import Payments from "./Payments";
 
 /**
  * Settings: how this farm is set up, as against what happened on it today.
@@ -39,6 +40,12 @@ import FarmAndPeople from "./FarmAndPeople";
  * forever; **Schedules** is a delivery pattern rather than a delivery. Both
  * were sitting among the pages their module is worked in daily.
  *
+ * **Payments** is what this farm takes — cash at the gate, Venmo, Zelle,
+ * whatever it decides. The list used to be one global three shared by every
+ * business on the instance and editable only from the SQL editor; migration
+ * 057 gave each business its own, and a decision nobody can make is not a
+ * decision.
+ *
  * Settings sits outside every module on purpose — a rental business has no
  * herd and will still have things to configure — so it is a top-level item
  * rather than a section of one. What is *inside* it is gated: a farm with no
@@ -63,7 +70,10 @@ export default function Settings() {
       ? [{ id: "accounts", label: "Accounts", hint: "The chart the books post against", node: () => <BooksAccounts /> }]
       : []),
     ...(store
-      ? [{ id: "schedules", label: "Schedules", hint: "When the store delivers and collects", node: () => <StoreSchedules /> }]
+      ? [
+          { id: "schedules", label: "Schedules", hint: "When the store delivers and collects", node: () => <StoreSchedules /> },
+          { id: "payments", label: "Payments", hint: "What this farm takes at the gate", node: () => <Payments /> },
+        ]
       : []),
     { id: "farm", label: "Farm & people", hint: "The farm's name, and who can sign in", node: () => <FarmAndPeople /> },
   ];

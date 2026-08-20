@@ -652,3 +652,78 @@ describe("the map, now that it is the only one", () => {
     expect(outlines).toHaveLength(0);
   });
 });
+
+describe("the far end of a paddock", () => {
+  /**
+   * "The rest of it" left two feet behind.
+   *
+   * The form draws a hair's breadth of strip when the wire sits on the back
+   * line, so a freshly-opened form shows something rather than a line of no
+   * width. That floor had no ceiling: with the back line at the far fence it
+   * pushed the wire *past* it, and offered — and stood ready to record — a
+   * strip of ground that is not there. On a 416-foot paddock, half a percent
+   * reads as two feet of grass.
+   */
+  beforeEach(() => {
+    events.length = 0;
+    // The farm's own record: Paddock 5 taken in five bites, the last one
+    // "the rest of it", so the mob is standing at the far end.
+    events.push(strip("e1", "p5", 0, 0.165, "2026-08-17T12:37:00.000Z"));
+    events.push(strip("e2", "p5", 0.165, 0.32, "2026-08-18T01:23:00.000Z"));
+    events.push(strip("e3", "p5", 0.32, 0.49, "2026-08-18T23:42:00.000Z"));
+    events.push(strip("e4", "p5", 0.49, 0.706851, "2026-08-20T03:02:00.000Z"));
+    events.push(strip("e5", "p5", 0.706851, 1, null));
+  });
+
+  it("says the paddock is finished rather than offering two more feet of it", async () => {
+    await mount();
+    expect(screen.getByText(/grazed to the far end in this pass/)).toBeTruthy();
+  });
+
+  it("offers no width of grass at the far fence", async () => {
+    // This is the figure the farm saw: the Width tile read 2′, because the
+    // wire sat half a percent past the end of a 416-foot paddock.
+    //
+    // The percentage readout beside it was no help at all — 1.005 × 100 is
+    // 100.49999999999999 in binary, so it rounded *down* and displayed a
+    // tidy "100% → 100%" over a strip that was not zero. The width is where
+    // the phantom shows, so the width is what this checks.
+    await mount();
+    const widths = [...document.querySelectorAll(".grz-strip-stats__v")].map((n) => n.textContent);
+    expect(widths).not.toContain("2′");
+  });
+
+  it("offers no width to open, because there is none", async () => {
+    await mount();
+    expect(screen.queryByRole("button", { name: "The rest of it" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "A day" })).toBeNull();
+  });
+
+  it("keeps the back line movable, which is how another pass is started", async () => {
+    // Hiding this would strand the farmer on the message.
+    await mount();
+    expect(screen.getByRole("button", { name: "Move the back line" })).toBeTruthy();
+  });
+
+  it("will not record a strip of ground that is not there", async () => {
+    await mount();
+    const log = screen.getByRole("button", { name: "Log the move" });
+    expect(log.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(log);
+    expect(moved).not.toHaveBeenCalled();
+  });
+
+  it("still takes the rest of it when there is a rest to take", async () => {
+    // The floor is right in the middle of a paddock; only the far end was
+    // ever wrong.
+    events.length = 0;
+    events.push(strip("e1", "p5", 0, 0.7, null));
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "The rest of it" }));
+    fireEvent.click(screen.getByRole("button", { name: "Log the move" }));
+    await waitFor(() => expect(moved).toHaveBeenCalled());
+    const draft = moved.mock.calls[0][1];
+    expect(draft.sweptFrom).toBeCloseTo(0.7, 6);
+    expect(draft.sweptTo).toBe(1);
+  });
+});

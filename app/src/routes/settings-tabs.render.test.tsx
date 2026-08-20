@@ -6,16 +6,16 @@ import { MemoryRouter } from "react-router-dom";
 /**
  * What Settings holds, and who sees which part of it.
  *
- * Settings grew from two tabs to seven by taking in the pages that are set up
+ * Settings grew from two tabs to eight by taking in the pages that are set up
  * once and then left alone — the ground, the mobs, the grazing plan, the
- * chart of accounts, the delivery schedules. The two things worth pinning are
- * the ones that break quietly.
+ * chart of accounts, the delivery schedules, and what the farm takes at the
+ * gate. The two things worth pinning are the ones that break quietly.
  *
  * **Each tab is gated by its module.** Settings itself is not: a business
  * with no herd still has a name and still has people. So the gating has to be
  * inside, tab by tab, and a rental business must not be offered a mob editor.
  *
- * **Only the open tab mounts.** Seven pages that each fetch on mount would
+ * **Only the open tab mounts.** Eight pages that each fetch on mount would
  * mean opening Settings goes and gets the ground, the herd, the plan, the
  * breeds, the chart of accounts and every delivery schedule at once.
  */
@@ -54,6 +54,7 @@ vi.mock("./Breeds", () => stub("breeds"));
 vi.mock("./BooksAccounts", () => stub("accounts"));
 vi.mock("./StoreSchedules", () => stub("schedules"));
 vi.mock("./FarmAndPeople", () => stub("farm"));
+vi.mock("./Payments", () => stub("payments"));
 
 beforeEach(() => {
   modules = ["herd", "store", "books"];
@@ -69,7 +70,7 @@ const mount = async (entry = "/settings") => {
 const tabs = () => [...document.querySelectorAll(".gr-tab")].map((t) => t.textContent);
 
 describe("what a farm with everything sees", () => {
-  it("offers the seven, ground first", async () => {
+  it("offers the eight, ground first", async () => {
     await mount();
     expect(tabs()).toEqual([
       "Ground",
@@ -78,12 +79,13 @@ describe("what a farm with everything sees", () => {
       "Breeds",
       "Accounts",
       "Schedules",
+      "Payments",
       "Farm & people",
     ]);
     expect(document.querySelector(".gr-tab--on")!.textContent).toBe("Ground");
   });
 
-  it("mounts the open tab and none of the other six", async () => {
+  it("mounts the open tab and none of the other seven", async () => {
     await mount();
     expect(mounted).toEqual(["ground"]);
     fireEvent.click(screen.getByRole("tab", { name: "Accounts" }));
@@ -104,7 +106,7 @@ describe("what a business without the module sees", () => {
     expect(tabs()).toEqual(["Accounts", "Farm & people"]);
   });
 
-  it("keeps schedules off a farm with no store", async () => {
+  it("keeps schedules and payments off a farm with no store", async () => {
     modules = ["herd"];
     await mount();
     expect(tabs()).toEqual(["Ground", "Mobs", "Grazing plan", "Breeds", "Farm & people"]);

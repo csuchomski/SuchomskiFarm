@@ -78,14 +78,14 @@ export default function StoreOrders() {
 
   const refresh = useCallback(async () => {
     if (businessId === null) {
-      setLoad({ state: "ok", orders: [], customers: [], products: [], methods: await fetchPaymentMethods() });
+      setLoad({ state: "ok", orders: [], customers: [], products: [], methods: [] });
       return;
     }
     const [orders, customers, store, methods] = await Promise.all([
       fetchOrders(businessId),
-      fetchCustomers(),
+      fetchCustomers(businessId),
       fetchStoreData({ businessId, farmId }),
-      fetchPaymentMethods(),
+      fetchPaymentMethods(businessId),
     ]);
     setLoad({ state: "ok", orders, customers, products: store.products, methods });
   }, [businessId, farmId]);

@@ -92,8 +92,8 @@ export async function setArchived(id: string, archived: boolean): Promise<void> 
  * Their login survives this — profiles.id references auth.users, not the
  * other way round, and removing an account needs the service_role key.
  */
-export async function deleteCustomer(id: string): Promise<void> {
-  const { error } = await supabase.rpc("delete_customer", { p_id: id });
+export async function deleteCustomer(id: string, businessId: number): Promise<void> {
+  const { error } = await supabase.rpc("delete_customer", { p_id: id, p_business_id: businessId });
   if (error) throw new Error(error.message);
 }
 
@@ -126,8 +126,9 @@ export const hasLogin = (c: Customer): boolean => c.has_login !== false;
  * dropped the foreign key that required one, and this function is the only
  * thing that writes has_login false.
  */
-export async function addCustomer(patch: CustomerPatch): Promise<string> {
+export async function addCustomer(businessId: number, patch: CustomerPatch): Promise<string> {
   const { data, error } = await supabase.rpc("add_customer", {
+    p_business_id: businessId,
     p_first_name: patch.first_name.trim(),
     p_last_name: patch.last_name.trim(),
     p_email: patch.email.trim(),

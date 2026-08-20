@@ -32,7 +32,12 @@ import {
   type Weekday,
 } from "../lib/schedules";
 import { amountDue, completePickup, validateCollection } from "../lib/orders";
-import { fetchPaymentMethods, methodCodes, type PaymentMethodOption } from "../lib/payment-methods";
+import {
+  fetchShopPaymentMethods,
+  methodCodes,
+  methodsFor,
+  type PaymentMethodOption,
+} from "../lib/payment-methods";
 import { maxOffer, quantityLabel, quantityOptions, stepFor } from "../lib/quantities";
 import "./customer-store.css";
 
@@ -116,7 +121,7 @@ export default function CustomerStore() {
       // The account tab needs a name to show. A missing profile is not an
       // error — the row is created by a trigger and may lag a fresh signup.
       fetchProfile(userId).catch(() => null),
-      fetchPaymentMethods(),
+      fetchShopPaymentMethods(),
     ]);
     setResult({ state: "ok", products, orders, schedules, profile, methods });
   }, [userId]);
@@ -299,6 +304,14 @@ export default function CustomerStore() {
   const subOptions =
     subProduct && !capacityLoading ? quantityOptions(stepFor(subProduct), subCap) : EMPTY_QUANTITIES;
 
+  /**
+   * Whose shop this product is. The methods offered at collection are that
+   * business's — one farm takes Zelle, the next takes cash at the gate, and
+   * the two pickup functions refuse a method the seller does not offer.
+   */
+  const productBusiness = (id: number) => products.find((p) => p.id === id)?.business_id ?? null;
+  const methodsHere = (productId: number) => methodsFor(methods, productBusiness(productId));
+
   const productName = (id: number) => products.find((p) => p.id === id)?.name ?? "Item";
   const productUnit = (id: number) => products.find((p) => p.id === id)?.unit ?? "";
   const productPrice = (id: number) => products.find((p) => p.id === id)?.price ?? null;
@@ -316,12 +329,12 @@ export default function CustomerStore() {
     setNotice(null);
   };
 
-  const collectProblem = (ordered: number) =>
+  const collectProblem = (ordered: number, productId: number) =>
     validateCollection({
       ordered,
       quantity: collectQty,
       paymentMethod: collectMethod,
-      allowed: methodCodes(methods),
+      allowed: methodCodes(methodsHere(productId)),
     });
 
   /**
@@ -334,7 +347,7 @@ export default function CustomerStore() {
     productId: number;
     ordered: number;
   }) => {
-    if (collectProblem(input.ordered)) return;
+    if (collectProblem(input.ordered, input.productId)) return;
     const quantity = Number(collectQty);
     const paid = amountDue(productPrice(input.productId), quantity);
 
@@ -387,7 +400,8 @@ export default function CustomerStore() {
             sentence, so adding one doesn't leave this line lying. */}
         <p className="shop-hero__lede text-wrap-pretty">
           Reserve what you want and pick it up at the farm.
-          {methods.length > 0 && ` Pay by ${orList(methods.map((m) => m.label))} when you collect.`}
+          {methods.length > 0 &&
+            ` Pay by ${orList([...new Set(methods.map((m) => m.label))])} when you collect.`}
         </p>
       </div>
 
@@ -591,12 +605,12 @@ export default function CustomerStore() {
                     unit={productUnit(sch.product_id)}
                     ordered={sch.quantity}
                     price={productPrice(sch.product_id)}
-                    methods={methods}
+                    methods={methodsHere(sch.product_id)}
                     quantity={collectQty}
                     onQuantity={setCollectQty}
                     method={collectMethod}
                     onMethod={setCollectMethod}
-                    problem={collectProblem(sch.quantity)}
+                    problem={collectProblem(sch.quantity, sch.product_id)}
                     busy={busyId === sch.id}
                     onConfirm={() =>
                       void handleCollect({
@@ -673,12 +687,12 @@ export default function CustomerStore() {
                 unit={productUnit(o.product_id)}
                 ordered={o.quantity}
                 price={productPrice(o.product_id)}
-                methods={methods}
+                methods={methodsHere(o.product_id)}
                 quantity={collectQty}
                 onQuantity={setCollectQty}
                 method={collectMethod}
                 onMethod={setCollectMethod}
-                problem={collectProblem(o.quantity)}
+                problem={collectProblem(o.quantity, o.product_id)}
                 busy={busyId === o.id}
                 onConfirm={() =>
                   void handleCollect({

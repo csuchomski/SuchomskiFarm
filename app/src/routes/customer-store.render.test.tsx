@@ -196,10 +196,15 @@ vi.mock("../lib/orders", async (importOriginal) => ({
 
 vi.mock("../lib/payment-methods", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/payment-methods")>()),
-  fetchPaymentMethods: vi.fn(async () => [
-    { code: "Cash", label: "Cash", active: true, sort_order: 10 },
-    { code: "Venmo", label: "Venmo", active: true, sort_order: 20 },
-    { code: "Check", label: "Check", active: true, sort_order: 30 },
+  // The shop spans businesses, so the storefront reads every shop's methods
+  // and picks the seller's at collection. Rocky Ridge's Zelle is here to be
+  // left out: offering it on a Suchomski pickup is what the database's
+  // composite key now refuses.
+  fetchShopPaymentMethods: vi.fn(async () => [
+    { code: "Cash", label: "Cash", active: true, sort_order: 10, business_id: 5 },
+    { code: "Venmo", label: "Venmo", active: true, sort_order: 20, business_id: 5 },
+    { code: "Check", label: "Check", active: true, sort_order: 30, business_id: 5 },
+    { code: "Zelle", label: "Zelle", active: true, sort_order: 10, business_id: 13 },
   ]),
 }));
 
@@ -343,7 +348,11 @@ describe("Collecting an order", () => {
     fireEvent.click(screen.getByRole("button", { name: /Pickup/ }));
   };
 
-  it("offers Check alongside Cash and Venmo", async () => {
+  it("offers what the farm selling it takes, and nothing another farm takes", async () => {
+    // Check is here because migration 022 put it in the table. Zelle is not,
+    // because it belongs to Rocky Ridge and this is a Suchomski pickup — the
+    // shop spans businesses but a payment does not, and the composite key on
+    // orders.payment_method would refuse it at the moment of collection.
     await openPickupTab();
     fireEvent.click(screen.getAllByRole("button", { name: "I've picked this up" })[0]);
 

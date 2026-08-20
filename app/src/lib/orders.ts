@@ -74,10 +74,29 @@ export async function fetchOrders(businessId: number): Promise<RealOrder[]> {
  * their own — so filtering to role 'buyer' would hide the customer you
  * reserve for most often.
  */
-export async function fetchCustomers(): Promise<Customer[]> {
+export async function fetchCustomers(businessId: number): Promise<Customer[]> {
+  // Two reads, because `profiles` has no business_id and should not have one:
+  // a customer can buy from two farms and is still one person. Who counts as
+  // this business's customer is the union of its orders, its standing orders
+  // and the walk-ins typed in at its gate, which is what `customer_ids_of`
+  // answers. See migration 056.
+  //
+  // This used to select `profiles` with no filter at all, which listed every
+  // profile on the instance — another farm's owner included. The policy has
+  // been fixed too, so this read is now scoped twice; the filter is what
+  // keeps one farmer's three businesses from pooling their customers.
+  const { data: ids, error: idsError } = await supabase.rpc("customer_ids_of", {
+    p_business_id: businessId,
+  });
+  if (idsError) throw new Error(`customer_ids_of: ${idsError.message}`);
+
+  const wanted = ((ids ?? []) as string[]).filter(Boolean);
+  if (wanted.length === 0) return [];
+
   const { data, error } = await supabase
     .from("profiles")
     .select("id, first_name, last_name, email, phone, role, archived_at, created_at, has_login")
+    .in("id", wanted)
     .order("first_name");
   if (error) throw new Error(`profiles: ${error.message}`);
   return (data ?? []) as Customer[];

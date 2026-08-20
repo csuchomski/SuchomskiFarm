@@ -60,7 +60,7 @@ export default function StoreCustomerDetail() {
       return;
     }
     const [customers, orders, store] = await Promise.all([
-      fetchCustomers(),
+      fetchCustomers(businessId),
       fetchOrders(businessId),
       fetchStoreData({ businessId, farmId }),
     ]);
@@ -160,7 +160,7 @@ export default function StoreCustomerDetail() {
     setBusy(true);
     setError(null);
     try {
-      await deleteCustomer(customer.id);
+      await deleteCustomer(customer.id, businessId!);
       navigate("/store/customers");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

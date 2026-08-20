@@ -92,7 +92,6 @@ export const allGroups: NavGroup[] = [
     items: [
       { label: "Products", to: "/store/products" },
       { label: "Orders", to: "/store/orders" },
-      { label: "Schedules", to: "/store/schedules" },
       { label: "Forecast", to: "/store/forecast" },
       { label: "Customers", to: "/store/customers" },
     ],
@@ -112,7 +111,6 @@ export const allGroups: NavGroup[] = [
     heading: "Books",
     items: [
       { label: "Transactions", to: "/books/transactions" },
-      { label: "Accounts", to: "/books/accounts" },
       { label: "Balance sheet", to: "/books/balance-sheet" },
       { label: "Reports", to: "/books/reports" },
       { label: "Taxes", to: "/books/taxes" },

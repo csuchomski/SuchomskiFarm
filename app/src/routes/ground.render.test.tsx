@@ -313,11 +313,19 @@ describe("putting retired ground back", () => {
 });
 
 describe("where it lives", () => {
-  it("is the first tab of Settings, ahead of Breeds", async () => {
+  it("is the first tab of Settings, ahead of everything else the farm is set up with", async () => {
     const { default: Settings } = await import("./Settings");
     render(<MemoryRouter><Settings /></MemoryRouter>);
     const tabs = [...document.querySelectorAll(".gr-tab")].map((t) => t.textContent);
-    expect(tabs).toEqual(["Ground", "Breeds"]);
+    expect(tabs).toEqual([
+      "Ground",
+      "Mobs",
+      "Grazing plan",
+      "Breeds",
+      "Accounts",
+      "Schedules",
+      "Farm & people",
+    ]);
     // Opening Settings lands on the ground rather than on the breed list.
     expect(document.querySelector(".gr-tab--on")!.textContent).toBe("Ground");
   });

@@ -64,6 +64,8 @@ export default function Animals() {
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
+  /** Which heading has its picker open — a mob's id, or "loose". */
+  const [picking, setPicking] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -180,9 +182,16 @@ export default function Animals() {
    * but they are now a division *within* a mob rather than the whole shape of
    * the page.
    *
-   * Animals in no mob come last, under a heading that says so. On a farm with
-   * one mob and nobody outside it there is nothing to head, and the list reads
-   * exactly as it did before.
+   * **Every working mob is headed, empty or not, and "Not in a mob" is always
+   * the last heading once the farm has one.** A heading is a place to put an
+   * animal, not just a label over rows that are already there: without the
+   * empty one a mob just made has nothing to drag into, and without the loose
+   * one there is no way to take an animal out of a mob at all. That was the
+   * hole — a farm could put animals into mobs and never get them back out.
+   *
+   * A mob that has been retired is headed only while somebody is still in it,
+   * and takes no drops. Its members can be dragged out; nobody can be dragged
+   * in.
    */
   const groups = useMemo(() => {
     const byMob = new Map<string, RealAnimal[]>();
@@ -193,20 +202,53 @@ export default function Animals() {
       else byMob.set(key, [a]);
     }
     const named = mobs
-      .filter((m) => (byMob.get(m.id)?.length ?? 0) > 0)
-      .map((m) => ({ mobId: m.id, mobName: m.name, rows: byMob.get(m.id) ?? [] }));
+      .filter((m) => m.active || (byMob.get(m.id)?.length ?? 0) > 0)
+      .map((m) => ({
+        mobId: m.id as string | null,
+        mobName: m.name,
+        target: m.active,
+        rows: byMob.get(m.id) ?? [],
+      }));
     const loose = byMob.get("") ?? [];
+    const anyMob = mobs.some((m) => m.active);
     return [
       ...named,
-      ...(loose.length > 0 ? [{ mobId: null, mobName: "Not in a mob", rows: loose }] : []),
+      ...(anyMob || loose.length > 0
+        ? [{ mobId: null, mobName: "Not in a mob", target: true, rows: loose }]
+        : []),
     ].map((g) => ({ ...g, sides: sides(g.rows) }));
   }, [visible, mobs, mobOf]);
 
   /** A heading earns its place once there is more than one thing to head. A
-   *  farm with one mob and nobody outside it reads as it always did. */
+   *  farm with no mobs at all reads as this list always did. */
   const showMobs = groups.length > 1;
-  /** Nowhere to drag an animal to until there are two mobs. */
-  const canDrag = mobs.filter((m) => m.active).length > 1;
+  /** One mob is enough: an animal can be dragged into it, and back out of it
+   *  onto "Not in a mob". */
+  const canDrag = mobs.some((m) => m.active);
+
+  /**
+   * Who a heading could take, for the pointer-free way of doing this.
+   *
+   * Drag and drop is the quick way and it needs a pointer, which a phone in
+   * the barn does not have. Every heading that takes a drop also carries a
+   * picker that does the same job by tap — including "Not in a mob", where
+   * picking somebody takes her out.
+   *
+   * Offered from the whole herd rather than from what the filters left on
+   * screen: this is an explicit choice by name, and hiding half the herd
+   * behind a search box somebody forgot to clear would make it look like
+   * animals had gone missing.
+   */
+  const candidatesFor = (mobId: string | null) =>
+    all
+      .filter((a) => a.status === "active")
+      .filter((a) => (mobId === null ? mobOf.has(a.id) : mobOf.get(a.id) !== mobId))
+      .sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+
+  const mobNameOf = (animalId: string) => {
+    const id = mobOf.get(animalId);
+    return id === undefined ? "not in a mob" : (mobs.find((m) => m.id === id)?.name ?? "another mob");
+  };
 
   return (
     <OpsShell>
@@ -312,8 +354,9 @@ export default function Animals() {
 
           {canDrag && (
             <p className="animals-drag-note">
-              Drag an animal onto another mob to move her, or open her record and change the mob
-              there.
+              <span className="mono">add</span> on a mob puts an animal in it;{" "}
+              <span className="mono">take one out</span> pulls her from hers. With a mouse, drag her
+              row onto a heading instead.
             </p>
           )}
 
@@ -329,7 +372,7 @@ export default function Animals() {
                 <div
                   className={`animals-mob ${over === (group.mobId ?? "loose") ? "animals-mob--over" : ""}`}
                   onDragOver={(e) => {
-                    if (dragging === null) return;
+                    if (dragging === null || !group.target) return;
                     e.preventDefault();
                     setOver(group.mobId ?? "loose");
                   }}
@@ -337,7 +380,7 @@ export default function Animals() {
                   onDrop={(e) => {
                     e.preventDefault();
                     setOver(null);
-                    if (dragging !== null) void moveToMob(dragging, group.mobId);
+                    if (dragging !== null && group.target) void moveToMob(dragging, group.mobId);
                   }}
                 >
                   <span className="serif animals-mob__name">{group.mobName}</span>
@@ -345,8 +388,26 @@ export default function Animals() {
                   {/* Only while something is in the air. Repeated on every
                       heading it was three copies of the same sentence, which
                       is how a page starts reading like a manual. */}
-                  {canDrag && dragging !== null && (
-                    <span className="animals-mob__hint">drop to move her here</span>
+                  {dragging !== null && group.target && (
+                    <span className="animals-mob__hint">
+                      {group.mobId === null ? "drop to take her out" : "drop to move her here"}
+                    </span>
+                  )}
+
+                  {group.target && dragging === null && (
+                    <MobPicker
+                      open={picking === (group.mobId ?? "loose")}
+                      loose={group.mobId === null}
+                      mobName={group.mobName}
+                      candidates={candidatesFor(group.mobId)}
+                      whereIsShe={mobNameOf}
+                      onOpen={() => setPicking(group.mobId ?? "loose")}
+                      onClose={() => setPicking(null)}
+                      onPick={(animalId) => {
+                        setPicking(null);
+                        void moveToMob(animalId, group.mobId);
+                      }}
+                    />
                   )}
                 </div>
               )}
@@ -432,6 +493,67 @@ export default function Animals() {
         </>
       )}
     </OpsShell>
+  );
+}
+
+/**
+ * The tap way into and out of a mob.
+ *
+ * Sits on the mob heading, which is also the drop target, so both ways of
+ * doing it are in the same place. On "Not in a mob" it reads the other
+ * direction — picking somebody there takes her out of whatever mob she is in.
+ *
+ * Each candidate says where she is now. Moving a cow out of the wrong mob is
+ * the mistake this page can make, and the name on its own does not say which
+ * mob she is coming from.
+ */
+function MobPicker({
+  open, loose, mobName, candidates, whereIsShe, onOpen, onClose, onPick,
+}: {
+  open: boolean;
+  loose: boolean;
+  mobName: string;
+  candidates: RealAnimal[];
+  whereIsShe: (animalId: string) => string;
+  onOpen: () => void;
+  onClose: () => void;
+  onPick: (animalId: string) => void;
+}) {
+  if (!open) {
+    if (candidates.length === 0) return null;
+    return (
+      <span className="animals-mob__act">
+        <button
+          type="button"
+          className="link-button mono"
+          aria-label={loose ? "take an animal out of her mob" : `add an animal to ${mobName}`}
+          onClick={onOpen}
+        >
+          {loose ? "take one out" : "add"}
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <span className="animals-mob__act">
+      <select
+        className="animals-mob__pick"
+        aria-label={loose ? "Take an animal out of her mob" : `Add an animal to ${mobName}`}
+        value=""
+        onChange={(e) => e.target.value !== "" && onPick(e.target.value)}
+      >
+        <option value="">Which one…</option>
+        {candidates.map((a) => (
+          <option key={a.id} value={a.id}>
+            {nameOf(a)} · {whereIsShe(a.id)}
+          </option>
+        ))}
+      </select>
+      <button type="button" className="link-button mono" onClick={onClose}>
+        cancel
+      </button>
+    </span>
   );
 }
 

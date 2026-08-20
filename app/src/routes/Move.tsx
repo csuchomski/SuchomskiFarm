@@ -190,6 +190,7 @@ export default function Move() {
   const backLine = backOverride ?? (movingOn ? 0 : (standing?.backLine ?? 0));
 
   const head = group && load.state === "ok" ? groupHeadCount(group, load.members) : null;
+
   const mob =
     group && load.state === "ok"
       ? mobWeight(load.members, group.id, load.weights)
@@ -265,6 +266,16 @@ export default function Move() {
   const stripped = dest !== null && isSwept(dest);
 
   // The wire opens away from the back line, or there is nothing to grab.
+  /**
+   * The narrowest strip the form will draw.
+   *
+   * A wire opened exactly on the back line has no width, and a strip of no
+   * width is invisible on the map and reads as nothing on the readout — so
+   * the form shows a hair's breadth instead. Half a percent of a 400-foot
+   * paddock is about two feet.
+   */
+  const MIN_STRIP = 0.005;
+
   const wire =
     wireTo ??
     (dest === null
@@ -275,10 +286,24 @@ export default function Move() {
           assumptions: assumed.assumptions,
         }));
 
+  /**
+   * Where the wire actually goes.
+   *
+   * The floor keeps a freshly-opened form from drawing a strip of no width.
+   * The cap is what was missing: with the back line at the end of a fully
+   * grazed paddock, the floor pushed the wire *past* it — offering a
+   * two-foot strip of ground that is not there, and standing ready to record
+   * one. "The rest of it" left two feet behind every time.
+   */
+  const wireAt = Math.min(1, Math.max(wire, backLine + MIN_STRIP));
+
+  /** Nothing of this paddock is left to give in this pass. */
+  const nothingLeft = stripped && wireAt - backLine <= 1e-9;
+
   const strip =
     stripped && dest
       ? planStrip({
-          paddock: dest, from: backLine, to: Math.max(wire, backLine + 0.005),
+          paddock: dest, from: backLine, to: wireAt,
           headCount: head, avgWeightLb: avgWeight,
           assumptions: assumed.assumptions,
         })
@@ -342,7 +367,7 @@ export default function Move() {
       setBackOverride(f);
       if (wireTo !== null && wireTo <= f) setWireTo(null);
     } else {
-      setWireTo(Math.max(backLine + 0.005, f));
+      setWireTo(Math.max(backLine + MIN_STRIP, f));
     }
   };
 
@@ -380,7 +405,7 @@ export default function Move() {
         residualHeightInExit: ateToIn,
         utilizationPct: atePct,
         sweptFrom: stripped ? backLine : null,
-        sweptTo: stripped ? Math.max(wire, backLine + 0.005) : null,
+        sweptTo: stripped ? wireAt : null,
       });
       setNote(
         (strip
@@ -650,7 +675,7 @@ export default function Move() {
                   <>
                     <SliceShape
                       ring={destRing} headingDeg={dest.sweepHeadingDeg!}
-                      from={backLine} to={Math.max(wire, backLine + 0.005)} put={put}
+                      from={backLine} to={wireAt} put={put}
                       className="pm-proposed"
                     />
                     <CutLine
@@ -659,7 +684,7 @@ export default function Move() {
                     />
                     <CutLine
                       ring={destRing} headingDeg={dest.sweepHeadingDeg!}
-                      at={Math.max(wire, backLine + 0.005)} put={put}
+                      at={wireAt} put={put}
                       className="pm-wire" grip
                     />
                   </>
@@ -697,7 +722,7 @@ export default function Move() {
                 </span>
                 {stripped && (
                   <span className="mono grz-wire__pos">
-                    {Math.round(backLine * 100)}% → {Math.round(Math.max(wire, backLine + 0.005) * 100)}%
+                    {Math.round(backLine * 100)}% → {Math.round(wireAt * 100)}%
                   </span>
                 )}
               </div>
@@ -738,9 +763,23 @@ export default function Move() {
                 </div>
               )}
 
+              {/* The pass has reached the far fence. Said plainly, because
+                  the alternative was a strip of no width that looked like two
+                  feet of grass and could be logged as one. */}
+              {nothingLeft && (
+                <p className="grz-warn">
+                  {dest?.name} is grazed to the far end in this pass — there is nothing left of it
+                  to open. Pick the next paddock, or move the back line to start another pass.
+                </p>
+              )}
+
               {stripped && (
                 <div className="grz-wire__presets">
-                  {dayWidth !== null && (
+                  {/* The width presets go when there is no width to be had.
+                      "Move the back line" stays — starting another pass is
+                      the way out of this, and hiding it would strand the
+                      farmer on the message above. */}
+                  {!nothingLeft && dayWidth !== null && (
                     <>
                       {/* Its own figure, not half the day's width: half the
                           ground is not half the distance unless the unit is a
@@ -755,9 +794,11 @@ export default function Move() {
                       </button>
                     </>
                   )}
-                  <button type="button" className="grz-preset" onClick={() => setWireTo(1)}>
-                    The rest of it
-                  </button>
+                  {!nothingLeft && (
+                    <button type="button" className="grz-preset" onClick={() => setWireTo(1)}>
+                      The rest of it
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={`grz-preset${movingBack ? " grz-preset--on" : ""}`}
@@ -815,7 +856,7 @@ export default function Move() {
                 <Button disabled={busy} onClick={() => setCutting(!cutting)}>
                   {cutting ? "Not hay" : "Cut for hay"}
                 </Button>
-                <Button variant="filled" disabled={busy} onClick={send}>
+                <Button variant="filled" disabled={busy || nothingLeft} onClick={send}>
                   {busy ? "Saving…" : "Log the move"}
                 </Button>
               </div>

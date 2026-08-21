@@ -580,6 +580,91 @@ the missing animal the thing to fix.
   unit is added without one — `stripAcres`, `planStrip` and `widthForHours` all
   fall back to it.
 
+## Requested 2026-08-21
+
+### What a purchased animal cost to buy
+
+An animal bought in has a price, and there is nowhere to type it. Eight of the
+twelve animals on file are `origin = 'purchased'` and one of them has a figure
+recorded anywhere — put there by hand, in SQL, not by the app.
+
+Her record already has the place to *show* it. What she has cost and earned
+reports basis beside the net rather than inside it — "Cost to buy … not an
+expense, so not in the net" — because netting a $700 purchase against a
+season's milk would say she lost money in the year she was bought and never
+again. That line reads `herd.cost_entries` where `is_basis` is true. So the
+display end is built and the entry end is missing.
+
+Worth knowing before building:
+
+- **`herd.animals.purchase_price_cents` exists and is inert.** A nullable
+  bigint that no page reads, no page writes, and no database function
+  mentions. It is not the mechanism the money section uses. Either make it the
+  source of truth or drop it, but do not leave a second home for the same
+  number — that is what the weight tile was just untangled from.
+- **The ledger is the mechanism that already works.** `cost_entries.source`
+  allows `'acquisition'`, `expense_categories` has an `acquisition` category
+  at `basis_type = 'basis'`, and the one real row on file uses exactly that
+  shape. A row per purchased animal, `source = 'acquisition'`, `is_basis`
+  true, is the smallest thing that lights up the display that is already
+  there.
+- **`is_basis` is never set true by the app, and that is a bug on its own.**
+  The column defaults to false and `attribute()` inserts without it. So
+  attributing an acquisition-category transaction to an animal today books
+  her purchase price as an operating cost and subtracts it from her milk —
+  the precise arithmetic the money section was designed to avoid. Setting
+  `is_basis` from the category's `basis_type` (at insert, or in a trigger, so
+  both paths get it) is part of this work, not a separate item.
+- **A cost entry needs a date and a farm, and neither is on the animal.**
+  There is no `acquired_on` column on `herd.animals`, so the form has to ask
+  when she was bought or default it to something defensible. `farm_id` comes
+  from the animal.
+- The field belongs on `AnimalForm`, which already has an `origin` select with
+  `'purchased'` in it, so it can appear when that is what was chosen. It is
+  also wanted for animals already on file — eight of them — so editing has to
+  reach it too, not just creation.
+
+### An animal with no ear tag has no record page
+
+Victor was added and his record will not open. The reason is that
+`/animals/:tag` resolves an animal by ear tag, and Victor's ear tag is the
+empty string, so his link points at `/animals/` and there is nothing to fetch.
+
+He is not a one-off. Ear tag `1` belongs to two live animals — Martha and a
+row called "test" — and `fetchAnimalByTag` uses `.maybeSingle()`, which errors
+on more than one row rather than picking one, so tag `1` opens for neither of
+them. Blank tags and duplicate tags are the same bug seen from two sides:
+identity on the record route is a value the database does not require to be
+present or unique.
+
+Worth knowing before building:
+
+- **The database does not constrain `ear_tag` beyond NOT NULL.** An empty
+  string satisfies that, and there is no unique index. Both live cases are
+  legal rows.
+- **`AnimalForm` is not the path.** Its `canSave` already requires a non-empty
+  tag and rejects one taken by another animal, and `OffspringEditor` renders
+  the same form. Whatever fix is chosen, this is not where the guard is
+  missing.
+- **`herd.record_calving` is the path, confirmed.** It sets
+  `v_tag := btrim(coalesce(v_calf ->> 'ear_tag', ''))` and inserts that
+  straight into `animals.ear_tag`. Victor's row and the calving that made him
+  share a `created_at` to the microsecond. The calving forms on Calvings and
+  Breedings never validate the tag field, so leaving it blank while recording
+  a historical calving is all it takes.
+- **Routing by tag is load-bearing.** Roughly a dozen link sites build
+  `/animals/${a.ear_tag}`, and Mobs carries a comment warning that an id
+  reaches the page and matches nothing. Switching the route to the id is a
+  defensible fix but it is a wide change, and it makes the URL unreadable to
+  someone who thinks in tags. Requiring a tag everywhere one is written is the
+  narrower one.
+- **Whichever way it goes, `.maybeSingle()` still needs handling.** Duplicates
+  that already exist will keep throwing until either the data is cleaned or
+  the query stops assuming uniqueness the schema never promised.
+- The two rows on file are the farm's to sort out: Victor needs a tag, and one
+  of Martha or "test" needs a different one. "test" looks like it was never
+  meant to stay.
+
 ## Carried over from earlier sessions
 
 - **Health** — the whole module. Deliberately last; may never be built.

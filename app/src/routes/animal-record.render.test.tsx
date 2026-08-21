@@ -119,6 +119,14 @@ vi.mock("../lib/animal-milk", async (importOriginal) => ({
   })),
 }));
 
+let disposition: import("../lib/dispositions").Disposition | null = null;
+
+vi.mock("../lib/dispositions", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/dispositions")>()),
+  fetchDisposition: vi.fn(async () => disposition),
+  fetchCullReasons: vi.fn(async () => []),
+}));
+
 vi.mock("../lib/animal-money", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/animal-money")>()),
   fetchAnimalMoney: vi.fn(async () => []),
@@ -146,6 +154,7 @@ beforeEach(() => {
   weighings = [{ id: "w1", animalId: "a1", date: "2026-08-14", weightLb: 900, weightType: "scale", notes: null }];
   geneticsMounted.mockClear();
   recordWeight.mockClear();
+  disposition = null;
 });
 afterEach(cleanup);
 
@@ -347,5 +356,79 @@ describe("an animal with no ear tag", () => {
     const link = [...document.querySelectorAll("a")].find((a) => a.textContent?.includes("Victor"));
     expect(link).toBeTruthy();
     expect(link!.getAttribute("href")).toContain("/animals/a7");
+  });
+});
+
+describe("how she left", () => {
+  it("offers to record it, and the timeline says nothing is on file", async () => {
+    await mount();
+    expect(screen.getByRole("button", { name: "record how she left" })).toBeTruthy();
+    expect(screen.getByText("Sold or processed")).toBeTruthy();
+    expect(screen.getByText("Nothing recorded")).toBeTruthy();
+  });
+
+  it("opens the form on that button", async () => {
+    await mount();
+    expect(screen.queryByLabelText("How she left")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "record how she left" }));
+    expect(screen.getByLabelText("How she left")).toBeTruthy();
+  });
+
+  it("draws a recorded departure on the timeline, dated when it happened", async () => {
+    disposition = {
+      id: "d1", animalId: "a1", exitChannel: "sold_live", date: "2026-08-10",
+      isCull: true, cullPrimaryReasonId: "r1", cullSecondaryReasonId: null,
+      cullNote: "", notes: "", sale: null,
+    };
+    await mount();
+    // Scoped to the timeline: "Sold" is also a milk-day status in the table
+    // below, and this is about her life rather than about a gallon.
+    const life = within(document.querySelector(".life") as HTMLElement);
+    expect(life.getByText("Sold")).toBeTruthy();
+    expect(life.getByText("Culled")).toBeTruthy();
+    expect(life.getByText("10 Aug 2026")).toBeTruthy();
+    expect(screen.queryByText("Nothing recorded")).toBeNull();
+    // And the action becomes an edit rather than a second recording.
+    expect(screen.getByRole("button", { name: "edit how she left" })).toBeTruthy();
+  });
+});
+
+describe("a bull calf's record", () => {
+  // Victor: male, class 'calf', and purpose 'dairy' because record_calving
+  // copies the dam's purpose to her calf. Every bull born on the dairy string
+  // carries it, and none of them will ever fill a bucket.
+  const victor = animal({
+    id: "a7", ear_tag: "7", barn_name: "Victor", sex: "male", class: "calf", purpose: "dairy",
+  });
+
+  it("is written about as he", async () => {
+    herd = [patience, victor];
+    await mount("7");
+    expect(screen.getByText(/What he has done/)).toBeTruthy();
+    expect(screen.getByText(/Where he came from/)).toBeTruthy();
+    expect(screen.getByText(/What he has left/)).toBeTruthy();
+    expect(screen.queryByText(/What she has done/)).toBeNull();
+  });
+
+  it("gets no milk chart, dairy purpose or not", async () => {
+    herd = [patience, victor];
+    await mount("7");
+    expect(screen.queryByText("Milk")).toBeNull();
+    // And the lede doesn't promise calvings either.
+    expect(screen.getByText("Everything on file, in the order it happened.")).toBeTruthy();
+  });
+
+  it("still counts as a dairy animal, because that is where he is kept", async () => {
+    herd = [patience, victor];
+    await mount("7");
+    // The purpose pill is the enterprise, not the udder.
+    expect(screen.getByText("dairy")).toBeTruthy();
+  });
+
+  it("leaves a dairy cow's milk chart alone", async () => {
+    herd = [patience, victor];
+    await mount("0");
+    expect(screen.getByText("Milk")).toBeTruthy();
+    expect(screen.getByText(/What she has done/)).toBeTruthy();
   });
 });

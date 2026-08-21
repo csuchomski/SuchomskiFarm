@@ -659,6 +659,98 @@ anyway.
 Still the farm's to do: Victor has no tag until somebody gives him one, and
 the row called "test" on Rocky Ridge looks like it was never meant to stay.
 
+## Raised 2026-08-21 by recording a departure
+
+### The processing and death records
+
+Migration 060 fills in `herd.dispositions` and `herd.disposition_sale_details`
+— how she left, when, whether it was a cull and what it was for, and what a
+live sale brought. Two detail tables were deliberately left for later, and the
+owner chose that split knowing what was in them.
+
+`herd.disposition_processing_details` is the larger of the two and is really a
+beef-processing module rather than a few more fields: processor and address,
+inspection type, dropoff, kill and pickup dates, hanging weight, days hung,
+quality and yield grade, ribeye area, backfat, a cut sheet document, packaged
+weight, processing cost, dressing percentage, cutting yield, cost per packaged
+pound. Twenty-odd columns, most of which arrive weeks after the animal does.
+
+`herd.disposition_death_details` is small — suspected and confirmed cause,
+necropsy performed, findings, a document, disposal method — and is the more
+likely of the two to be wanted first.
+
+Worth knowing before building:
+
+- **The processing record arrives in instalments.** Dropoff is known on the
+  day, kill and hanging weight a few days later, packaged weight and cost at
+  pickup. A form that demands all of it at once will be filled in wrong or not
+  at all; this wants the same "record it, correct it later" shape 060 already
+  has.
+- **`record_disposition` refuses sale figures on a processed animal** because
+  migration 058 credits packaged meat back to her when it sells through the
+  store. The processing *cost* is a different thing and belongs in
+  `cost_entries` against her, not as negative revenue.
+- **Cause of death is where a herd-health picture would start**, and Health is
+  the module that was deliberately left last. Worth deciding whether this
+  small table is part of a disposition or the first piece of that.
+
+### One test fails about once in five full runs, and nobody knows which
+
+`npx vitest run` has come back with exactly one failure out of ~1,700 on two
+separate occasions, both times passing on every rerun. The failing test's name
+was not captured either time — the mistake was rerunning the suite to look for
+the name, which starts a fresh run rather than showing the one that failed.
+
+What is known: one test, not a file-load error; it has never failed twice in a
+row; ten-plus clean runs sit either side of each sighting, including a
+deliberate sweep of six consecutive runs immediately after the second one.
+
+Worth knowing before chasing it:
+
+- **Capture the run, don't rerun it.** `npx vitest run > run.log 2>&1` and read
+  `run.log`. Every attempt so far has thrown the evidence away.
+- The suspects are the render tests that wait on effects — `waitFor` with a
+  promise that resolves in a microtask, where an assertion can land in the tick
+  before state arrives. `disposition-editor.render.test.tsx` has a documented
+  instance of exactly that shape (the cull reasons), which was found by
+  screenshot rather than by a failure.
+- `vitest --repeat` or a seeded `--sequence.shuffle` would turn a one-in-five
+  into something reproducible faster than repeating whole runs by hand.
+
+### ~~The word "she", on an animal who isn't~~ Built 2026-08-21
+
+Victor is a bull calf and his record called him "she" throughout, on a page
+that showed `male` two inches above the copy. He also had a milk chart.
+
+`herd.animals.sex` is `CHECK (sex = ANY (ARRAY['female', 'male']))` — two
+values, both always present — so `lib/pronouns.ts` is a total function, with
+the verb agreement carried on the pronoun so no call site has to think about
+it. Threaded through the record page, the money section and the disposition
+editor, including their aria-labels. Left alone where the animal is female by
+construction: calvings and breedings are about dams, the herd roll covers the
+milking string, and the milk section only renders for an animal that gives
+milk. Made neutral rather than gendered where no particular animal is in hand
+— the mob controls on Animals and Mobs, which apply to steers and bulls too.
+
+The milk chart was a separate bug underneath the same complaint. `isMilked`
+was answering two different questions with one predicate: the Animals page
+asked "is this animal on the dairy side" for its chips and counts, and the
+record page asked "does this animal give milk". `record_calving` copies the
+dam's purpose to her calf, so every bull born on the dairy string carries
+`purpose = 'dairy'`. Split into `isDairy` (the enterprise — Victor still
+counts, because that is where he is kept and fed) and `givesMilk` (dairy,
+female, past calfhood).
+
+Two more of the same family turned up while looking:
+
+- `animal-life.ts` compared origin against `"born here"` — with a space, and
+  not one of the four values the column allows — so it never matched and every
+  home-bred animal's first step read "Bought in". Victor was born on this farm
+  in 2022 and his record said he was bought. The test covering it used the
+  same invented value, so it passed on a vocabulary nothing has ever had.
+- "His services, seasons and due dates are on Breedings" was shown on a bull.
+  Only females are bred.
+
 ## Carried over from earlier sessions
 
 - **Health** — the whole module. Deliberately last; may never be built.

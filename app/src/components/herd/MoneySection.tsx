@@ -4,6 +4,7 @@ import { fetchAnimalMoney, summariseMoney, type MoneyEntry } from "../../lib/ani
 import { fetchValuations, isHerdInventory, type Valuation } from "../../lib/depreciation";
 import { formatMoney } from "../../lib/sires";
 import type { RealAnimal } from "../../lib/herd";
+import { pronounsFor, type Pronouns } from "../../lib/pronouns";
 import "./money-section.css";
 
 /**
@@ -45,6 +46,7 @@ export function MoneySection({
   name: string;
 }) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
+  const p = pronounsFor(animal);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,7 +77,7 @@ export function MoneySection({
     <>
       <div className="section__head" style={{ marginBottom: 4 }}>
         <div className="serif" style={{ fontSize: 21 }}>
-          What she has cost and earned
+          What {p.subject} {p.has} cost and earned
         </div>
         {/* Attribution happens against a transaction, not against her — so
             this points at where the work is done rather than pretending
@@ -86,16 +88,16 @@ export function MoneySection({
       </div>
       {/* Not "not just this lactation": a beef cow has none, and her page
           should not name something she does not have. */}
-      <p className="record-section__lede">Her whole life on this farm, not just this year.</p>
+      <p className="record-section__lede">{p.Possessive} whole life on this farm, not just this year.</p>
 
       {load.state === "loading" && <p style={{ fontSize: 13, color: "var(--ink-muted)" }}>Loading…</p>}
 
       {load.state === "error" && (
-        <p style={{ fontSize: 13, color: "var(--red)" }}>Couldn't load her figures: {load.message}</p>
+        <p style={{ fontSize: 13, color: "var(--red)" }}>Couldn't load {p.possessive} figures: {load.message}</p>
       )}
 
       {load.state === "ok" && (
-        <Figures entries={load.entries} valuations={load.valuations} animal={animal} name={name} />
+        <Figures entries={load.entries} valuations={load.valuations} animal={animal} name={name} p={p} />
       )}
     </>
   );
@@ -124,11 +126,13 @@ function Figures({
   valuations,
   animal,
   name,
+  p,
 }: {
   entries: MoneyEntry[];
   valuations: Valuation[];
   animal: RealAnimal;
   name: string;
+  p: Pronouns;
 }) {
   const sum = summariseMoney(entries);
   const carried = valuations[0] ?? null;
@@ -137,8 +141,8 @@ function Figures({
     return (
       <>
         <p style={{ fontSize: 13, color: "var(--ink-muted)" }}>
-          Nothing costed against {name} yet. A ledger transaction attributed to her lands here, as does an AI
-          service and a purchase price.
+          Nothing costed against {name} yet. A ledger transaction attributed to {p.object} lands here, as does
+          an AI service and a purchase price.
         </p>
         {/* Still worth saying what the roll makes of her — a cow nothing has
             been booked against is not a cow with no value. */}
@@ -162,7 +166,9 @@ function Figures({
         <Column title="Cost" lines={spent} total={sum.operatingCents} empty="Nothing yet" />
 
         <div className="money-answer">
-          <div className="eyebrow">{ahead ? "She is ahead by" : "She is behind by"}</div>
+          <div className="eyebrow">
+            {p.Subject} {p.is} {ahead ? "ahead by" : "behind by"}
+          </div>
           <div
             className="serif mono money-answer__value"
             style={{ color: ahead ? "var(--ink)" : "var(--red)" }}
@@ -170,7 +176,7 @@ function Figures({
             {formatMoney(Math.abs(sum.netCents))}
           </div>
           <p className="money-answer__note">
-            What she has earned, less what it costs to run her.
+            What {p.subject} {p.has} earned, less what it costs to run {p.object}.
           </p>
 
           {sum.basisCents > 0 && (
@@ -189,7 +195,7 @@ function Figures({
 
       <p className="money-note">
         Attribution can be partial — a bill that was four fifths herd is recorded as four fifths — so these are
-        the amounts booked against {name}, not the whole of every bill she appears on.
+        the amounts booked against {name}, not the whole of every bill {p.subject} appears on.
       </p>
     </>
   );

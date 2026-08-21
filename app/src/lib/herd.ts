@@ -43,25 +43,42 @@ export const herdOnly = <T extends { record_type: string }>(animals: T[]): T[] =
   animals.filter((a) => a.record_type !== "reference");
 
 /**
- * Is this animal milked?
+ * Is this animal run on the dairy side of the farm?
  *
- * `purpose` is the switch, not her breeds. A cow can be a dairy breed and be
- * run as a beef cow — that is exactly what a Jersey nursing her own calf is —
- * and the farm records that decision on the animal. Breed composition says
- * what she is; purpose says what she's for.
+ * `purpose` is the switch, not breed. An animal can be a dairy breed and be
+ * run as beef — that is exactly what a Jersey nursing her own calf is — and
+ * the farm records that decision on the animal. Breed composition says what
+ * she is; purpose says what she's for.
  *
- * 'dual' counts as milked, matching herd.record_calving, which opens a
- * lactation for `purpose in ('dairy', 'dual')`. Keeping one definition here
- * and one there is the whole point: a beef cow who calved never got a
- * lactation from the database, and the app was still counting her as a cow
- * missing one.
+ * 'dual' counts, matching herd.record_calving, which opens a lactation for
+ * `purpose in ('dairy', 'dual')`. Keeping one definition here and one there
+ * is the whole point: a beef cow who calved never got a lactation from the
+ * database, and the app was still counting her as a cow missing one.
+ *
+ * **This is about the enterprise, not the udder.** A bull calf out of a dairy
+ * cow inherits `purpose = 'dairy'` from his dam — `record_calving` copies it —
+ * and belongs under the dairy heading on the Animals page, because that is
+ * where he is kept and fed. Whether he will ever be milked is `givesMilk`.
  */
-export const isMilked = (animal: { purpose: string }): boolean =>
+export const isDairy = (animal: { purpose: string }): boolean =>
   animal.purpose === "dairy" || animal.purpose === "dual";
 
+/**
+ * Will this animal ever be milked?
+ *
+ * Purpose alone said yes to Victor, a bull calf, and put a milk chart on his
+ * record. Purpose is inherited from the dam at calving, so every bull calf
+ * born on the dairy string carries 'dairy' and none of them will ever fill a
+ * bucket.
+ *
+ * A heifer calf is excluded too: she may be milked one day and is not being
+ * milked now, and a chart of nothing is not a fact about her.
+ */
+export const givesMilk = (animal: { purpose: string; sex: string; class: string }): boolean =>
+  isDairy(animal) && animal.sex === "female" && animal.class !== "calf";
+
 /** Females old enough to have calved, on the dairy side of the herd. */
-export const milkingHerd = (animals: RealAnimal[]): RealAnimal[] =>
-  herdOnly(animals).filter((a) => a.sex === "female" && a.class !== "calf" && isMilked(a));
+export const milkingHerd = (animals: RealAnimal[]): RealAnimal[] => herdOnly(animals).filter(givesMilk);
 
 export interface BreedShare {
   breedId: string;

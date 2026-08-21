@@ -186,13 +186,13 @@ export default function Mobs() {
         members: load.members,
       });
       setPick("");
-      return `${who ? nameOf(who) : "She"} is in the mob.`;
+      return `${who ? nameOf(who) : "The animal"} is in the mob.`;
     });
 
   const takeOut = (m: GrazingGroupMember, who: RealAnimal | undefined) =>
     act(async () => {
       await removeFromGroup(farmId!, m.id, today());
-      return `${who ? nameOf(who) : "She"} is out of the mob as of today.`;
+      return `${who ? nameOf(who) : "The animal"} is out of the mob as of today.`;
     });
 
   return (
@@ -419,7 +419,7 @@ export default function Mobs() {
                 {adding === g.id && unassigned.length === 0 && (
                   <p className="grz-optional">
                     Everything on the farm is already in a mob. An animal can only be in one at a
-                    time — take her out of the other one first.
+                    time — take it out of the other one first.
                   </p>
                 )}
               </section>

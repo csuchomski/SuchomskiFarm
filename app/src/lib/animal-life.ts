@@ -2,6 +2,8 @@ import type { RealAnimal } from "./herd";
 import type { RealLactation } from "./lactations";
 import type { Calving } from "./repro";
 import type { Breeding } from "./breedings";
+import type { Disposition } from "./dispositions";
+import { formatMoney } from "./sires";
 
 /**
  * What a cow has done, in the order she did it.
@@ -38,6 +40,21 @@ export interface LifeEvent {
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * Where the animal came from, in the farm's words.
+ *
+ * The four `herd.animals.origin` allows. It used to be a single comparison
+ * against `"born here"` — with a space, and not one of the four — so it never
+ * matched anything and every home-bred animal's first step read "Bought in".
+ * Victor was born on this farm in 2022 and his record said he was bought.
+ */
+const ORIGINS: Record<string, string> = {
+  born_on_farm: "On this farm",
+  purchased: "Bought in",
+  embryo_transfer: "Out of an embryo transfer",
+  leased: "Leased in",
+};
 
 /** `9 Jul 2024`, from an ISO day, without going through a Date and a
  *  timezone that could move it. */
@@ -79,10 +96,16 @@ export function buildLife(input: {
   breedings: Breeding[];
   /** Everything out of her, so a calving can name the calf it produced. */
   offspring: RealAnimal[];
+  /** How she left, when it has been recorded. Her status says only *that*
+   *  she is gone; this is the day and the reason. */
+  disposition?: Disposition | null;
   today: string;
 }): LifeEvent[] {
   const { animal, today } = input;
   const events: LifeEvent[] = [];
+  // Read up here because it decides more than the last step: a cow with a
+  // departure on file is not in milk, whatever her lactation row says.
+  const gone = input.disposition ?? null;
 
   const calvings = input.calvings
     .filter((c) => c.dam_id === animal.id)
@@ -101,7 +124,7 @@ export function buildLife(input: {
     endDate: null,
     kind: "born",
     title: "Born",
-    detail: animal.origin === "born here" ? "On this farm" : "Bought in",
+    detail: ORIGINS[animal.origin] ?? "Bought in",
     current: false,
   });
 
@@ -156,7 +179,7 @@ export function buildLife(input: {
 
   // ── lactations ─────────────────────────────────────────────────────
   for (const lactation of lactations) {
-    const running = lactation.dry_off_date === null && animal.status === "active";
+    const running = lactation.dry_off_date === null && animal.status === "active" && gone === null;
     events.push({
       key: `lactation-${lactation.id}`,
       date: lactation.fresh_date,
@@ -175,7 +198,22 @@ export function buildLife(input: {
   events.sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
 
   // ── how it ended, or that it hasn't ────────────────────────────────
-  if (animal.status === "active") {
+  //
+  // A recorded disposition is the honest version: the day she actually left
+  // and how. Without one there is only her status, which says that she is
+  // gone and nothing else — so the step is dated today, which is a lie the
+  // step has to own up to rather than state.
+  if (gone) {
+    events.push({
+      key: "gone",
+      date: gone.date,
+      endDate: null,
+      kind: "gone",
+      title: EXIT_TITLES[gone.exitChannel] ?? "Left the farm",
+      detail: goneDetail(gone),
+      current: false,
+    });
+  } else if (animal.status === "active") {
     events.push({
       key: "open",
       date: "",
@@ -191,11 +229,46 @@ export function buildLife(input: {
       date: today,
       endDate: null,
       kind: "gone",
-      title: animal.status === "sold" ? "Sold" : animal.status === "dead" ? "Died" : animal.status,
-      detail: "Off the farm",
+      title: STATUS_TITLES[animal.status] ?? "Left the farm",
+      // Her status is the only thing on file, and it carries no date. Saying
+      // so beats printing today's as though it were the day she went.
+      detail: "Off the farm — the day isn't recorded",
       current: false,
     });
   }
 
   return events;
+}
+
+/** What the exit channel is called on a timeline. The five `exit_channel`
+ *  allows, in the farm's words rather than the column's. */
+const EXIT_TITLES: Record<string, string> = {
+  sold_live: "Sold",
+  processed: "To a processor",
+  died_on_farm: "Died",
+  leased_out: "Leased out",
+  transferred: "Transferred",
+};
+
+/** Her status, for an animal marked gone before there was anywhere to record
+ *  how. `died` — not `dead`, which is not one of the values the column
+ *  allows and never matched. */
+const STATUS_TITLES: Record<string, string> = {
+  sold: "Sold",
+  culled: "Culled",
+  processed: "To a processor",
+  died: "Died",
+  leased_out: "Leased out",
+};
+
+function goneDetail(gone: Disposition): string {
+  const parts: string[] = [];
+  if (gone.isCull) parts.push("Culled");
+  if (gone.sale) {
+    const who = gone.sale.buyerName.trim();
+    parts.push(who === "" ? "Sold" : who);
+    if (gone.sale.netCents > 0) parts.push(`${formatMoney(gone.sale.netCents)} net`);
+  }
+  if (parts.length === 0) parts.push("Off the farm");
+  return parts.join(" · ");
 }

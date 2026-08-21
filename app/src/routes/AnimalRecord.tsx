@@ -17,7 +17,10 @@ import { OffspringEditor } from "../components/herd/OffspringEditor";
 import { GeneticsSection } from "../components/herd/GeneticsSection";
 import { MoneySection } from "../components/herd/MoneySection";
 import { WeightTile } from "../components/herd/WeightTile";
+import { DispositionEditor } from "../components/herd/DispositionEditor";
+import { fetchDisposition, type Disposition } from "../lib/dispositions";
 import { isSire } from "../lib/sires";
+import { pronounsFor } from "../lib/pronouns";
 import { BreedEditor } from "../components/herd/BreedEditor";
 import {
   animalPath,
@@ -26,7 +29,8 @@ import {
   fetchAnimals,
   fetchBreedComposition,
   formatAge,
-  isMilked,
+  givesMilk,
+  isDairy,
   type BreedShare,
   type RealAnimal,
 } from "../lib/herd";
@@ -50,6 +54,9 @@ type Fetch =
       /** Her last weighing, for the tile. Null when she has never been on a
        *  scale, which is most of a beef herd. */
       weight: Weighing | null;
+      /** How she left, if she has. Null for an animal still here — and for
+       *  one marked gone before there was anywhere to record how. */
+      disposition: Disposition | null;
     };
 
 export default function AnimalRecord() {
@@ -57,6 +64,7 @@ export default function AnimalRecord() {
   const [result, setResult] = useState<Fetch>({ state: "loading" });
   const [editing, setEditing] = useState(false);
   const [linking, setLinking] = useState(false);
+  const [recordingExit, setRecordingExit] = useState(false);
   const [editingBreeds, setEditingBreeds] = useState(false);
   // Bumped after a breed edit to re-run the fetch below. Composition is
   // written as a delete-then-insert, so the ids change and there's no saved
@@ -87,14 +95,15 @@ export default function AnimalRecord() {
         // Three reads for the life. A farm is needed for all of them, and a
         // failure in any one leaves the timeline empty rather than taking
         // the whole page down — the rest of her record still reads.
-        const [calvings, lactations, breedings, weighings] = farmId
+        const [calvings, lactations, breedings, weighings, disposition] = farmId
           ? await Promise.all([
               fetchCalvings(farmId).catch(() => []),
               fetchLactations(farmId).catch(() => []),
               fetchBreedings(farmId).catch(() => []),
               fetchWeighings(farmId, animal.id).catch(() => [] as Weighing[]),
+              fetchDisposition(animal.id).catch(() => null),
             ])
-          : [[], [], [], [] as Weighing[]];
+          : [[], [], [], [] as Weighing[], null];
         if (cancelled) return;
 
         const byId = new Map(all.map((a) => [a.id, a]));
@@ -105,12 +114,14 @@ export default function AnimalRecord() {
           allBreeds: composition,
           dam: animal.dam_id ? (byId.get(animal.dam_id) ?? null) : null,
           herd: all,
+          disposition,
           life: buildLife({
             animal,
             calvings,
             lactations,
             breedings,
             offspring: all.filter((a) => a.dam_id === animal.id || a.sire_id === animal.id),
+            disposition,
             today: todayLocal(),
           }),
           weight:
@@ -163,7 +174,7 @@ export default function AnimalRecord() {
     );
   }
 
-  const { animal, breeds, allBreeds, dam, herd, life, weight } = result;
+  const { animal, breeds, allBreeds, dam, herd, life, weight, disposition } = result;
   const name = animal.barn_name ?? `Tag ${animal.ear_tag}`;
   const breeding = describeBreeding(breeds);
 
@@ -179,6 +190,13 @@ export default function AnimalRecord() {
         .sort((a, b) => b.birth_date.localeCompare(a.birth_date))
     : [];
 
+  // Every line on this page used to be written about a cow. Victor is a bull
+  // calf and his sex is on the identity line two inches above the copy that
+  // called him "she".
+  const p = pronounsFor(animal);
+  // Whether this animal is milked, which is not the same as whether it is
+  // kept on the dairy side. Victor is 'dairy' and is a bull calf.
+  const milked = givesMilk(animal);
   /** Where she is in the lactation she is in, if she is in one. */
   const running = life.find((e) => e.current) ?? null;
   const inMilk = running
@@ -189,22 +207,61 @@ export default function AnimalRecord() {
     {
       id: "record",
       label: "Record",
-      hint: "Her life, her milk, what she has cost and where she came from.",
+      hint: milked
+        ? `${p.Possessive} life, ${p.possessive} milk, what ${p.subject} has cost and where ${p.subject} came from.`
+        : `${p.Possessive} life, what ${p.subject} has cost and where ${p.subject} came from.`,
       node: () => (
         <>
-          <div className="serif record-section__head">What she has done</div>
+          <div className="section__head" style={{ marginBottom: 4 }}>
+            <div className="serif record-section__head" style={{ marginBottom: 0 }}>
+              What {p.subject} {p.has} done
+            </div>
+            {/* The timeline's last step is her departure, so the way to
+                record one belongs on this heading rather than in a section
+                of its own further down the page. */}
+            {farmId && (
+              <button
+                type="button"
+                className="link-button mono"
+                onClick={() => setRecordingExit((v) => !v)}
+              >
+                {recordingExit
+                  ? "cancel"
+                  : disposition
+                    ? `edit how ${p.subject} left`
+                    : `record how ${p.subject} left`}
+              </button>
+            )}
+          </div>
           <p className="record-section__lede">
-            {/* A beef cow has calvings and no lactations. Saying "and
-                lactation" on her page names something she does not have,
-                which is the same reason the lactation section itself stays
-                off it. */}
-            {isMilked(animal)
+            {/* A beef cow has calvings and no lactations, and a bull has
+                neither. Naming something an animal cannot have is the same
+                mistake as the milk chart that used to appear on Victor. */}
+            {milked
               ? "Every calving and lactation on file, in the order they happened."
-              : "Every calving on file, in the order they happened."}
+              : animal.sex === "female"
+                ? "Every calving on file, in the order they happened."
+                : "Everything on file, in the order it happened."}
           </p>
+          {recordingExit && (
+            <DispositionEditor
+              animal={animal}
+              farmId={farmId}
+              current={disposition}
+              onCancel={() => setRecordingExit(false)}
+              onSaved={() => {
+                setRecordingExit(false);
+                // A re-read rather than a merge: recording a departure moves
+                // her status, her timeline and her earnings at once, and
+                // three of those are read from elsewhere on this page.
+                setReloadKey((k) => k + 1);
+              }}
+            />
+          )}
+
           <LifeTimeline events={life} />
 
-          {isMilked(animal) && (
+          {milked && (
             <div className="record-section">
               <MilkSection animalId={animal.id} farmId={farmId} businessId={businessId} name={name} />
             </div>
@@ -216,14 +273,14 @@ export default function AnimalRecord() {
 
           <div className="record-section two-col">
             <div>
-              <div className="serif record-section__head">Where she came from</div>
+              <div className="serif record-section__head">Where {p.subject} came from</div>
               <Pedigree animal={animal} herd={herd} breeds={allBreeds} />
             </div>
 
             <div>
               <div className="section__head" style={{ marginBottom: 12 }}>
                 <div className="serif" style={{ fontSize: 21 }}>
-                  What she has left
+                  What {p.subject} {p.has} left
                   {offspring.length > 0 && (
                     <span className="mono" style={{ fontSize: 13, color: "var(--ink-muted)" }}>
                       {" "}
@@ -325,10 +382,15 @@ export default function AnimalRecord() {
                   </p>
                 )}
 
-            <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 16 }}>
-              Her services, seasons and due dates are on{" "}
-              <Link to="/breeding?tab=breedings">Breedings</Link>.
-            </p>
+            {/* Only females are bred, so only a female has services, seasons
+                and a due date. Naming them on a bull's page is the same
+                mistake as the milk chart Victor used to get. */}
+            {animal.sex === "female" && (
+              <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 16 }}>
+                {p.Possessive} services, seasons and due dates are on{" "}
+                <Link to="/breeding?tab=breedings">Breedings</Link>.
+              </p>
+            )}
 
             {animal.notes && (
               <>
@@ -354,7 +416,7 @@ export default function AnimalRecord() {
     {
       id: "genetics",
       label: "Genetics",
-      hint: "Her markers, and what the conditions this farm tracks say about her.",
+      hint: `${p.Possessive} markers, and what the conditions this farm tracks say about ${p.object}.`,
       node: () => <GeneticsSection animalId={animal.id} farmId={farmId} />,
     },
   ];
@@ -383,9 +445,11 @@ export default function AnimalRecord() {
               <span>·</span>
               <span>{formatAge(animal.birth_date)} old</span>
               <Pill variant="outline-green">{animal.class}</Pill>
-              {/* Beef or dairy, on the identity line rather than buried in the
-                  edit form — it decides whether she has a lactation at all. */}
-              <Pill variant={isMilked(animal) ? "outline-green" : "outline"}>{animal.purpose}</Pill>
+              {/* The enterprise the animal is run on, rather than buried in
+                  the edit form. Not "is milked": a bull calf out of the dairy
+                  string inherits 'dairy' from his dam and will never fill a
+                  bucket. */}
+              <Pill variant={isDairy(animal) ? "outline-green" : "outline"}>{animal.purpose}</Pill>
               {animal.status !== "active" && <Pill variant="outline">{animal.status}</Pill>}
             </div>
           </div>
@@ -451,6 +515,7 @@ export default function AnimalRecord() {
                 herd: nextHerd,
                 life,
                 weight,
+                disposition,
               });
             }}
           />

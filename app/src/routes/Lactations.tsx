@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Callout, EarTag, GridRow, Pill, StatTile } from "../components/ui";
-import { animalPath, fetchAnimals, isMilked, milkingHerd, type RealAnimal } from "../lib/herd";
+import { animalPath, fetchAnimals, isDairy, milkingHerd, type RealAnimal } from "../lib/herd";
 import {
   byFreshDateDesc,
   daysInMilk,
@@ -82,7 +82,7 @@ export default function Lactations() {
   const dairyFemales = milkingHerd(animals);
   const missing = dairyFemales.filter((a) => !withLactation.has(a.id));
   const beefFemales = animals.filter(
-    (a) => a.record_type !== "reference" && a.sex === "female" && a.class !== "calf" && !isMilked(a),
+    (a) => a.record_type !== "reference" && a.sex === "female" && a.class !== "calf" && !isDairy(a),
   );
 
   return (

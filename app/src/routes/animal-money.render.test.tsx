@@ -112,9 +112,11 @@ const mount = async (tag = "1") => {
       </Routes>
     </MemoryRouter>,
   );
-  // The record tab opens on her life, so this is the sentinel for
-  // "the page has finished loading" now.
-  await screen.findByText("What she has done");
+  // The record tab opens on the animal's life, so this is the sentinel for
+  // "the page has finished loading" now. The pronoun follows `sex`, so a bull
+  // says "he" — which is the whole point, and was what this test caught when
+  // it was still hard-coded to "she".
+  await screen.findByText(/What (she|he) has done/);
 };
 
 describe("A way back", () => {

@@ -137,55 +137,78 @@ describe("A way back", () => {
 });
 
 describe("What she is carried at", () => {
-  it("says she isn't marked yet, and why the roll doesn't speak for her", async () => {
-    // Martha is a beef cow — the herd roll covers the dairy string.
+  it("says why the roll doesn't speak for her, beside the net rather than in a section", async () => {
+    // Martha is a beef cow — the herd roll covers the dairy string. It used
+    // to be a section of its own; a valuation is one line, not a heading.
     await mount();
     await waitFor(() =>
-      expect(screen.getByText(/The herd roll covers the dairy string; anyone else is valued by hand/)).toBeTruthy(),
+      expect(screen.getByText(/the herd roll covers the dairy string; anyone else is valued by hand/)).toBeTruthy(),
     );
   });
 
-  it("lists the roll as dated rows, newest first, with the movement between them", async () => {
+  it("shows what the roll carries her at when it has marked her", async () => {
     valuations.push(
       { id: "v2", animalId: "cow-2", asOf: "2026-08-10", valueCents: 142458, basis: "marked", note: "" },
       { id: "v1", animalId: "cow-2", asOf: "2025-08-10", valueCents: 179601, basis: "marked", note: "" },
     );
     await mount();
 
-    await waitFor(() => expect(screen.getAllByText("marked in the herd roll").length).toBe(2));
-    const amounts = [...document.querySelectorAll(".money-row__amount")].map((n) => n.textContent);
-    // A year of depreciation, shown as the change rather than left to be
-    // worked out — the reason the history is kept at all.
-    expect(amounts[0]).toContain("$1,424.58");
-    expect(amounts[0]).toContain("−$371.43");
-    expect(amounts[1]).toContain("$1,796.01");
+    // Nothing is costed against Martha, so the carried figure stands on its
+    // own rather than beside a net there is no arithmetic for.
+    await waitFor(() => expect(screen.getByText("Carried at")).toBeTruthy());
+    const aside = document.querySelector(".money-answer__aside")!;
+    // The newest figure. The year-on-year movement is Depreciation's job —
+    // this page says what she is worth, not how she got there.
+    expect(aside.textContent).toContain("$1,424.58");
+    expect(aside.textContent).not.toContain("$1,796.01");
   });
 
   it("keeps another animal's valuations off her page", async () => {
     valuations.push({ id: "v9", animalId: "someone-else", asOf: "2026-08-10", valueCents: 500000, basis: "marked", note: "" });
     await mount();
-    await waitFor(() => expect(screen.getByText(/No value on file/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/valued by hand/)).toBeTruthy());
+    expect(document.querySelector(".money-answer__aside")!.textContent).not.toContain("$5,000.00");
   });
 });
 
-describe("Costs and revenue on her record", () => {
+describe("What she has cost and earned", () => {
+  /** The two ledgers, not the answer panel beside them. */
+  const books = () => [...document.querySelectorAll(".money-book")].map((n) => n.textContent).join(" ");
+
   it("says so plainly when nothing has been costed against her", async () => {
     await mount();
     await waitFor(() => expect(screen.getByText(/Nothing costed against Martha yet/)).toBeTruthy());
   });
 
-  it("shows revenue, the cost of running her, and the net", async () => {
+  it("keeps what she earned and what she cost in columns of their own", async () => {
     money.push(
       entry({ kind: "revenue", amountCents: 40000, label: "Live sale" }),
       entry({ kind: "cost", amountCents: 9500 }),
     );
     await mount();
 
-    await waitFor(() => expect(screen.getByText("Revenue")).toBeTruthy());
-    const totals = document.querySelector(".money-totals")!;
-    expect(totals.textContent).toContain("$400.00");
-    expect(totals.textContent).toContain("$95.00");
-    expect(totals.textContent).toContain("+$305.00");
+    await waitFor(() => expect(screen.getByText("Earned")).toBeTruthy());
+    expect(books()).toContain("Live sale");
+    expect(books()).toContain("$400.00");
+    expect(books()).toContain("$95.00");
+  });
+
+  it("answers the question the two columns are asked for", async () => {
+    money.push(
+      entry({ kind: "revenue", amountCents: 40000, label: "Live sale" }),
+      entry({ kind: "cost", amountCents: 9500 }),
+    );
+    await mount();
+
+    await waitFor(() => expect(screen.getByText("She is ahead by")).toBeTruthy());
+    expect(document.querySelector(".money-answer__value")!.textContent).toBe("$305.00");
+  });
+
+  it("says she is behind when she is, without a minus sign to miss", async () => {
+    money.push(entry({ kind: "cost", amountCents: 9500 }));
+    await mount();
+    await waitFor(() => expect(screen.getByText("She is behind by")).toBeTruthy());
+    expect(document.querySelector(".money-answer__value")!.textContent).toBe("$95.00");
   });
 
   it("reports what she cost to buy beside the net rather than inside it", async () => {
@@ -196,42 +219,34 @@ describe("Costs and revenue on her record", () => {
     await mount();
 
     await waitFor(() => expect(screen.getByText("Cost to buy")).toBeTruthy());
-    const totals = document.querySelector(".money-totals")!;
-    // Net is −$95.00, not −$795.00: basis is capital, not a cost of the year.
-    expect(totals.textContent).toContain("−$95.00");
-    expect(totals.textContent).toContain("$700.00");
-    expect(screen.getByText(/basis — what she cost to buy, not an expense/)).toBeTruthy();
+    const answer = document.querySelector(".money-answer")!;
+    // Behind by $95.00, not $795.00: basis is capital, not a cost of the year.
+    expect(document.querySelector(".money-answer__value")!.textContent).toBe("$95.00");
+    expect(answer.textContent).toContain("$700.00");
+    expect(answer.textContent).toContain("not an expense, so not in the net");
+    // and it is nowhere in the cost column
+    expect(books()).not.toContain("$700.00");
   });
 
-  it("marks revenue apart from cost in the list", async () => {
+  it("groups what the money was for rather than listing every attribution", async () => {
+    // Three AI services are one line saying three. The dates and the
+    // individual attributions are on the transactions they came from.
     money.push(
-      entry({ kind: "revenue", amountCents: 40000, label: "Live sale" }),
-      entry({ kind: "cost", amountCents: 9500 }),
+      entry({ kind: "cost", amountCents: 9500, label: "Breeding and semen" }),
+      entry({ kind: "cost", amountCents: 9500, label: "Breeding and semen" }),
+      entry({ kind: "cost", amountCents: 4200, label: "Feed" }),
     );
     await mount();
 
-    await waitFor(() => expect(document.querySelectorAll(".money-row").length).toBe(2));
-    const amounts = [...document.querySelectorAll(".money-row__amount")].map((n) => n.textContent);
-    expect(amounts).toContain("+$400.00");
-    expect(amounts).toContain("−$95.00");
+    await waitFor(() => expect(screen.getByText("Cost")).toBeTruthy());
+    expect(books()).toContain("· 2");
+    expect(books()).toContain("$190.00");
+    expect(books()).toContain("Feed");
   });
 
   it("says the totals are what was attributed, not the whole of every bill", async () => {
     money.push(entry({ kind: "cost", amountCents: 9500 }));
     await mount();
     await waitFor(() => expect(screen.getByText(/Attribution can be partial/)).toBeTruthy());
-  });
-
-  it("names where a row came from", async () => {
-    money.push(
-      entry({ kind: "cost", amountCents: 9500, source: "breeding", note: "AI service" }),
-      entry({ kind: "cost", amountCents: 4200, label: "Feed", ledgerTransactionId: 91, note: "Feed store" }),
-    );
-    await mount();
-
-    await waitFor(() => expect(document.querySelectorAll(".money-row").length).toBe(2));
-    const list = document.querySelector(".money-list")!;
-    expect(list.textContent).toContain("recorded by breeding");
-    expect(list.textContent).toContain("from the ledger");
   });
 });

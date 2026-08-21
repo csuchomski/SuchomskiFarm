@@ -10,15 +10,13 @@ import { fetchCalvings } from "../lib/repro";
 import { fetchBreedings } from "../lib/breedings";
 import { fetchWeighings, type Weighing } from "../lib/grazing";
 import { todayLocal } from "../lib/local-time";
-import { LactationSection } from "../components/herd/LactationSection";
 import { Button, Callout, EarTag, Pill, StatTile } from "../components/ui";
 import { AnimalForm } from "../components/herd/AnimalForm";
 import { Pedigree } from "../components/herd/Pedigree";
 import { OffspringEditor } from "../components/herd/OffspringEditor";
 import { GeneticsSection } from "../components/herd/GeneticsSection";
 import { MoneySection } from "../components/herd/MoneySection";
-import { ValueSection } from "../components/herd/ValueSection";
-import { WeightSection } from "../components/herd/WeightSection";
+import { WeightTile } from "../components/herd/WeightTile";
 import { isSire } from "../lib/sires";
 import { BreedEditor } from "../components/herd/BreedEditor";
 import {
@@ -206,23 +204,8 @@ export default function AnimalRecord() {
             </div>
           )}
 
-          {isMilked(animal) && (
-            <div className="record-section">
-              <LactationSection
-                animalId={animal.id}
-                farmId={farmId}
-                canWrite={animal.sex === "female" && animal.class !== "calf"}
-              />
-            </div>
-          )}
-
           <div className="record-section">
-            <MoneySection animalId={animal.id} name={name} />
-            <ValueSection animal={animal} farmId={farmId} />
-          </div>
-
-          <div className="record-section">
-            <WeightSection animal={animal} farmId={farmId} />
+            <MoneySection animal={animal} farmId={farmId} name={name} />
           </div>
 
           <div className="record-section two-col">
@@ -425,11 +408,14 @@ export default function AnimalRecord() {
             value={formatAge(animal.birth_date)}
             label={`Age · born ${lifeDate(animal.birth_date)}`}
           />
-          <StatTile
-            size="md"
-            value={weight ? weight.weightLb : "—"}
-            unit={weight ? "lb" : undefined}
-            label={weight ? `Weighed ${lifeDate(weight.date)}` : "No weight on file"}
+          {/* Editable in place. Her weight had a section of its own further
+              down the page, which meant the figure you read and the field you
+              changed were in two different places. */}
+          <WeightTile
+            animal={animal}
+            farmId={farmId}
+            weight={weight}
+            onSaved={(next) => setResult({ ...result, weight: next })}
           />
           {inMilk ? (
             <StatTile size="md" value={inMilk.days} unit="days" label={`In milk · ${inMilk.title.toLowerCase()}`} />

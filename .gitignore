@@ -1,3 +1,9 @@
 # Vitest writes its cache beside wherever it was invoked from, which is the
 # repo root when a test run is started here rather than in app/.
 node_modules
+
+# The seeded design canvas: ~2 MB of packaged editor around the artboards.
+# The artboards and canvas.json beside it are the source; the canvas is
+# rebuilt from them by the design skill's helper and published, never read
+# back from here.
+.design/**/animal-record.html

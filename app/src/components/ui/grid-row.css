@@ -24,6 +24,10 @@
   text-align: right;
 }
 
+.show-sm {
+  display: none;
+}
+
 @media (max-width: 640px) {
   .grid-row {
     grid-template-columns: var(--grid-cols-sm);
@@ -46,6 +50,12 @@
      the wrong columns. See GridRow's `mobileCols`. */
   .hide-sm {
     display: none;
+  }
+
+  /* Its opposite: something that only earns its place once a column has been
+     dropped — a status word that had a column of its own at full width. */
+  .show-sm {
+    display: block;
   }
 }
 

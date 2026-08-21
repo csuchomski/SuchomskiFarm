@@ -102,21 +102,35 @@
   margin-bottom: -1px;
 }
 
-.record-body {
-  padding: 24px 32px 32px;
-  display: grid;
-  /* minmax(0, …), not a bare 1fr. A grid track sized `1fr` still refuses to
-     go below its content's min-content width, so the pedigree — three 132px
-     columns inside an overflow-x box — pushed this track to 400px on a
-     390px screen. html then clipped the excess instead of scrolling, which
-     put Pedigree and Offspring somewhere you could not reach at all. */
-  grid-template-columns: minmax(0, 1fr) 348px;
-  gap: 32px;
+/* Option A: one column, her life first. The two-column split that used to
+   put Pedigree in a 348px sidebar is gone — the sidebar was where the family
+   went to be ignored. */
+.record-tabbed {
+  padding: 8px 32px 32px;
 }
 
-/* Same reason: a grid item defaults to min-width: auto, which lets its
-   contents veto any shrinking the track asks for. */
-.record-body > * {
+.record-section {
+  margin-top: 36px;
+  padding-top: 28px;
+  border-top: 1px solid var(--hairline);
+}
+
+.record-section__head {
+  font-size: 21px;
+  margin-bottom: 4px;
+}
+
+.record-section__lede {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin: 0 0 20px;
+}
+
+/* minmax(0, …) is not enough on its own: a grid item defaults to
+   min-width: auto, which lets the pedigree's three 132px columns veto any
+   shrinking the track asks for. That clipped Pedigree off a 390px screen
+   entirely the last time this page had a two-column row. */
+.record-section.two-col > * {
   min-width: 0;
 }
 
@@ -280,11 +294,15 @@
   /* The record was two columns at every width. On a phone the 348px track
      put Pedigree and Offspring at x=612 on a 390px screen — off the edge,
      and the page did not scroll, so that half of the record simply could
-     not be reached. One column, and the padding comes in with it. */
-  .record-body {
+     not be reached. The page is one column now; this brings the padding in
+     with it, and flattens the one row that is still a pair. */
+  .record-tabbed {
+    padding: 4px 16px 32px;
+  }
+
+  .record-section.two-col {
     grid-template-columns: minmax(0, 1fr);
     gap: 24px;
-    padding: 20px 16px 32px;
   }
 
   /* The photo, name, tag and buttons all competed for one row. The buttons
@@ -386,4 +404,225 @@
 @media (max-width: 860px) {
   /* 16px or Safari zooms on focus. */
   .wt-field input { font-size: 16px; }
+}
+
+/* ── her life, along a line ────────────────────────────────────────────
+   The order things happened in was the one thing her page could not say:
+   calvings in one section, lactations in another, services in a third. */
+
+.life {
+  position: relative;
+  padding-top: 34px;
+}
+
+.life__rule {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 40px;
+  height: 1px;
+  background: var(--hairline);
+}
+
+.life__steps {
+  display: flex;
+  gap: 8px;
+  position: relative;
+}
+
+.life__step {
+  flex: 1;
+  min-width: 0;
+}
+
+.life__date {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.life__dot {
+  width: 9px;
+  height: 9px;
+  background: var(--ink);
+  margin: 8px 0 12px;
+}
+
+.life__title {
+  font-size: 17px;
+}
+
+.life__detail {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* Where she is now. The one green thing on the line, so it is found without
+   being looked for. */
+.life__step--now .life__date,
+.life__step--now .life__title,
+.life__step--now .life__detail {
+  color: var(--herd-green);
+}
+
+.life__step--now .life__dot {
+  width: 11px;
+  height: 11px;
+  background: var(--herd-green);
+  margin: 7px 0 11px;
+}
+
+/* The end that hasn't happened. Drawn open rather than left off — a line
+   that simply stops reads as missing data rather than as a cow still here. */
+.life__step--open .life__date,
+.life__step--open .life__title,
+.life__step--open .life__detail {
+  color: var(--ink-faint);
+}
+
+.life__step--open .life__dot {
+  background: none;
+  border: 1px dashed var(--ink-faint);
+}
+
+@media (max-width: 860px) {
+  /* Seven steps across 390px is 55px each, which is a column of broken
+     words rather than a timeline. The line turns instead. */
+  .life {
+    padding-top: 0;
+    padding-left: 18px;
+    border-left: 1px solid var(--hairline);
+  }
+
+  .life__rule {
+    display: none;
+  }
+
+  .life__steps {
+    display: block;
+  }
+
+  .life__step {
+    position: relative;
+    padding-bottom: 16px;
+  }
+
+  .life__dot {
+    position: absolute;
+    left: -23px;
+    top: 5px;
+    margin: 0;
+  }
+
+  .life__step--now .life__dot {
+    left: -24px;
+    top: 4px;
+    margin: 0;
+  }
+}
+
+/* ── her milk ──────────────────────────────────────────────────────── */
+
+.milk-ranges {
+  display: flex;
+  gap: 6px;
+}
+
+.milk-range {
+  padding: 7px 12px;
+  min-height: 44px;
+  font: 500 12px/1 var(--font-sans);
+  letter-spacing: 0.02em;
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.milk-range--on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.milk-chart {
+  position: relative;
+}
+
+/* A fixed height, so the row does not jump when the chart measures itself
+   and redraws at the width it actually has. */
+.milk-chart svg {
+  display: block;
+  width: 100%;
+  height: 190px;
+  overflow: visible;
+}
+
+.milk-legend {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.milk-legend span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.milk-key {
+  width: 11px;
+  height: 11px;
+  display: inline-block;
+}
+
+.milk-key--sold {
+  background: var(--herd-green);
+}
+
+/* An outline rather than a paler green: the three states then differ in
+   shape as well as colour, which is what a printed page and a colourblind
+   reader both need. */
+.milk-key--held {
+  background: var(--paper);
+  border: 1px solid var(--ink-faint);
+}
+
+.milk-key--binned {
+  background: var(--red);
+}
+
+/* Ninety rows would push the money and the family off the bottom of the
+   page. The window scrolls; the page does not grow with it. */
+.milk-table {
+  max-height: 430px;
+  overflow: auto;
+  margin-top: 4px;
+}
+
+.milk-table .grid-row--header {
+  position: sticky;
+  top: 0;
+  background: var(--page);
+  z-index: 1;
+}
+
+.milk-tip {
+  position: absolute;
+  top: -6px;
+  width: 168px;
+  margin-left: -84px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  padding: 8px 10px;
+  pointer-events: none;
+}
+
+/* Under the date on a phone, where the status column has been dropped. */
+.milk-status-sm {
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  letter-spacing: 0;
 }

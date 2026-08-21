@@ -1,0 +1,61 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "A · Life first, one column",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 2150
+    },
+    {
+      "file": "TwoColumn.dc.html",
+      "title": "B · Milk first, record beside it",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 2060
+    },
+    {
+      "file": "Folded.dc.html",
+      "title": "C · Folded into tabs",
+      "x": 3120,
+      "y": 0,
+      "w": 1440,
+      "h": 1320
+    }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -300,
+      "w": 620,
+      "text": "Patience · tag 0\n\nEverything except the milk and money is her real record: Jersey, born 4 Jul 2020, 900 lb on 14 Aug, calved 9 Jul 2024 (Vera), three AI services, lactation 1 dried off 6 Aug 2026, lactation 3 fresh the same day. Milk and money are invented.\n\nAll three hold the same material — name, breed, age, weight · life timeline · pedigree · offspring · cost and revenue · lactation chart · milk table. They differ in what you see first and how far you scroll. The day-range chips work; hovering a bar gives you the day."
+    },
+    {
+      "id": "opt-a",
+      "x": 700,
+      "y": -300,
+      "w": 300,
+      "text": "A — Life first\n\nThe record reads like a biography: what she has done sits above what she is giving. One column, top to bottom, no hiding.\n\nTradeoff: the longest scroll of the three. Money and family are a long way down."
+    },
+    {
+      "id": "opt-b",
+      "x": 1560,
+      "y": -300,
+      "w": 300,
+      "text": "B — Milk first\n\nThe thing you check daily gets the width; her record sits in a rail beside it, all visible at once, nothing hidden.\n\nTradeoff: needs a wide screen. On a phone it collapses back into A's order."
+    },
+    {
+      "id": "opt-c",
+      "x": 3120,
+      "y": -300,
+      "w": 300,
+      "text": "C — Folded into tabs\n\nSame fold the rest of the app uses (Animals, Settings, Grazing records). The page stops being long; each subject gets full width. Tabs work — try Life and Money.\n\nTradeoff: her story is behind a tab, so nothing is seen unless it is asked for."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

@@ -174,7 +174,7 @@ export default function Calvings() {
     () => animals.filter((a) => a.birth_date === date && !claimed.has(a.id) && a.record_type !== "reference"),
     [animals, date, claimed],
   );
-  const problem = adding ? validateCalving({ damId, date, calves: recorded }) : null;
+  const problem = adding ? validateCalving({ damId, date, calves: recorded, herd: animals }) : null;
 
   // Her standing services before this date — the ones that could have made
   // the calf. A voided service made nothing.

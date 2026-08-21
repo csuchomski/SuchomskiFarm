@@ -624,46 +624,40 @@ Worth knowing before building:
   also wanted for animals already on file — eight of them — so editing has to
   reach it too, not just creation.
 
-### An animal with no ear tag has no record page
+### ~~An animal with no ear tag has no record page~~ Built 2026-08-21
 
-Victor was added and his record will not open. The reason is that
-`/animals/:tag` resolves an animal by ear tag, and Victor's ear tag is the
-empty string, so his link points at `/animals/` and there is nothing to fetch.
+Victor's record would not open because `/animals/:tag` resolves an animal by
+ear tag and his was the empty string, so his link came out as `/animals/`.
+Traced to `herd.record_calving`, which took the calf's tag as given and
+inserted whatever it got — his row and the calving that made him share a
+`created_at` to the microsecond — while the calving forms on Calvings and
+Breedings never asked for one.
 
-He is not a one-off. Ear tag `1` belongs to two live animals — Martha and a
-row called "test" — and `fetchAnimalByTag` uses `.maybeSingle()`, which errors
-on more than one row rather than picking one, so tag `1` opens for neither of
-them. Blank tags and duplicate tags are the same bug seen from two sides:
-identity on the record route is a value the database does not require to be
-present or unique.
+What was built:
 
-Worth knowing before building:
+- **Migration 059.** `record_calving` refuses a live calf with a blank tag, a
+  tag another animal on that farm already wears, or twins sharing one, all in
+  the pre-flight loop so nothing is half-written. Plus a partial unique index
+  on `(farm_id, ear_tag)` — per farm, because Martha is tag 1 here and Rocky
+  Ridge has its own tag 1, and that has to keep working.
+- **`validateCalving` asks for the tag** in both forms. Its `herd` argument is
+  required rather than optional on purpose: a validator that skips a check
+  when a caller forgets an argument is the hole being closed.
+- **`animalPath`** replaces every hand-built `/animals/${…}`, using the tag
+  and falling back to the id. That is what makes an already-blank row
+  reachable, so Victor can be opened and given a number in the app rather
+  than in SQL. The source-reading guard in `animal-links.test.ts` now enforces
+  the helper instead of the field, and widening its glob to `.ts` immediately
+  turned up a call site in `lib/alerts.ts` the old `.tsx`-only version missed.
 
-- **The database does not constrain `ear_tag` beyond NOT NULL.** An empty
-  string satisfies that, and there is no unique index. Both live cases are
-  legal rows.
-- **`AnimalForm` is not the path.** Its `canSave` already requires a non-empty
-  tag and rejects one taken by another animal, and `OffspringEditor` renders
-  the same form. Whatever fix is chosen, this is not where the guard is
-  missing.
-- **`herd.record_calving` is the path, confirmed.** It sets
-  `v_tag := btrim(coalesce(v_calf ->> 'ear_tag', ''))` and inserts that
-  straight into `animals.ear_tag`. Victor's row and the calving that made him
-  share a `created_at` to the microsecond. The calving forms on Calvings and
-  Breedings never validate the tag field, so leaving it blank while recording
-  a historical calving is all it takes.
-- **Routing by tag is load-bearing.** Roughly a dozen link sites build
-  `/animals/${a.ear_tag}`, and Mobs carries a comment warning that an id
-  reaches the page and matches nothing. Switching the route to the id is a
-  defensible fix but it is a wide change, and it makes the URL unreadable to
-  someone who thinks in tags. Requiring a tag everywhere one is written is the
-  narrower one.
-- **Whichever way it goes, `.maybeSingle()` still needs handling.** Duplicates
-  that already exist will keep throwing until either the data is cleaned or
-  the query stops assuming uniqueness the schema never promised.
-- The two rows on file are the farm's to sort out: Victor needs a tag, and one
-  of Martha or "test" needs a different one. "test" looks like it was never
-  meant to stay.
+Corrected while building: the duplicate half was overstated here. RLS scopes
+`herd.animals` to `is_farm_member(farm_id)` and nobody belongs to two farms,
+so `.maybeSingle()` was never seeing both tag-1 rows — Martha opened fine. The
+duplicate was legal in the schema, not broken in the app. The index closes it
+anyway.
+
+Still the farm's to do: Victor has no tag until somebody gives him one, and
+the row called "test" on Rocky Ridge looks like it was never meant to stay.
 
 ## Carried over from earlier sessions
 

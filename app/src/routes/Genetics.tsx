@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Callout, EarTag, GridRow, Pill, StatTile } from "../components/ui";
-import { fetchAnimals, herdOnly, type RealAnimal } from "../lib/herd";
+import { animalPath, fetchAnimals, herdOnly, type RealAnimal } from "../lib/herd";
 import {
   fetchConditions,
   fetchConditionStatuses,
@@ -212,7 +212,7 @@ export default function Genetics() {
                 const of = (code: string) => markers.find((m) => m.animal_id === a.id && m.marker_code === code);
                 const beta = of("BETA_CASEIN");
                 return (
-                  <Link key={a.id} to={`/animals/${a.ear_tag}`} style={{ color: "inherit", display: "contents" }}>
+                  <Link key={a.id} to={animalPath(a)} style={{ color: "inherit", display: "contents" }}>
                     <GridRow cols={COLS} mobileCols={COLS_SM} as="body">
                       <EarTag tag={a.ear_tag} accent="herd" />
                       <span className="serif" style={{ fontSize: 17 }}>
@@ -301,7 +301,7 @@ function Cell({ value }: { value: MarkerGenotype | undefined }) {
 function AnimalChip({ animal, tone }: { animal: RealAnimal | undefined; tone: "carrier" | "affected" }) {
   if (!animal) return null;
   return (
-    <Link to={`/animals/${animal.ear_tag}`} className={`animal-chip animal-chip--${tone}`}>
+    <Link to={animalPath(animal)} className={`animal-chip animal-chip--${tone}`}>
       {animal.barn_name || `Tag ${animal.ear_tag}`}
       <span className="animal-chip__tone">{tone}</span>
     </Link>

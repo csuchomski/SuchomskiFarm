@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, GridRow } from "../components/ui";
 import { useWorkspace } from "../lib/workspace";
-import { fetchAnimals, type RealAnimal } from "../lib/herd";
+import { animalPath, fetchAnimals, type RealAnimal } from "../lib/herd";
 import {
   addToGroup,
   fetchGrazingGroups,
@@ -347,7 +347,7 @@ export default function Mobs() {
                         <GridRow key={m.id} cols={COLS} mobileCols={COLS_SM} as="body">
                           <span>
                             {who ? (
-                              <Link to={`/animals/${who.ear_tag}`}>{nameOf(who)}</Link>
+                              <Link to={animalPath(who)}>{nameOf(who)}</Link>
                             ) : (
                               <span className="mb-missing">not on file</span>
                             )}

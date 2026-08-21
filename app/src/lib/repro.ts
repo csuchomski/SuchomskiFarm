@@ -260,11 +260,33 @@ export function validateCheck(input: {
   return null;
 }
 
-export function validateCalving(input: { damId: string; date: string; calves: CalfDraft[] }): string | null {
+/**
+ * Whether this calving can be recorded, and if not, why in a sentence.
+ *
+ * **A live calf needs an ear tag.** The tag is how her record is reached —
+ * `/animals/:tag` resolves an animal by it — so a calf entered without one
+ * gets a row nobody can open. `record_calving` used to take the field as
+ * given and insert an empty string, and that is exactly what happened to a
+ * bull calf called Victor.
+ *
+ * `herd` is the animals already on file, and it is required rather than
+ * optional on purpose: a duplicate tag breaks the same lookup as a missing
+ * one, and a validator that skips the check whenever a caller forgets an
+ * argument is the hole this is closing. Pass what the page already read.
+ * Tags need only be unique within the farm — two farms can both have a
+ * number 1, and `herd` is already what this account can see.
+ */
+export function validateCalving(input: {
+  damId: string;
+  date: string;
+  calves: CalfDraft[];
+  herd: { id: string; ear_tag: string }[];
+}): string | null {
   if (!input.damId) return "Which cow or heifer calved?";
   if (!input.date) return "When did she calve?";
   if (input.calves.length === 0) return "A calving needs at least one calf, even a stillborn one.";
 
+  const seen = new Set<string>();
   for (const calf of input.calves) {
     if (!OUTCOMES.some((o) => o.code === calf.outcome)) return "Each calf is live, stillborn, or died within 24h.";
     // animals.sex is NOT NULL, so a live calf can't get a record without one.
@@ -273,6 +295,16 @@ export function validateCalving(input: { damId: string; date: string; calves: Ca
     if (calf.animalId !== "" && calf.outcome !== "live") return "Only a live calf can be an animal already on file.";
     const w = calf.birthWeight.trim();
     if (w !== "" && (!Number.isFinite(Number(w)) || Number(w) <= 0)) return "A birth weight has to be a number above zero.";
+
+    // A calf adopting a record already on file brings that record's tag with
+    // it; only a new record is having one typed here.
+    if (calf.outcome === "live" && calf.animalId === "") {
+      const tag = calf.earTag.trim();
+      if (tag === "") return "A live calf needs an ear tag — it's how her record is found later.";
+      if (input.herd.some((a) => a.ear_tag.trim() === tag)) return `Tag ${tag} is already on another animal.`;
+      if (seen.has(tag)) return `Both calves are down as tag ${tag}.`;
+      seen.add(tag);
+    }
   }
   return null;
 }

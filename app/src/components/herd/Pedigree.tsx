@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { EarTag } from "../ui";
-import { buildPedigree, describeBreeding, type BreedShare, type RealAnimal } from "../../lib/herd";
+import { animalPath, buildPedigree, describeBreeding, type BreedShare, type RealAnimal } from "../../lib/herd";
 import "./pedigree.css";
 
 const GENERATION_LABELS = ["Parents", "Grandparents", "Great-grandparents"];
@@ -73,7 +73,7 @@ function PedigreeCell({
   const breeding = breeds ? describeBreeding(breeds.get(node.animal.id)) : null;
 
   return (
-    <Link to={`/animals/${node.animal.ear_tag}`} className="ped-cell ped-cell--link">
+    <Link to={animalPath(node.animal)} className="ped-cell ped-cell--link">
       <div className="eyebrow ped-cell__role">{roleLabel}</div>
       <div className="ped-cell__body">
         <EarTag tag={node.animal.ear_tag} accent="herd" size="sm" />

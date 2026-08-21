@@ -50,7 +50,11 @@ const geneticsMounted = vi.fn();
 
 vi.mock("../lib/herd", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/herd")>()),
-  fetchAnimalByTag: vi.fn(async (tag: string) => herd.find((a) => a.ear_tag === tag) ?? null),
+  // Mirrors the real one: the URL carries her tag, or her id when she has no
+  // tag to be found by. See animalPath.
+  fetchAnimalByTag: vi.fn(
+    async (key: string) => herd.find((a) => (a.ear_tag.trim() === "" ? a.id === key : a.ear_tag === key)) ?? null,
+  ),
   fetchAnimals: vi.fn(async () => herd),
   fetchBreedComposition: vi.fn(async () => new Map([["a1", [{ breedId: "b1", name: "Jersey", percent: 100 }]]])),
 }));
@@ -321,5 +325,27 @@ describe("genetics, on its own tab", () => {
     await mount();
     fireEvent.click(screen.getByRole("tab", { name: "Genetics" }));
     expect(screen.queryByText("What she has done")).toBeNull();
+  });
+});
+
+describe("an animal with no ear tag", () => {
+  // Victor, 2026-08-21: a calving wrote him with ear_tag '' and every link to
+  // him came out as /animals/, which is the list. Migration 059 stops new
+  // ones; he still has to be openable so somebody can give him a number.
+  const victor = animal({ id: "a7", ear_tag: "", barn_name: "Victor", sex: "male", class: "calf" });
+
+  it("opens on her id, and says the tag is missing rather than showing a blank chip", async () => {
+    herd = [patience, victor];
+    await mount("a7");
+    expect(screen.getByText("Victor")).toBeTruthy();
+    expect(screen.getByText("no tag")).toBeTruthy();
+  });
+
+  it("is linked by id from her dam's record, so there is a way in", async () => {
+    herd = [patience, animal({ id: "a7", ear_tag: "", barn_name: "Victor", sex: "male", class: "calf", dam_id: "a1" })];
+    await mount("0");
+    const link = [...document.querySelectorAll("a")].find((a) => a.textContent?.includes("Victor"));
+    expect(link).toBeTruthy();
+    expect(link!.getAttribute("href")).toContain("/animals/a7");
   });
 });

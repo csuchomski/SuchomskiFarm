@@ -4,7 +4,7 @@ import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, EarTag, GridRow, StatTile } from "../components/ui";
 import { fetchDashboardData, type DashboardData } from "../lib/dashboard-data";
 import { useWorkspace } from "../lib/workspace";
-import { formatAge } from "../lib/herd";
+import { animalPath, formatAge } from "../lib/herd";
 import { buildAlerts, fetchAlertInputs, whenInWords, type Alert } from "../lib/alerts";
 import "./today.css";
 
@@ -195,7 +195,7 @@ export default function Today() {
                 <span className="text-right">Net</span>
               </GridRow>
               {data.profitPerHead.map(({ animal, costCents, revenueCents, netCents }) => (
-                <Link key={animal.id} to={`/animals/${animal.ear_tag}`} style={{ color: "inherit", display: "contents" }}>
+                <Link key={animal.id} to={animalPath(animal)} style={{ color: "inherit", display: "contents" }}>
                   <GridRow cols="60px 1fr 92px 92px 100px" mobileCols="44px 1fr 92px" as="body">
                     <EarTag tag={animal.ear_tag} accent="herd" />
                     <span>

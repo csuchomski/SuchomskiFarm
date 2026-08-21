@@ -1,4 +1,4 @@
-import { fetchAnimals, herdOnly, type RealAnimal } from "./herd";
+import { animalPath, fetchAnimals, herdOnly, type RealAnimal } from "./herd";
 import { fetchBreedings, type Breeding } from "./breedings";
 import { fetchBreeds, fetchComposition, fetchOverrides, gestationFor, type GestationInputs } from "./gestation";
 import {
@@ -164,7 +164,7 @@ export function buildAlerts(input: AlertInputs): Alert[] {
       animalId: cow.id,
       animalName: nameOf(cow),
       earTag: cow.ear_tag,
-      href: cow.ear_tag ? `/animals/${cow.ear_tag}` : "/breedings",
+      href: animalPath(cow),
     };
 
     // A calf on file that no calving accounts for. First, because it makes

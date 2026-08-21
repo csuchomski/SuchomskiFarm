@@ -139,7 +139,7 @@ describe("Calvings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Record a calving" }));
     fireEvent.change(screen.getByLabelText("Dam"), { target: { value: "cow-1" } });
     fireEvent.change(screen.getByLabelText("Calf 1 sex"), { target: { value: "female" } });
-    fireEvent.change(screen.getByLabelText("Calf 1 ear tag"), { target: { value: "99" } });
+    fireEvent.change(screen.getByLabelText("Calf 1 ear tag"), { target: { value: "100" } });
 
     fireEvent.click(screen.getByRole("button", { name: /another calf/ }));
     fireEvent.change(screen.getByLabelText("Calf 2 outcome"), { target: { value: "stillborn" } });
@@ -150,8 +150,37 @@ describe("Calvings", () => {
 
     const sent = recordCalving.mock.calls[0][0];
     expect(sent.calves.length).toBe(2);
-    expect(sent.calves[0]).toMatchObject({ outcome: "live", sex: "female", earTag: "99" });
+    expect(sent.calves[0]).toMatchObject({ outcome: "live", sex: "female", earTag: "100" });
     expect(sent.calves[1]).toMatchObject({ outcome: "stillborn", sex: "male" });
+  });
+
+  it("won't record a live calf with no ear tag", async () => {
+    // Victor, 2026-08-21: entered from a calving with this field blank, which
+    // put an empty string on animals.ear_tag. /animals/:tag is resolved by
+    // tag, so his record had no link that led to it.
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Record a calving" }));
+    fireEvent.change(screen.getByLabelText("Dam"), { target: { value: "cow-1" } });
+    fireEvent.change(screen.getByLabelText("Calf 1 sex"), { target: { value: "female" } });
+
+    expect(screen.getByText(/needs an ear tag/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Record it" }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.change(screen.getByLabelText("Calf 1 ear tag"), { target: { value: "100" } });
+    expect((screen.getByRole("button", { name: "Record it" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("won't give a calf a tag another animal is already wearing", async () => {
+    // Bess is 99. Two animals on one tag breaks the same lookup a blank one
+    // does — herd.animals_farm_ear_tag_uniq refuses it too.
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Record a calving" }));
+    fireEvent.change(screen.getByLabelText("Dam"), { target: { value: "cow-1" } });
+    fireEvent.change(screen.getByLabelText("Calf 1 sex"), { target: { value: "female" } });
+    fireEvent.change(screen.getByLabelText("Calf 1 ear tag"), { target: { value: "99" } });
+
+    expect(screen.getByText(/Tag 99 is already on another animal/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Record it" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("stops asking for an ear tag once a calf isn't live", async () => {
@@ -179,6 +208,7 @@ describe("Calvings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Record a calving" }));
     fireEvent.change(screen.getByLabelText("Dam"), { target: { value: "cow-2" } });
     fireEvent.change(screen.getByLabelText("Calf 1 sex"), { target: { value: "male" } });
+    fireEvent.change(screen.getByLabelText("Calf 1 ear tag"), { target: { value: "101" } });
     fireEvent.change(screen.getByLabelText("Calving ease"), { target: { value: "4" } });
     fireEvent.change(screen.getByLabelText("Assistance"), { target: { value: "hard_pull" } });
     fireEvent.change(screen.getByLabelText("Presentation"), { target: { value: "breech" } });
@@ -220,6 +250,7 @@ describe("Calvings", () => {
     expect((screen.getByLabelText("Service") as HTMLSelectElement).value).toBe("b2");
 
     fireEvent.change(screen.getByLabelText("Calf 1 sex"), { target: { value: "female" } });
+    fireEvent.change(screen.getByLabelText("Calf 1 ear tag"), { target: { value: "102" } });
     fireEvent.click(screen.getByRole("button", { name: "Record it" }));
     await waitFor(() => expect(recordCalving).toHaveBeenCalledTimes(1));
     expect(recordCalving.mock.calls[0][0]).toMatchObject({ breedingEventId: "b2" });
@@ -234,6 +265,7 @@ describe("Calvings", () => {
     expect(screen.getByText(/No breeding logged for her before this date/)).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("Calf 1 sex"), { target: { value: "male" } });
+    fireEvent.change(screen.getByLabelText("Calf 1 ear tag"), { target: { value: "103" } });
     fireEvent.click(screen.getByRole("button", { name: "Record it" }));
     await waitFor(() => expect(recordCalving).toHaveBeenCalledTimes(1));
     expect(recordCalving.mock.calls[0][0].breedingEventId).toBeNull();

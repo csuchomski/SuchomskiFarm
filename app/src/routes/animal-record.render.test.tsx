@@ -100,13 +100,16 @@ vi.mock("../lib/milkings", async (importOriginal) => ({
   ]),
 }));
 
+// 19 Aug: the batch is gone, so the day sold. 21 Aug: 4.6 still in the tank,
+// 2 of it promised to an open order.
 vi.mock("../lib/animal-milk", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/animal-milk")>()),
   fetchMilkContext: vi.fn(async () => ({
     priceCents: 1000,
     productId: 1,
-    liveBatchIds: new Set([13]),
-    discardedDates: new Set<string>(),
+    onHand: new Map([["2026-08-21", { quantity: 4.6, reserved: 2 }]]),
+    binned: new Map<string, number>(),
+    soldOn: new Map([["2026-08-19", ["2026-08-20"]]]),
   })),
 }));
 
@@ -192,7 +195,7 @@ describe("her life, along a line", () => {
 });
 
 describe("her milk", () => {
-  it("shows the days she was milked and what became of each", async () => {
+  it("says what became of each day, and when it sold", async () => {
     await mount();
     await waitFor(() => expect(screen.getByText("19 Aug 2026")).toBeTruthy());
     // Read off the rows themselves: "Sold" is also a stat-tile label, and
@@ -201,10 +204,12 @@ describe("her milk", () => {
     const rows = [...document.querySelectorAll(".milk-table .grid-row--body")];
     const nineteenth = rows.find((r) => r.textContent?.includes("19 Aug 2026"))!;
     const twentyFirst = rows.find((r) => r.textContent?.includes("21 Aug 2026"))!;
-    // 19 Aug's batch is gone — sold. 21 Aug's is still in the shop.
-    expect(nineteenth.textContent).toContain("Sold");
+    // 19 Aug's batch is gone and one pickup drew from that day alone, so the
+    // day is sold and dated. 21 Aug is still in the tank, part of it promised.
+    expect(nineteenth.textContent).toContain("4.2 sold 20 Aug");
     expect(nineteenth.textContent).toContain("$42.00");
-    expect(twentyFirst.textContent).toContain("In inventory");
+    expect(twentyFirst.textContent).toContain("2 promised");
+    expect(twentyFirst.textContent).toContain("2.6 in the tank");
     expect(twentyFirst.textContent).toContain("$46.00");
   });
 

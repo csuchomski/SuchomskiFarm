@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GridRow, Pill, StatTile } from "../ui";
+import { GridRow, StatTile } from "../ui";
 import { fetchProductionRecords, type RealProductionRecord } from "../../lib/milkings";
 import {
   buildMilkDays,
+  emptyMilkContext,
   fetchMilkContext,
   summariseMilk,
   type MilkContext,
@@ -35,7 +36,32 @@ const COLS_SM = "minmax(0, 1fr) 76px 96px";
 type Load =
   | { state: "loading" }
   | { state: "error"; message: string }
-  | { state: "ok"; records: RealProductionRecord[]; context: MilkContext };
+  | { state: "ok"; records: RealProductionRecord[]; all: RealProductionRecord[]; context: MilkContext };
+
+/**
+ * What became of a day, in words.
+ *
+ * Milk is pooled — one tank, several cows — so this describes the tank
+ * rather than her pail: "1 sold 7 Aug · 4 promised · 2 in the tank". A single
+ * word would have to pick one of those and drop the rest, which is how 4 Aug
+ * came to be labelled inventory when a gallon of it had already gone.
+ */
+function disposition(day: MilkDay): string {
+  const gal = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+  const parts: string[] = [];
+  if (day.tank.sold > 0) {
+    // "7 Aug" reads better than "7 Aug 2026" beside a date in the same year;
+    // across a year boundary the year is the whole point of the date.
+    const last = day.soldOn[day.soldOn.length - 1];
+    const sameYear = last !== undefined && last.slice(0, 4) === day.date.slice(0, 4);
+    const when = last === undefined ? "" : ` ${sameYear ? lifeDate(last).slice(0, -5) : lifeDate(last)}`;
+    parts.push(`${gal(day.tank.sold)} sold${when}`);
+  }
+  if (day.tank.promised > 0) parts.push(`${gal(day.tank.promised)} promised`);
+  if (day.tank.free > 0) parts.push(`${gal(day.tank.free)} in the tank`);
+  if (day.tank.binned > 0) parts.push(`${gal(day.tank.binned)} binned`);
+  return parts.length > 0 ? parts.join(" · ") : "Nothing recorded against it";
+}
 
 export function MilkSection({
   animalId,
@@ -55,14 +81,16 @@ export function MilkSection({
 
   const read = useCallback(async () => {
     if (!farmId || businessId === null) {
-      setLoad({ state: "ok", records: [], context: { priceCents: 0, productId: null, liveBatchIds: new Set(), discardedDates: new Set() } });
+      setLoad({ state: "ok", records: [], all: [], context: emptyMilkContext() });
       return;
     }
     const [records, context] = await Promise.all([
       fetchProductionRecords(farmId),
       fetchMilkContext(businessId),
     ]);
-    setLoad({ state: "ok", records: records.filter((r) => r.animal_id === animalId), context });
+    // Both hers and everyone's: a pooled day has to know its own size before
+    // it can say what share of it was hers.
+    setLoad({ state: "ok", records: records.filter((r) => r.animal_id === animalId), all: records, context });
   }, [animalId, farmId, businessId]);
 
   useEffect(() => {
@@ -76,15 +104,15 @@ export function MilkSection({
     if (load.state !== "ok") return [];
     return buildMilkDays({
       records: load.records,
-      liveBatchIds: load.context.liveBatchIds,
-      discardedDates: load.context.discardedDates,
-      priceCents: load.context.priceCents,
+      allRecords: load.all,
+      context: load.context,
       days,
       today,
     });
   }, [load, days, today]);
 
-  const summary = useMemo(() => summariseMilk(rows), [rows]);
+  const priceCents = load.state === "ok" ? load.context.priceCents : 0;
+  const summary = useMemo(() => summariseMilk(rows, priceCents), [rows, priceCents]);
   const milked = rows.filter((r) => r.recorded);
 
   if (load.state === "loading") {
@@ -172,30 +200,22 @@ export function MilkSection({
                   {lifeDate(row.date)}
                   {/* The status column is dropped on a phone, and colour on
                       its own is not a label. It comes back under the date. */}
-                  <span className="show-sm milk-status-sm">
-                    {row.status === "sold" ? "Sold" : row.status === "inventory" ? "In inventory" : "Discarded"}
-                  </span>
+                  <span className="show-sm milk-status-sm">{disposition(row)}</span>
                 </span>
                 <span className="mono text-right">{row.gallons.toFixed(1)}</span>
                 <span className="hide-sm">
-                  <span style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>
-                    {row.status === "sold" ? "Sold" : row.status === "inventory" ? "In inventory" : "Discarded"}
-                  </span>
+                  <span style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>{disposition(row)}</span>
                 </span>
-                <span className="mono text-right">
-                  {row.status === "discarded" ? (
-                    <Pill variant="withdrawal">binned</Pill>
-                  ) : (
-                    money(row.valueCents)
-                  )}
-                </span>
+                <span className="mono text-right">{money(row.valueCents)}</span>
               </GridRow>
             ))}
           </div>
 
           <p style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 12, maxWidth: "68ch" }}>
-            A day is valued at the milk price today. What a pickup actually paid is attributed across
-            the days it drew from, so the money below is the earned figure and this is the estimate.
+            Milk is pooled, so what a day sold is the tank's; her share of it is her share of that
+            day's milking. Value is her gallons at the milk price today, less anything binned. A
+            pickup that drew from several days at once can't date any one of them, so those are left
+            undated.
           </p>
         </>
       )}
@@ -391,18 +411,8 @@ function MilkChart({
           <div className="serif mono" style={{ fontSize: 19, margin: "2px 0 4px" }}>
             {hovered.row.gallons.toFixed(1)} gal
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12 }}>
-            <span>
-              {hovered.row.status === "sold"
-                ? "Sold"
-                : hovered.row.status === "inventory"
-                  ? "In inventory"
-                  : "Discarded"}
-            </span>
-            <span className="mono">
-              {hovered.row.status === "discarded" ? "—" : money(hovered.row.valueCents)}
-            </span>
-          </div>
+          <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>{disposition(hovered.row)}</div>
+          <div className="mono" style={{ fontSize: 12, marginTop: 2 }}>{money(hovered.row.valueCents)}</div>
         </div>
       )}
     </div>

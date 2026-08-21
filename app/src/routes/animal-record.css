@@ -626,3 +626,51 @@
   color: var(--ink-muted);
   letter-spacing: 0;
 }
+
+/* ── the weight, edited where it is read ───────────────────────────────
+   It had a section of its own halfway down the page, so the figure you read
+   and the field you changed were in two different places. */
+
+/* A column, not a row: beside the figure the link read as a tile of its own
+   sitting between "900 lb" and "15 days". Under the label it belongs to the
+   weight. */
+.weight-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 104px;
+}
+
+.weight-tile__edit {
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.weight-tile--editing {
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.weight-tile__field {
+  display: block;
+}
+
+.weight-tile__field input {
+  display: block;
+  margin-top: 4px;
+  width: 128px;
+}
+
+.weight-tile__acts {
+  display: flex;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+
+.weight-tile__error {
+  flex: 1 0 100%;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--red);
+}

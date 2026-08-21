@@ -82,11 +82,13 @@ vi.mock("../lib/breedings", async (importOriginal) => ({
   fetchBreedingCosts: vi.fn(async () => new Map()),
 }));
 
+let weighings = [{ id: "w1", animalId: "a1", date: "2026-08-14", weightLb: 900, weightType: "scale", notes: null }];
+const recordWeight = vi.fn(async (_i: { farmId: string; animalId: string; weightLb: number; date?: string }) => "w2");
+
 vi.mock("../lib/grazing", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/grazing")>()),
-  fetchWeighings: vi.fn(async () => [
-    { id: "w1", animalId: "a1", date: "2026-08-14", weightLb: 900, weightType: "scale", notes: null },
-  ]),
+  fetchWeighings: vi.fn(async () => weighings),
+  recordWeight: (i: { farmId: string; animalId: string; weightLb: number; date?: string }) => recordWeight(i),
 }));
 
 // Two milkings on file: one whose batch is still in the shop, one whose
@@ -137,7 +139,9 @@ vi.mock("../lib/local-time", async (importOriginal) => ({
 
 beforeEach(() => {
   herd = [patience, vera];
+  weighings = [{ id: "w1", animalId: "a1", date: "2026-08-14", weightLb: 900, weightType: "scale", notes: null }];
   geneticsMounted.mockClear();
+  recordWeight.mockClear();
 });
 afterEach(cleanup);
 
@@ -164,6 +168,60 @@ describe("the four figures at the top", () => {
     // Fresh on 6 Aug, read on 21 Aug.
     expect(stats.textContent).toContain("In milk · lactation 3");
     expect(within(stats as HTMLElement).getByText("15")).toBeTruthy();
+  });
+});
+
+describe("her weight, changed where it is read", () => {
+  it("records a new one from the tile at the top", async () => {
+    // It had a section of its own halfway down the page, so the figure you
+    // read and the field you changed were in two different places.
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "record a weight" }));
+    fireEvent.change(screen.getByLabelText("Weight, lb"), { target: { value: "915" } });
+    fireEvent.change(screen.getByLabelText("Weighed on"), { target: { value: "2026-08-21" } });
+
+    weighings = [
+      { id: "w2", animalId: "a1", date: "2026-08-21", weightLb: 915, weightType: "adhoc", notes: null },
+      ...weighings,
+    ];
+    fireEvent.click(screen.getByRole("button", { name: "save" }));
+
+    await waitFor(() =>
+      expect(recordWeight).toHaveBeenCalledWith({
+        farmId: "farm-1", animalId: "a1", weightLb: 915, date: "2026-08-21",
+      }),
+    );
+    // and the tile is the new figure, read back rather than assumed: a
+    // same-day weighing overwrites rather than adding a row.
+    await waitFor(() =>
+      expect(document.querySelector(".record-head__stats")!.textContent).toContain("Weighed 21 Aug 2026"),
+    );
+  });
+
+  it("will not save an empty or impossible weight", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "record a weight" }));
+    fireEvent.change(screen.getByLabelText("Weight, lb"), { target: { value: "" } });
+    expect((screen.getByRole("button", { name: "save" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Weight, lb"), { target: { value: "-5" } });
+    expect((screen.getByRole("button", { name: "save" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("keeps the weight history off the page", async () => {
+    // Every weighing she has ever had was listed under a heading of its own.
+    // The database keeps them; the page only ever needed the last.
+    await mount();
+    expect(screen.queryByText("Weight, lb")).toBeNull();
+    expect(document.body.textContent).not.toContain("Grazing uses this");
+  });
+});
+
+describe("what came off the page", () => {
+  it("has no Lactations table — that list lives on Milking", async () => {
+    await mount();
+    expect(screen.queryByText("Lactations")).toBeNull();
+    // Her lactations are still on the timeline, where the order is the point.
+    expect(screen.getByText("Lactation 3")).toBeTruthy();
   });
 });
 

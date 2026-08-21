@@ -694,6 +694,29 @@ Worth knowing before building:
   the module that was deliberately left last. Worth deciding whether this
   small table is part of a disposition or the first piece of that.
 
+### One test fails about once in five full runs, and nobody knows which
+
+`npx vitest run` has come back with exactly one failure out of ~1,700 on two
+separate occasions, both times passing on every rerun. The failing test's name
+was not captured either time — the mistake was rerunning the suite to look for
+the name, which starts a fresh run rather than showing the one that failed.
+
+What is known: one test, not a file-load error; it has never failed twice in a
+row; ten-plus clean runs sit either side of each sighting, including a
+deliberate sweep of six consecutive runs immediately after the second one.
+
+Worth knowing before chasing it:
+
+- **Capture the run, don't rerun it.** `npx vitest run > run.log 2>&1` and read
+  `run.log`. Every attempt so far has thrown the evidence away.
+- The suspects are the render tests that wait on effects — `waitFor` with a
+  promise that resolves in a microtask, where an assertion can land in the tick
+  before state arrives. `disposition-editor.render.test.tsx` has a documented
+  instance of exactly that shape (the cull reasons), which was found by
+  screenshot rather than by a failure.
+- `vitest --repeat` or a seeded `--sequence.shuffle` would turn a one-in-five
+  into something reproducible faster than repeating whole runs by hand.
+
 ### The word "she", on an animal who isn't
 
 The record page says "she" throughout — "What she has done", "What she has

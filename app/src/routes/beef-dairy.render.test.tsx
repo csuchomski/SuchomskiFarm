@@ -244,7 +244,9 @@ describe("An animal's record", () => {
         </Routes>
       </MemoryRouter>,
     );
-    await screen.findByText("Pedigree");
+    // The record tab opens on her life, so this is the sentinel for
+  // "the page has finished loading" now.
+  await screen.findByText("What she has done");
   };
 
   it("has no lactation section for a beef cow", async () => {

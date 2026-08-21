@@ -292,13 +292,13 @@ function StatusPill({ status }: { status: ConditionStatusCode }) {
   return <Pill variant="neutral">untested</Pill>;
 }
 
+/**
+ * The wrapper, minus a heading.
+ *
+ * This lives on a tab called Genetics under a line that says what genetics
+ * means here. A third "Genetics" immediately below the other two was the
+ * word three times before a single marker.
+ */
 function Section({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ marginTop: 24 }}>
-      <div className="serif" style={{ fontSize: 21, marginBottom: 12 }}>
-        Genetics
-      </div>
-      {children}
-    </div>
-  );
+  return <div style={{ marginTop: 4 }}>{children}</div>;
 }

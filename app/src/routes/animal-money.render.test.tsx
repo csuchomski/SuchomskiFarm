@@ -112,7 +112,9 @@ const mount = async (tag = "1") => {
       </Routes>
     </MemoryRouter>,
   );
-  await screen.findByText("Pedigree");
+  // The record tab opens on her life, so this is the sentinel for
+  // "the page has finished loading" now.
+  await screen.findByText("What she has done");
 };
 
 describe("A way back", () => {

@@ -41,6 +41,21 @@ export interface LifeEvent {
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+/**
+ * Where the animal came from, in the farm's words.
+ *
+ * The four `herd.animals.origin` allows. It used to be a single comparison
+ * against `"born here"` — with a space, and not one of the four — so it never
+ * matched anything and every home-bred animal's first step read "Bought in".
+ * Victor was born on this farm in 2022 and his record said he was bought.
+ */
+const ORIGINS: Record<string, string> = {
+  born_on_farm: "On this farm",
+  purchased: "Bought in",
+  embryo_transfer: "Out of an embryo transfer",
+  leased: "Leased in",
+};
+
 /** `9 Jul 2024`, from an ISO day, without going through a Date and a
  *  timezone that could move it. */
 export function lifeDate(iso: string): string {
@@ -109,7 +124,7 @@ export function buildLife(input: {
     endDate: null,
     kind: "born",
     title: "Born",
-    detail: animal.origin === "born here" ? "On this farm" : "Bought in",
+    detail: ORIGINS[animal.origin] ?? "Bought in",
     current: false,
   });
 

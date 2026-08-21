@@ -43,7 +43,7 @@ const animal = (over: Partial<RealAnimal> & { id: string; ear_tag: string }): Re
     birth_date: "2022-04-01", sire_id: null, dam_id: null, notes: null,
     // `origin` and `purpose` are both required to save, so a fixture without
     // them leaves the button disabled and every save assertion silently fails.
-    purpose: "beef", origin: "born here", record_type: "herd",
+    purpose: "beef", origin: "born_on_farm", record_type: "herd",
     ...over,
   }) as RealAnimal;
 
@@ -171,7 +171,7 @@ describe("the herd, grouped by mob", () => {
   });
 
   it("keeps a 'Not in a mob' heading even when everybody is in one", async () => {
-    // Otherwise there is nowhere to put an animal you want out of her mob,
+    // Otherwise there is nowhere to put an animal you want out of its mob,
     // and a farm can get animals into mobs but never back out.
     mobs = [mob("main", "Main mob")];
     members = herd.map((a) => memberOf(a.id, "main"));
@@ -295,7 +295,7 @@ describe("the same three jobs without a pointer", () => {
 
   it("takes an animal out of every mob", async () => {
     await mount();
-    pick("Not in a mob", "take an animal out of her mob", "a1");
+    pick("Not in a mob", "take an animal out of its mob", "a1");
     await waitFor(() => expect(setAnimalMob).toHaveBeenCalledWith("farm-1", "a1", null));
   });
 
@@ -311,7 +311,7 @@ describe("the same three jobs without a pointer", () => {
     members = [memberOf("a1", "main")];
     await mount();
     fireEvent.click(
-      within(heading("Not in a mob")).getByRole("button", { name: "take an animal out of her mob" }),
+      within(heading("Not in a mob")).getByRole("button", { name: "take an animal out of its mob" }),
     );
     const options = [...within(heading("Not in a mob")).getByRole("combobox").querySelectorAll("option")]
       .map((o) => o.textContent);
@@ -322,7 +322,7 @@ describe("the same three jobs without a pointer", () => {
     members = [];
     await mount();
     expect(
-      within(heading("Not in a mob")).queryByRole("button", { name: "take an animal out of her mob" }),
+      within(heading("Not in a mob")).queryByRole("button", { name: "take an animal out of its mob" }),
     ).toBeNull();
   });
 

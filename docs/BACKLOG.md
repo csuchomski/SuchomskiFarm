@@ -717,17 +717,39 @@ Worth knowing before chasing it:
 - `vitest --repeat` or a seeded `--sequence.shuffle` would turn a one-in-five
   into something reproducible faster than repeating whole runs by hand.
 
-### The word "she", on an animal who isn't
+### ~~The word "she", on an animal who isn't~~ Built 2026-08-21
 
-The record page says "she" throughout — "What she has done", "What she has
-left", "Nothing costed against Victor yet". Victor is a bull calf, and the
-page knows it: `sex` is on the row and drives the pill on the identity line.
+Victor is a bull calf and his record called him "she" throughout, on a page
+that showed `male` two inches above the copy. He also had a milk chart.
 
-Not a schema problem and not a small edit either: it runs through
-`AnimalRecord`, `MoneySection`, `MilkSection`, `DispositionEditor`,
-`animal-life.ts` and most of their comments. Worth doing in one pass with a
-decision behind it — the neutral wording, or wording that follows `sex` — not
-as a scatter of one-word fixes.
+`herd.animals.sex` is `CHECK (sex = ANY (ARRAY['female', 'male']))` — two
+values, both always present — so `lib/pronouns.ts` is a total function, with
+the verb agreement carried on the pronoun so no call site has to think about
+it. Threaded through the record page, the money section and the disposition
+editor, including their aria-labels. Left alone where the animal is female by
+construction: calvings and breedings are about dams, the herd roll covers the
+milking string, and the milk section only renders for an animal that gives
+milk. Made neutral rather than gendered where no particular animal is in hand
+— the mob controls on Animals and Mobs, which apply to steers and bulls too.
+
+The milk chart was a separate bug underneath the same complaint. `isMilked`
+was answering two different questions with one predicate: the Animals page
+asked "is this animal on the dairy side" for its chips and counts, and the
+record page asked "does this animal give milk". `record_calving` copies the
+dam's purpose to her calf, so every bull born on the dairy string carries
+`purpose = 'dairy'`. Split into `isDairy` (the enterprise — Victor still
+counts, because that is where he is kept and fed) and `givesMilk` (dairy,
+female, past calfhood).
+
+Two more of the same family turned up while looking:
+
+- `animal-life.ts` compared origin against `"born here"` — with a space, and
+  not one of the four values the column allows — so it never matched and every
+  home-bred animal's first step read "Bought in". Victor was born on this farm
+  in 2022 and his record said he was bought. The test covering it used the
+  same invented value, so it passed on a vocabulary nothing has ever had.
+- "His services, seasons and due dates are on Breedings" was shown on a bull.
+  Only females are bred.
 
 ## Carried over from earlier sessions
 

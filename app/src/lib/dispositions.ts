@@ -1,4 +1,5 @@
 import { herdSchema } from "./supabase";
+import { pronounsFor, type Pronouns } from "./pronouns";
 
 /**
  * How an animal left the farm.
@@ -16,10 +17,10 @@ import { herdSchema } from "./supabase";
  * cannot drift apart quietly.
  */
 
-/** How she left. The five the `exit_channel` CHECK allows. */
+/** How the animal left. The five the `exit_channel` CHECK allows. */
 export const EXIT_CHANNELS = [
   { code: "sold_live", label: "Sold live", hint: "Through a barn, or straight to a buyer" },
-  { code: "processed", label: "To a processor", hint: "Her money arrives later, as packaged meat" },
+  { code: "processed", label: "To a processor", hint: "The money arrives later, as packaged meat" },
   { code: "died_on_farm", label: "Died on the farm", hint: "" },
   { code: "leased_out", label: "Leased out", hint: "Off the farm, still yours" },
   { code: "transferred", label: "Transferred", hint: "To another farm or another owner" },
@@ -175,12 +176,18 @@ export const hasSale = (draft: DispositionDraft): boolean =>
  */
 export function validateDisposition(
   draft: DispositionDraft,
-  animal: { birth_date: string },
+  animal: { birth_date: string; sex: string },
   today: string,
+  /** Passed in by callers that already have them; worked out here otherwise,
+   *  so this stays usable from a test with nothing but a birth date. */
+  pronouns?: Pronouns,
 ): string | null {
-  if (!EXIT_CHANNELS.some((c) => c.code === draft.exitChannel)) return "How did she leave?";
-  if (draft.date === "") return "When did she leave?";
-  if (draft.date < animal.birth_date) return `She was born ${animal.birth_date} — she can't have left before that.`;
+  const p = pronouns ?? pronounsFor(animal);
+  if (!EXIT_CHANNELS.some((c) => c.code === draft.exitChannel)) return `How did ${p.subject} leave?`;
+  if (draft.date === "") return `When did ${p.subject} leave?`;
+  if (draft.date < animal.birth_date) {
+    return `${p.Subject} ${p.was} born ${animal.birth_date} — ${p.subject} can't have left before that.`;
+  }
   if (draft.date > today) return "That date hasn't happened yet.";
 
   if (draft.isCull && draft.cullPrimaryReasonId === "") return "A cull needs a reason.";
@@ -194,7 +201,7 @@ export function validateDisposition(
       ? "Sale figures belong on an animal sold live. A processor's animal earns later, as packaged meat."
       : "Sale figures belong on an animal sold live.";
   }
-  if (!SALE_CHANNELS.some((c) => c.code === draft.saleChannel)) return "How was she sold?";
+  if (!SALE_CHANNELS.some((c) => c.code === draft.saleChannel)) return `How ${p.was} ${p.subject} sold?`;
 
   const weight = num(draft.liveWeightLb);
   if (draft.liveWeightLb.trim() !== "" && (weight === null || weight <= 0)) {

@@ -36,7 +36,7 @@ vi.mock("../../lib/local-time", async (importOriginal) => ({
   todayLocal: () => "2026-08-21",
 }));
 
-const abigail = { id: "a1", birth_date: "2025-07-24" };
+const abigail = { id: "a1", birth_date: "2025-07-24", sex: "female" };
 
 afterEach(() => {
   cleanup();

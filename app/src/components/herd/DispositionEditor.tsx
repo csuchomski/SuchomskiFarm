@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Button } from "../ui";
 import { formatMoney } from "../../lib/sires";
 import { todayLocal } from "../../lib/local-time";
+import { pronounsFor } from "../../lib/pronouns";
 import {
   EXIT_CHANNELS,
   SALE_CHANNELS,
@@ -44,7 +45,7 @@ export function DispositionEditor({
   onCancel,
   onSaved,
 }: {
-  animal: { id: string; birth_date: string };
+  animal: { id: string; birth_date: string; sex: string };
   farmId: string | null;
   /** What is already recorded, when this is an edit rather than a first. */
   current: Disposition | null;
@@ -52,6 +53,8 @@ export function DispositionEditor({
   onSaved: () => void;
 }) {
   const today = todayLocal();
+  // Any animal can leave, and most of them on this farm are not cows.
+  const p = pronounsFor(animal);
   const [draft, setDraft] = useState<DispositionDraft>(() =>
     current ? draftFrom(current, today) : emptyDisposition(today),
   );
@@ -88,7 +91,7 @@ export function DispositionEditor({
   const set = <K extends keyof DispositionDraft>(key: K, value: DispositionDraft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
 
-  const problem = validateDisposition(draft, animal, today);
+  const problem = validateDisposition(draft, animal, today, p);
   const loaded = reasons ?? [];
   /** A reason already on file, before the list it belongs to has arrived. The
    *  select would otherwise fall back to its first option and show "Pick one"
@@ -132,11 +135,11 @@ export function DispositionEditor({
     <div className="animal-form disposition-editor">
       <div className="animal-form__grid">
         <label className="animal-form__field">
-          <span className="eyebrow">How she left</span>
+          <span className="eyebrow">How {p.subject} left</span>
           <select
             className="animal-form__input"
             value={draft.exitChannel}
-            aria-label="How she left"
+            aria-label={`How ${p.subject} left`}
             onChange={(e) => set("exitChannel", e.target.value)}
           >
             {EXIT_CHANNELS.map((c) => (
@@ -154,7 +157,7 @@ export function DispositionEditor({
             className="animal-form__input mono"
             type="date"
             value={draft.date}
-            aria-label="When she left"
+            aria-label={`When ${p.subject} left`}
             onChange={(e) => set("date", e.target.value)}
           />
         </label>
@@ -187,7 +190,7 @@ export function DispositionEditor({
 
         {draft.isCull && reasonsFailed && (
           <p className="disposition-editor__problem">
-            Couldn't load this farm's cull reasons. She can still be recorded as culled without one.
+            Couldn't load this farm's cull reasons. {p.Subject} can still be recorded as culled without one.
           </p>
         )}
 
@@ -363,7 +366,7 @@ export function DispositionEditor({
             <div className="disposition-editor__figures">
               <span className="eyebrow">Gross</span>
               <span className="mono">{formatMoney(grossCents)}</span>
-              <span className="eyebrow">She cleared</span>
+              <span className="eyebrow">{p.Subject} cleared</span>
               <span
                 className="serif mono disposition-editor__net"
                 style={{ color: (netCents ?? 0) < 0 ? "var(--red)" : "var(--ink)" }}
@@ -376,7 +379,7 @@ export function DispositionEditor({
                 </span>
               ) : (
                 <span className="disposition-editor__hint">
-                  Goes on her record as {draft.isCull ? "cull proceeds" : "a live sale"}
+                  Goes on {p.possessive} record as {draft.isCull ? "cull proceeds" : "a live sale"}
                 </span>
               )}
             </div>
@@ -409,7 +412,7 @@ export function DispositionEditor({
         {current &&
           (confirmingUndo ? (
             <span className="disposition-editor__undo">
-              <span>Put her back on the farm, and drop what was recorded?</span>
+              <span>Put {p.object} back on the farm, and drop what was recorded?</span>
               <button type="button" className="link-button mono" disabled={saving} onClick={() => void undo()}>
                 yes, undo it
               </button>
@@ -419,7 +422,7 @@ export function DispositionEditor({
             </span>
           ) : (
             <button type="button" className="link-button mono" onClick={() => setConfirmingUndo(true)}>
-              she didn't go
+              {p.subject} didn't go
             </button>
           ))}
 

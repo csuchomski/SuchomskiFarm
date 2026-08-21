@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { animalPath, describeBreeding, formatAge, isMilked, milkingHerd, type BreedShare, type RealAnimal } from "./herd";
+import { animalPath, describeBreeding, formatAge, givesMilk, isDairy, milkingHerd, type BreedShare, type RealAnimal } from "./herd";
 
 const share = (name: string, percent: number): BreedShare => ({ breedId: name, name, code: name.slice(0, 2), percent });
 
@@ -57,25 +57,51 @@ describe("formatAge", () => {
   });
 });
 
-describe("isMilked", () => {
+describe("isDairy", () => {
   it("goes by purpose, not by breed", () => {
     // A Jersey run as a beef cow is a beef cow. Composition says what she is;
     // purpose says what she's for, and only one of them decides whether she
     // has a lactation.
-    expect(isMilked({ purpose: "dairy" })).toBe(true);
-    expect(isMilked({ purpose: "beef" })).toBe(false);
+    expect(isDairy({ purpose: "dairy" })).toBe(true);
+    expect(isDairy({ purpose: "beef" })).toBe(false);
   });
 
-  it("counts dual as milked, matching herd.record_calving", () => {
+  it("counts dual, matching herd.record_calving", () => {
     // The database opens a lactation for purpose in ('dairy', 'dual'). If
     // this disagreed, the app would show a cow as missing a lactation the
     // database was never going to create.
-    expect(isMilked({ purpose: "dual" })).toBe(true);
+    expect(isDairy({ purpose: "dual" })).toBe(true);
   });
 
   it("won't guess at a purpose it doesn't know", () => {
-    expect(isMilked({ purpose: "" })).toBe(false);
-    expect(isMilked({ purpose: "draft" })).toBe(false);
+    expect(isDairy({ purpose: "" })).toBe(false);
+    expect(isDairy({ purpose: "draft" })).toBe(false);
+  });
+});
+
+describe("givesMilk", () => {
+  const cow = { purpose: "dairy", sex: "female", class: "cow" };
+
+  it("is a dairy female past calfhood", () => {
+    expect(givesMilk(cow)).toBe(true);
+    expect(givesMilk({ ...cow, purpose: "dual" })).toBe(true);
+    expect(givesMilk({ ...cow, class: "heifer" })).toBe(true);
+  });
+
+  it("is false for a bull, however he is kept", () => {
+    // Victor: a bull calf out of a dairy cow. record_calving copies the dam's
+    // purpose to the calf, so every bull born on the dairy string carries
+    // 'dairy' — and a milk chart appeared on his record because of it.
+    expect(givesMilk({ purpose: "dairy", sex: "male", class: "calf" })).toBe(false);
+    expect(givesMilk({ purpose: "dairy", sex: "male", class: "bull" })).toBe(false);
+  });
+
+  it("is false for a heifer calf, who is not being milked now", () => {
+    expect(givesMilk({ ...cow, class: "calf" })).toBe(false);
+  });
+
+  it("is false for any beef animal", () => {
+    expect(givesMilk({ ...cow, purpose: "beef" })).toBe(false);
   });
 });
 

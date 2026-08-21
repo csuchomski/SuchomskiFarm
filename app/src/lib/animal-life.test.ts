@@ -64,7 +64,15 @@ describe("the order of a life", () => {
 
   it("says where she came from, since a bought-in cow has no calving here", () => {
     expect(build()[0].detail).toBe("Bought in");
-    expect(build({ animal: animal({ origin: "born here" }) })[0].detail).toBe("On this farm");
+    expect(build({ animal: animal({ origin: "born_on_farm" }) })[0].detail).toBe("On this farm");
+    expect(build({ animal: animal({ origin: "purchased" }) })[0].detail).toBe("Bought in");
+    expect(build({ animal: animal({ origin: "embryo_transfer" }) })[0].detail).toBe(
+      "Out of an embryo transfer",
+    );
+    // The old check compared against "born here" — a space, and not one of
+    // the four the column allows — so it matched nothing and every home-bred
+    // animal read as bought. This test used the same invented value.
+    expect(build({ animal: animal({ origin: "born here" }) })[0].detail).toBe("Bought in");
   });
 });
 

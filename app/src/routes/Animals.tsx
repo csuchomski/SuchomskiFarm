@@ -9,7 +9,7 @@ import {
   fetchBreedComposition,
   formatAge,
   herdOnly,
-  isMilked,
+  isDairy,
   type BreedShare,
   type RealAnimal,
 } from "../lib/herd";
@@ -112,7 +112,7 @@ export default function Animals() {
   // filter rather than being invisible.
   const classes = useMemo(() => [...new Set(all.map((a) => a.class))].sort(), [all]);
   const inactiveCount = all.filter((a) => a.status !== "active").length;
-  const dairyCount = all.filter(isMilked).length;
+  const dairyCount = all.filter(isDairy).length;
   const beefCount = all.length - dairyCount;
 
   const visible = useMemo(() => {
@@ -120,8 +120,8 @@ export default function Animals() {
     const filtered = all.filter((a) => {
       if (!showInactive && a.status !== "active") return false;
       if (classFilter !== "all" && a.class !== classFilter) return false;
-      if (purposeFilter === "dairy" && !isMilked(a)) return false;
-      if (purposeFilter === "beef" && isMilked(a)) return false;
+      if (purposeFilter === "dairy" && !isDairy(a)) return false;
+      if (purposeFilter === "beef" && isDairy(a)) return false;
       if (!q) return true;
       const breeding = describeBreeding(breeds.get(a.id)) ?? "";
       return [a.barn_name ?? "", a.ear_tag, a.class, a.sex, a.purpose, a.status, breeding, a.notes ?? ""]
@@ -145,7 +145,7 @@ export default function Animals() {
   }, [all, breeds, query, classFilter, purposeFilter, showInactive, sort]);
 
   // The two sides of the herd, as sections rather than as a filter that hides
-  // one of them. `isMilked` is the same predicate the chips, the counts and
+  // one of them. `isDairy` is the same predicate the chips, the counts and
   // the lactation pages use, so a dual-purpose cow lands under Dairy on every
   // screen — and her row still says "dual".
   const moveToMob = async (animalId: string, groupId: string | null) => {
@@ -161,8 +161,8 @@ export default function Animals() {
   };
 
   const sides = (rows: RealAnimal[]) => {
-    const dairy = rows.filter(isMilked);
-    const beef = rows.filter((a) => !isMilked(a));
+    const dairy = rows.filter(isDairy);
+    const beef = rows.filter((a) => !isDairy(a));
     return [
       {
         key: "dairy",
@@ -391,7 +391,7 @@ export default function Animals() {
                       is how a page starts reading like a manual. */}
                   {dragging !== null && group.target && (
                     <span className="animals-mob__hint">
-                      {group.mobId === null ? "drop to take her out" : "drop to move her here"}
+                      {group.mobId === null ? "drop to take out of a mob" : "drop to move here"}
                     </span>
                   )}
 
@@ -527,7 +527,7 @@ function MobPicker({
         <button
           type="button"
           className="link-button mono"
-          aria-label={loose ? "take an animal out of her mob" : `add an animal to ${mobName}`}
+          aria-label={loose ? "take an animal out of its mob" : `add an animal to ${mobName}`}
           onClick={onOpen}
         >
           {loose ? "take one out" : "add"}
@@ -540,7 +540,7 @@ function MobPicker({
     <span className="animals-mob__act">
       <select
         className="animals-mob__pick"
-        aria-label={loose ? "Take an animal out of her mob" : `Add an animal to ${mobName}`}
+        aria-label={loose ? "Take an animal out of its mob" : `Add an animal to ${mobName}`}
         value=""
         onChange={(e) => e.target.value !== "" && onPick(e.target.value)}
       >

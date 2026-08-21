@@ -10,7 +10,7 @@ import {
 } from "./dispositions";
 
 const TODAY = "2026-08-21";
-const abigail = { birth_date: "2026-07-24" };
+const abigail = { birth_date: "2026-07-24", sex: "female" };
 const base = (over: Partial<DispositionDraft> = {}): DispositionDraft => ({
   ...emptyDisposition(TODAY),
   date: "2026-08-01",

@@ -20,6 +20,7 @@ import { WeightTile } from "../components/herd/WeightTile";
 import { isSire } from "../lib/sires";
 import { BreedEditor } from "../components/herd/BreedEditor";
 import {
+  animalPath,
   describeBreeding,
   fetchAnimalByTag,
   fetchAnimals,
@@ -125,6 +126,11 @@ export default function AnimalRecord() {
     };
   }, [tag, reloadKey, farmId]);
 
+  // The URL carries her tag, or her id when she has no tag to be found by —
+  // see animalPath. Naming the wrong one in an error message sends somebody
+  // looking for an ear tag that reads like a UUID.
+  const which = tag.includes("-") && tag.length === 36 ? `that animal` : `tag ${tag}`;
+
   if (result.state === "loading") {
     return (
       <Frame title="…">
@@ -138,7 +144,7 @@ export default function AnimalRecord() {
       <Frame title="Animal">
         <div style={{ padding: 48 }}>
           <p style={{ color: "var(--red)" }}>
-            Couldn't load tag {tag}: {result.message}
+            Couldn't load {which}: {result.message}
           </p>
           <Link to="/animals">← back to Animals</Link>
         </div>
@@ -150,7 +156,7 @@ export default function AnimalRecord() {
     return (
       <Frame title="Animal">
         <div style={{ padding: 48 }}>
-          <p style={{ marginBottom: 8 }}>No animal on tag {tag}.</p>
+          <p style={{ marginBottom: 8 }}>No animal on {which}.</p>
           <Link to="/animals">← back to Animals</Link>
         </div>
       </Frame>
@@ -463,7 +469,7 @@ export default function AnimalRecord() {
  * two lists read as one idea rather than two designs. */
 function RelativeRow({ animal, note }: { animal: RealAnimal; note: string }) {
   return (
-    <Link to={`/animals/${animal.ear_tag}`} className="relative-row">
+    <Link to={animalPath(animal)} className="relative-row">
       <EarTag tag={animal.ear_tag} accent="herd" />
       <span style={{ flex: 1, minWidth: 0 }}>
         <span className="serif" style={{ fontSize: 15 }}>

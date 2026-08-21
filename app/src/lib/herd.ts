@@ -80,11 +80,32 @@ export async function fetchAnimals(): Promise<RealAnimal[]> {
   return (data ?? []) as RealAnimal[];
 }
 
-export async function fetchAnimalByTag(earTag: string): Promise<RealAnimal | null> {
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The link to an animal's record.
+ *
+ * Her tag, because a URL somebody reads or types should say which animal it
+ * is. Migration 059 makes a tag required and unique within the farm, so from
+ * here on every animal has one.
+ *
+ * **Rows written before 059 might not**, and an animal with a blank tag had
+ * no reachable record at all — the link came out as `/animals/`, which is
+ * the list. Falling back to the id keeps her reachable, and the record page
+ * resolves either form. It is a way back to a row that needs fixing, not a
+ * second addressing scheme: give her a tag and the link becomes the tag.
+ */
+export const animalPath = (animal: { id: string; ear_tag: string }): string =>
+  `/animals/${encodeURIComponent(animal.ear_tag.trim() || animal.id)}`;
+
+/** Resolve what `animalPath` produced: a tag, or an id for an animal that has
+ *  no tag to be found by. */
+export async function fetchAnimalByTag(tagOrId: string): Promise<RealAnimal | null> {
+  const column = UUID.test(tagOrId) ? "id" : "ear_tag";
   const { data, error } = await herdSchema()
     .from("animals")
     .select(ANIMAL_COLUMNS)
-    .eq("ear_tag", earTag)
+    .eq(column, tagOrId)
     .is("deleted_at", null)
     .maybeSingle();
   if (error) throw new Error(`herd.animals: ${error.message}`);

@@ -100,7 +100,12 @@ describe("validateCheck", () => {
 
 describe("validateCalving", () => {
   const live = { ...emptyCalf(), sex: "female", earTag: "99" };
-  const base = { damId: "cow-1", date: "2026-08-08", calves: [live] };
+  const base = {
+    damId: "cow-1",
+    date: "2026-08-08",
+    calves: [live],
+    herd: [{ id: "cow-1", ear_tag: "12" }],
+  };
 
   it("accepts a live heifer calf", () => {
     expect(validateCalving(base)).toBeNull();
@@ -133,6 +138,41 @@ describe("validateCalving", () => {
     expect(
       validateCalving({ ...base, calves: [{ ...emptyCalf(), outcome: "stillborn", sex: "male", animalId: "a1" }] }),
     ).toMatch(/Only a live calf can be an animal already on file/);
+  });
+
+  it("wants a live calf to have an ear tag, because the tag is how her record is found", () => {
+    // Victor, 2026-08-21: recorded from a calving with the tag left blank,
+    // which put an empty string on animals.ear_tag and left /animals/ as the
+    // only link to him.
+    expect(validateCalving({ ...base, calves: [{ ...live, earTag: "" }] })).toMatch(/needs an ear tag/);
+    expect(validateCalving({ ...base, calves: [{ ...live, earTag: "   " }] })).toMatch(/needs an ear tag/);
+  });
+
+  it("doesn't ask a stillborn calf for a tag, because it gets no record", () => {
+    expect(
+      validateCalving({ ...base, calves: [{ ...emptyCalf(), outcome: "stillborn", sex: "male", earTag: "" }] }),
+    ).toBeNull();
+  });
+
+  it("doesn't ask for a tag when the calf is a record already on file", () => {
+    // The tag comes from the record being adopted, and the field is disabled.
+    expect(validateCalving({ ...base, calves: [{ ...live, earTag: "", animalId: "a1" }] })).toBeNull();
+  });
+
+  it("refuses a tag another animal already wears", () => {
+    expect(validateCalving({ ...base, calves: [{ ...live, earTag: "12" }] })).toMatch(/already on another animal/);
+  });
+
+  it("refuses twins sharing one tag", () => {
+    expect(
+      validateCalving({ ...base, calves: [live, { ...emptyCalf(), sex: "male", earTag: "99" }] }),
+    ).toMatch(/Both calves are down as tag 99/);
+  });
+
+  it("lets two farms use the same number, because herd is only what this account sees", () => {
+    // Martha is tag 1 here; Rocky Ridge has its own tag 1. RLS means the
+    // other farm's animals are not in `herd`, so they can't collide.
+    expect(validateCalving({ ...base, calves: [{ ...live, earTag: "1" }], herd: [] })).toBeNull();
   });
 
   it("refuses a birth weight that isn't a positive number", () => {

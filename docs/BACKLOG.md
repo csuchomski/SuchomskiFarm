@@ -580,6 +580,85 @@ the missing animal the thing to fix.
   unit is added without one — `stripAcres`, `planStrip` and `widthForHours` all
   fall back to it.
 
+## Requested 2026-08-21
+
+### What a purchased animal cost to buy
+
+An animal bought in has a price, and there is nowhere to type it. Eight of the
+twelve animals on file are `origin = 'purchased'` and one of them has a figure
+recorded anywhere — put there by hand, in SQL, not by the app.
+
+Her record already has the place to *show* it. What she has cost and earned
+reports basis beside the net rather than inside it — "Cost to buy … not an
+expense, so not in the net" — because netting a $700 purchase against a
+season's milk would say she lost money in the year she was bought and never
+again. That line reads `herd.cost_entries` where `is_basis` is true. So the
+display end is built and the entry end is missing.
+
+Worth knowing before building:
+
+- **`herd.animals.purchase_price_cents` exists and is inert.** A nullable
+  bigint that no page reads, no page writes, and no database function
+  mentions. It is not the mechanism the money section uses. Either make it the
+  source of truth or drop it, but do not leave a second home for the same
+  number — that is what the weight tile was just untangled from.
+- **The ledger is the mechanism that already works.** `cost_entries.source`
+  allows `'acquisition'`, `expense_categories` has an `acquisition` category
+  at `basis_type = 'basis'`, and the one real row on file uses exactly that
+  shape. A row per purchased animal, `source = 'acquisition'`, `is_basis`
+  true, is the smallest thing that lights up the display that is already
+  there.
+- **`is_basis` is never set true by the app, and that is a bug on its own.**
+  The column defaults to false and `attribute()` inserts without it. So
+  attributing an acquisition-category transaction to an animal today books
+  her purchase price as an operating cost and subtracts it from her milk —
+  the precise arithmetic the money section was designed to avoid. Setting
+  `is_basis` from the category's `basis_type` (at insert, or in a trigger, so
+  both paths get it) is part of this work, not a separate item.
+- **A cost entry needs a date and a farm, and neither is on the animal.**
+  There is no `acquired_on` column on `herd.animals`, so the form has to ask
+  when she was bought or default it to something defensible. `farm_id` comes
+  from the animal.
+- The field belongs on `AnimalForm`, which already has an `origin` select with
+  `'purchased'` in it, so it can appear when that is what was chosen. It is
+  also wanted for animals already on file — eight of them — so editing has to
+  reach it too, not just creation.
+
+### ~~An animal with no ear tag has no record page~~ Built 2026-08-21
+
+Victor's record would not open because `/animals/:tag` resolves an animal by
+ear tag and his was the empty string, so his link came out as `/animals/`.
+Traced to `herd.record_calving`, which took the calf's tag as given and
+inserted whatever it got — his row and the calving that made him share a
+`created_at` to the microsecond — while the calving forms on Calvings and
+Breedings never asked for one.
+
+What was built:
+
+- **Migration 059.** `record_calving` refuses a live calf with a blank tag, a
+  tag another animal on that farm already wears, or twins sharing one, all in
+  the pre-flight loop so nothing is half-written. Plus a partial unique index
+  on `(farm_id, ear_tag)` — per farm, because Martha is tag 1 here and Rocky
+  Ridge has its own tag 1, and that has to keep working.
+- **`validateCalving` asks for the tag** in both forms. Its `herd` argument is
+  required rather than optional on purpose: a validator that skips a check
+  when a caller forgets an argument is the hole being closed.
+- **`animalPath`** replaces every hand-built `/animals/${…}`, using the tag
+  and falling back to the id. That is what makes an already-blank row
+  reachable, so Victor can be opened and given a number in the app rather
+  than in SQL. The source-reading guard in `animal-links.test.ts` now enforces
+  the helper instead of the field, and widening its glob to `.ts` immediately
+  turned up a call site in `lib/alerts.ts` the old `.tsx`-only version missed.
+
+Corrected while building: the duplicate half was overstated here. RLS scopes
+`herd.animals` to `is_farm_member(farm_id)` and nobody belongs to two farms,
+so `.maybeSingle()` was never seeing both tag-1 rows — Martha opened fine. The
+duplicate was legal in the schema, not broken in the app. The index closes it
+anyway.
+
+Still the farm's to do: Victor has no tag until somebody gives him one, and
+the row called "test" on Rocky Ridge looks like it was never meant to stay.
+
 ## Carried over from earlier sessions
 
 - **Health** — the whole module. Deliberately last; may never be built.

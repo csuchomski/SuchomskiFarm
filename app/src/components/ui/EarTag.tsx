@@ -17,12 +17,16 @@ export function EarTag({
   accent: TagAccent;
   size?: "sm" | "md" | "lg";
 }) {
+  // An animal with no tag renders as an empty chip, which reads as a layout
+  // fault rather than as missing information. Migration 059 stops new ones
+  // being written; the rows that predate it still have to say what they are.
+  const blank = tag.trim() === "";
   return (
     <span
       className={`ear-tag ear-tag--${size} mono`}
-      style={{ borderLeftColor: accentVar[accent] }}
+      style={{ borderLeftColor: accentVar[accent], ...(blank ? { color: "var(--ink-faint)" } : null) }}
     >
-      {tag}
+      {blank ? "no tag" : tag}
     </span>
   );
 }

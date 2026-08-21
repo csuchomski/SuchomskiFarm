@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, EarTag, GridRow, Pill } from "../components/ui";
 import {
+  animalPath,
   describeBreeding,
   fetchAnimals,
   fetchBreedComposition,
@@ -277,7 +278,7 @@ export default function Animals() {
               setAdding(false);
               // Straight to the new animal's record — the next thing you
               // want after adding one is usually to fill in the rest.
-              navigate(`/animals/${saved.ear_tag}`);
+              navigate(animalPath(saved));
             }}
           />
         </div>
@@ -427,7 +428,7 @@ export default function Animals() {
               {side.rows.map((a) => (
                 <Link
                   key={a.id}
-                  to={`/animals/${a.ear_tag}`}
+                  to={animalPath(a)}
                   style={{ color: "inherit", display: "contents" }}
                   draggable={canDrag}
                   onDragStart={(e) => {

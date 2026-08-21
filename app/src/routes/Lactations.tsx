@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Callout, EarTag, GridRow, Pill, StatTile } from "../components/ui";
-import { fetchAnimals, isMilked, milkingHerd, type RealAnimal } from "../lib/herd";
+import { animalPath, fetchAnimals, isMilked, milkingHerd, type RealAnimal } from "../lib/herd";
 import {
   byFreshDateDesc,
   daysInMilk,
@@ -158,7 +158,7 @@ export default function Lactations() {
                 return (
                   <Link
                     key={l.id}
-                    to={animal ? `/animals/${animal.ear_tag}` : "/animals"}
+                    to={animal ? animalPath(animal) : "/animals"}
                     style={{ color: "inherit", display: "contents" }}
                   >
                     <GridRow cols={COLS} mobileCols={COLS_SM} as="body">
@@ -210,7 +210,7 @@ export default function Lactations() {
                 until someone records her freshening.
               </p>
               {missing.map((a) => (
-                <Link key={a.id} to={`/animals/${a.ear_tag}`} style={{ color: "inherit", display: "contents" }}>
+                <Link key={a.id} to={animalPath(a)} style={{ color: "inherit", display: "contents" }}>
                   <GridRow cols="60px 1fr 120px" mobileCols="44px 1fr 72px" as="body">
                     <EarTag tag={a.ear_tag} accent="herd" />
                     <span className="serif" style={{ fontSize: 17 }}>

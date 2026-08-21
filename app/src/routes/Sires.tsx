@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, EarTag, GridRow, Pill, StatTile } from "../components/ui";
-import { fetchAnimals, formatAge, type RealAnimal } from "../lib/herd";
+import { animalPath, fetchAnimals, formatAge, type RealAnimal } from "../lib/herd";
 import {
   createReferenceSire,
   createSemenLot,
@@ -415,7 +415,7 @@ export default function Sires() {
                       <EarTag tag={a.ear_tag || "—"} accent="herd" />
                       <span className="sire-row__name" style={{ minWidth: 0 }}>
                         {a.ear_tag ? (
-                          <Link to={`/animals/${a.ear_tag}`} className="serif" style={{ fontSize: 17 }}>
+                          <Link to={animalPath(a)} className="serif" style={{ fontSize: 17 }}>
                             {sireName(a)}
                           </Link>
                         ) : (

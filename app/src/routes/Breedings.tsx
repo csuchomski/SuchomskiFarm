@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, GridRow, Pill, StatTile } from "../components/ui";
-import type { RealAnimal } from "../lib/herd";
+import { animalPath, type RealAnimal } from "../lib/herd";
 import { fetchSemenLots, type SemenLot } from "../lib/sires";
 import {
   countServices,
@@ -240,7 +240,7 @@ export default function Breedings() {
     })();
     const calvingProblem =
       alsoCalved && checkResult === "pregnant"
-        ? validateCalving({ damId: b.animal_id, date: calvingDate, calves: [asRecorded] })
+        ? validateCalving({ damId: b.animal_id, date: calvingDate, calves: [asRecorded], herd: animals })
         : null;
     return (
                   <div key={b.id}>
@@ -255,7 +255,7 @@ export default function Breedings() {
                             doing", and there was no way to get from one to
                             the other. */}
                         {dam ? (
-                          <Link to={`/animals/${dam.ear_tag}`} className="serif" style={{ fontSize: 17 }}>
+                          <Link to={animalPath(dam)} className="serif" style={{ fontSize: 17 }}>
                             {name(b.animal_id) ?? "Unknown"}
                           </Link>
                         ) : (

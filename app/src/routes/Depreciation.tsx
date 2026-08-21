@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Button, Callout, EarTag, GridRow, StatTile } from "../components/ui";
-import { fetchAnimals, type RealAnimal } from "../lib/herd";
+import { animalPath, fetchAnimals, type RealAnimal } from "../lib/herd";
 import { fetchProductionRecords } from "../lib/milkings";
 import { fetchLactations } from "../lib/lactations";
 import { fetchCalvings } from "../lib/repro";
@@ -316,7 +316,7 @@ export default function Depreciation() {
             <GridRow key={r.animal.id} cols={COLS} mobileCols={COLS_SM} as="body">
               <EarTag tag={r.animal.ear_tag} accent="herd" />
               <span style={{ minWidth: 0 }}>
-                <Link to={`/animals/${r.animal.ear_tag}`} className="serif" style={{ fontSize: 17 }}>
+                <Link to={animalPath(r.animal)} className="serif" style={{ fontSize: 17 }}>
                   {nameOf(r.animal)}
                 </Link>
                 <br />

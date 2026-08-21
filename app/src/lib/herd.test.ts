@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeBreeding, formatAge, isMilked, milkingHerd, type BreedShare, type RealAnimal } from "./herd";
+import { animalPath, describeBreeding, formatAge, isMilked, milkingHerd, type BreedShare, type RealAnimal } from "./herd";
 
 const share = (name: string, percent: number): BreedShare => ({ breedId: name, name, code: name.slice(0, 2), percent });
 
@@ -110,5 +110,25 @@ describe("milkingHerd", () => {
 
   it("is empty on a herd with no dairy in it", () => {
     expect(milkingHerd([animal({ id: "a", purpose: "beef" }), animal({ id: "b", purpose: "beef" })])).toEqual([]);
+  });
+});
+
+describe("animalPath", () => {
+  it("links by tag, because a URL should say which animal it is", () => {
+    expect(animalPath({ id: "2e2d30bd-f266-44b4-a915-ecaae8a43201", ear_tag: "12" })).toBe("/animals/12");
+  });
+
+  it("falls back to the id when the tag is blank, so the row is still reachable", () => {
+    // Victor, on file from a calving that never asked for a tag. Before this
+    // his link came out as /animals/, which is the list, and there was no way
+    // to open him and give him one. Migration 059 stops new ones.
+    expect(animalPath({ id: "2e2d30bd-f266-44b4-a915-ecaae8a43201", ear_tag: "" })).toBe(
+      "/animals/2e2d30bd-f266-44b4-a915-ecaae8a43201",
+    );
+    expect(animalPath({ id: "abc", ear_tag: "   " })).toBe("/animals/abc");
+  });
+
+  it("escapes a tag that would otherwise break the path", () => {
+    expect(animalPath({ id: "abc", ear_tag: "33432/B" })).toBe("/animals/33432%2FB");
   });
 });

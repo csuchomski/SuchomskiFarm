@@ -659,6 +659,53 @@ anyway.
 Still the farm's to do: Victor has no tag until somebody gives him one, and
 the row called "test" on Rocky Ridge looks like it was never meant to stay.
 
+## Raised 2026-08-21 by recording a departure
+
+### The processing and death records
+
+Migration 060 fills in `herd.dispositions` and `herd.disposition_sale_details`
+— how she left, when, whether it was a cull and what it was for, and what a
+live sale brought. Two detail tables were deliberately left for later, and the
+owner chose that split knowing what was in them.
+
+`herd.disposition_processing_details` is the larger of the two and is really a
+beef-processing module rather than a few more fields: processor and address,
+inspection type, dropoff, kill and pickup dates, hanging weight, days hung,
+quality and yield grade, ribeye area, backfat, a cut sheet document, packaged
+weight, processing cost, dressing percentage, cutting yield, cost per packaged
+pound. Twenty-odd columns, most of which arrive weeks after the animal does.
+
+`herd.disposition_death_details` is small — suspected and confirmed cause,
+necropsy performed, findings, a document, disposal method — and is the more
+likely of the two to be wanted first.
+
+Worth knowing before building:
+
+- **The processing record arrives in instalments.** Dropoff is known on the
+  day, kill and hanging weight a few days later, packaged weight and cost at
+  pickup. A form that demands all of it at once will be filled in wrong or not
+  at all; this wants the same "record it, correct it later" shape 060 already
+  has.
+- **`record_disposition` refuses sale figures on a processed animal** because
+  migration 058 credits packaged meat back to her when it sells through the
+  store. The processing *cost* is a different thing and belongs in
+  `cost_entries` against her, not as negative revenue.
+- **Cause of death is where a herd-health picture would start**, and Health is
+  the module that was deliberately left last. Worth deciding whether this
+  small table is part of a disposition or the first piece of that.
+
+### The word "she", on an animal who isn't
+
+The record page says "she" throughout — "What she has done", "What she has
+left", "Nothing costed against Victor yet". Victor is a bull calf, and the
+page knows it: `sex` is on the row and drives the pill on the identity line.
+
+Not a schema problem and not a small edit either: it runs through
+`AnimalRecord`, `MoneySection`, `MilkSection`, `DispositionEditor`,
+`animal-life.ts` and most of their comments. Worth doing in one pass with a
+decision behind it — the neutral wording, or wording that follows `sex` — not
+as a scatter of one-word fixes.
+
 ## Carried over from earlier sessions
 
 - **Health** — the whole module. Deliberately last; may never be built.

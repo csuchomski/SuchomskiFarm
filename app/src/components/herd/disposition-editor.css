@@ -1,0 +1,118 @@
+/* Recording how an animal left. Sits inside the animal-form panel, so the
+   border, background and inputs come from animal-edit-form.css and only what
+   is particular to a departure is here. */
+
+.disposition-editor__hint {
+  font-size: 12px;
+  color: var(--ink-muted);
+  line-height: 1.4;
+}
+
+.disposition-editor__problem {
+  font-size: 13px;
+  color: var(--red);
+}
+
+.disposition-editor__error {
+  font-size: 13px;
+  color: var(--red);
+  margin: 12px 0 0;
+}
+
+/* The cull question is about the animal rather than about the route she took
+   off the farm, so it is set apart from the two selects above it. */
+.disposition-editor__cull {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+}
+
+.disposition-editor__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+
+.disposition-editor__check input {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  accent-color: var(--herd-green);
+}
+
+.disposition-editor__sale {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+  display: grid;
+  gap: 12px;
+}
+
+.disposition-editor__head {
+  margin-bottom: 2px;
+}
+
+/* What she actually cleared, on the tint this app uses for a figure being
+   drawn rather than typed — same vocabulary as the answer panel on her
+   money section. */
+.disposition-editor__figures {
+  background: var(--paper-tint);
+  padding: 14px 16px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.disposition-editor__net {
+  font-size: 21px;
+}
+
+.disposition-editor__acts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* Away from cancel: undoing a recorded departure is a different kind of
+   act from closing the form, and side by side they read as one pair. */
+.disposition-editor__undo,
+.disposition-editor__acts > button.link-button:last-of-type {
+  margin-left: auto;
+}
+
+.disposition-editor__undo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 640px) {
+  .disposition-editor__figures {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  /* The acts wrap to their own lines on a phone; a row of four controls at
+     390 put "cancel" under the button it cancels. */
+  .disposition-editor__acts {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* Stacked on a phone, so pushing one to the end would only add a gap. */
+  .disposition-editor__undo,
+  .disposition-editor__acts > button.link-button:last-of-type {
+    margin-left: 0;
+  }
+}

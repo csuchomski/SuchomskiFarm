@@ -17,6 +17,8 @@ import { OffspringEditor } from "../components/herd/OffspringEditor";
 import { GeneticsSection } from "../components/herd/GeneticsSection";
 import { MoneySection } from "../components/herd/MoneySection";
 import { WeightTile } from "../components/herd/WeightTile";
+import { DispositionEditor } from "../components/herd/DispositionEditor";
+import { fetchDisposition, type Disposition } from "../lib/dispositions";
 import { isSire } from "../lib/sires";
 import { BreedEditor } from "../components/herd/BreedEditor";
 import {
@@ -50,6 +52,9 @@ type Fetch =
       /** Her last weighing, for the tile. Null when she has never been on a
        *  scale, which is most of a beef herd. */
       weight: Weighing | null;
+      /** How she left, if she has. Null for an animal still here — and for
+       *  one marked gone before there was anywhere to record how. */
+      disposition: Disposition | null;
     };
 
 export default function AnimalRecord() {
@@ -57,6 +62,7 @@ export default function AnimalRecord() {
   const [result, setResult] = useState<Fetch>({ state: "loading" });
   const [editing, setEditing] = useState(false);
   const [linking, setLinking] = useState(false);
+  const [recordingExit, setRecordingExit] = useState(false);
   const [editingBreeds, setEditingBreeds] = useState(false);
   // Bumped after a breed edit to re-run the fetch below. Composition is
   // written as a delete-then-insert, so the ids change and there's no saved
@@ -87,14 +93,15 @@ export default function AnimalRecord() {
         // Three reads for the life. A farm is needed for all of them, and a
         // failure in any one leaves the timeline empty rather than taking
         // the whole page down — the rest of her record still reads.
-        const [calvings, lactations, breedings, weighings] = farmId
+        const [calvings, lactations, breedings, weighings, disposition] = farmId
           ? await Promise.all([
               fetchCalvings(farmId).catch(() => []),
               fetchLactations(farmId).catch(() => []),
               fetchBreedings(farmId).catch(() => []),
               fetchWeighings(farmId, animal.id).catch(() => [] as Weighing[]),
+              fetchDisposition(animal.id).catch(() => null),
             ])
-          : [[], [], [], [] as Weighing[]];
+          : [[], [], [], [] as Weighing[], null];
         if (cancelled) return;
 
         const byId = new Map(all.map((a) => [a.id, a]));
@@ -105,12 +112,14 @@ export default function AnimalRecord() {
           allBreeds: composition,
           dam: animal.dam_id ? (byId.get(animal.dam_id) ?? null) : null,
           herd: all,
+          disposition,
           life: buildLife({
             animal,
             calvings,
             lactations,
             breedings,
             offspring: all.filter((a) => a.dam_id === animal.id || a.sire_id === animal.id),
+            disposition,
             today: todayLocal(),
           }),
           weight:
@@ -163,7 +172,7 @@ export default function AnimalRecord() {
     );
   }
 
-  const { animal, breeds, allBreeds, dam, herd, life, weight } = result;
+  const { animal, breeds, allBreeds, dam, herd, life, weight, disposition } = result;
   const name = animal.barn_name ?? `Tag ${animal.ear_tag}`;
   const breeding = describeBreeding(breeds);
 
@@ -192,7 +201,23 @@ export default function AnimalRecord() {
       hint: "Her life, her milk, what she has cost and where she came from.",
       node: () => (
         <>
-          <div className="serif record-section__head">What she has done</div>
+          <div className="section__head" style={{ marginBottom: 4 }}>
+            <div className="serif record-section__head" style={{ marginBottom: 0 }}>
+              What she has done
+            </div>
+            {/* The timeline's last step is her departure, so the way to
+                record one belongs on this heading rather than in a section
+                of its own further down the page. */}
+            {farmId && (
+              <button
+                type="button"
+                className="link-button mono"
+                onClick={() => setRecordingExit((v) => !v)}
+              >
+                {recordingExit ? "cancel" : disposition ? "edit how she left" : "record how she left"}
+              </button>
+            )}
+          </div>
           <p className="record-section__lede">
             {/* A beef cow has calvings and no lactations. Saying "and
                 lactation" on her page names something she does not have,
@@ -202,6 +227,22 @@ export default function AnimalRecord() {
               ? "Every calving and lactation on file, in the order they happened."
               : "Every calving on file, in the order they happened."}
           </p>
+          {recordingExit && (
+            <DispositionEditor
+              animal={animal}
+              farmId={farmId}
+              current={disposition}
+              onCancel={() => setRecordingExit(false)}
+              onSaved={() => {
+                setRecordingExit(false);
+                // A re-read rather than a merge: recording a departure moves
+                // her status, her timeline and her earnings at once, and
+                // three of those are read from elsewhere on this page.
+                setReloadKey((k) => k + 1);
+              }}
+            />
+          )}
+
           <LifeTimeline events={life} />
 
           {isMilked(animal) && (
@@ -451,6 +492,7 @@ export default function AnimalRecord() {
                 herd: nextHerd,
                 life,
                 weight,
+                disposition,
               });
             }}
           />

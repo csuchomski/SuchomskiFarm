@@ -84,12 +84,6 @@
   padding: 12px 0;
 }
 
-.gnd-note {
-  font-size: 13px;
-  color: var(--herd-green);
-  padding: 12px 0;
-}
-
 /* What the server said when it refused to remove ground with history on it,
    and the way out. Ochre: a warning about the record, not a failure. */
 .gnd-stuck {

@@ -694,28 +694,22 @@ Worth knowing before building:
   the module that was deliberately left last. Worth deciding whether this
   small table is part of a disposition or the first piece of that.
 
-### One test fails about once in five full runs, and nobody knows which
+### ~~One test fails about once in five full runs, and nobody knows which~~ Found 2026-08-21
 
-`npx vitest run` has come back with exactly one failure out of ~1,700 on two
-separate occasions, both times passing on every rerun. The failing test's name
-was not captured either time — the mistake was rerunning the suite to look for
-the name, which starts a fresh run rather than showing the one that failed.
+`animal-money.render.test.tsx`, and it was never a logic bug. Its `mount`
+helper waits for the page's loaded-sentinel with `findByText`, which allows
+1000ms by default. `AnimalRecord` waits on a chain of reads before it draws
+anything, and with the whole suite running across workers that page
+occasionally hadn't got past "Loading…" inside the budget. Given a 5s timeout.
 
-What is known: one test, not a file-load error; it has never failed twice in a
-row; ten-plus clean runs sit either side of each sighting, including a
-deliberate sweep of six consecutive runs immediately after the second one.
+It was caught the moment the output of the failing run was kept instead of
+being thrown away — the failure text said the page was still showing
+"Loading…", which is the whole answer. Two earlier sightings were lost to
+rerunning the suite to look for the name, which starts a fresh run.
 
-Worth knowing before chasing it:
-
-- **Capture the run, don't rerun it.** `npx vitest run > run.log 2>&1` and read
-  `run.log`. Every attempt so far has thrown the evidence away.
-- The suspects are the render tests that wait on effects — `waitFor` with a
-  promise that resolves in a microtask, where an assertion can land in the tick
-  before state arrives. `disposition-editor.render.test.tsx` has a documented
-  instance of exactly that shape (the cull reasons), which was found by
-  screenshot rather than by a failure.
-- `vitest --repeat` or a seeded `--sequence.shuffle` would turn a one-in-five
-  into something reproducible faster than repeating whole runs by hand.
+**Worth carrying forward:** `npx vitest run > run.log 2>&1`, then read the
+log. And any other `findBy*` on a page with a serial chain of reads is the
+same accident waiting to happen; the ones in this suite have not been audited.
 
 ### ~~The word "she", on an animal who isn't~~ Built 2026-08-21
 

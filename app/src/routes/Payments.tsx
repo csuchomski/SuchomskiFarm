@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Callout, GridRow, Pill } from "../components/ui";
+import { Pill, Button, GridRow, Callout, SaveToast } from "../components/ui";
 import { useWorkspace } from "../lib/workspace";
 import {
   addPaymentMethod,
@@ -97,7 +97,7 @@ export default function Payments() {
       {load.state === "ok" && (
         <>
           {error && <p className="gnd-error">{error}</p>}
-          {note && <p className="gnd-note">{note}</p>}
+          <SaveToast note={note} onDone={() => setNote(null)} />
 
           {!isOwner && (
             <div style={{ margin: "12px 0" }}>

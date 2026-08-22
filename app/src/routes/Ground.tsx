@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Callout, GridRow, Pill, StatTile } from "../components/ui";
+import { Pill, Button, StatTile, GridRow, Callout, SaveToast } from "../components/ui";
 import { KmlImport } from "../components/herd/KmlImport";
 import { useWorkspace } from "../lib/workspace";
 import {
@@ -330,7 +330,7 @@ export default function Ground() {
           </div>
 
           {error && <p className="gnd-error">{error}</p>}
-          {note && <p className="gnd-note">{note}</p>}
+          <SaveToast note={note} onDone={() => setNote(null)} />
 
           <div style={{ margin: "12px 0" }}>
             <Callout>

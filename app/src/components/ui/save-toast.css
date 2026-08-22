@@ -1,0 +1,91 @@
+/* What the farm just saved, said once and then gone.
+
+   The two pieces that make this work without a JS animation library:
+
+   - `@starting-style` gives the browser a state to animate *from* on the
+     element's first paint. Without it there is no "before", so an element
+     that appears at opacity 1 simply appears.
+   - `transition-behavior: allow-discrete` on `display` lets a discrete
+     property take part in a transition, holding `display: block` until the
+     opacity has finished going the other way. That is the thing that used to
+     require animating a wrapper, or a library.
+
+   Where neither is supported the toast appears and vanishes with no fade,
+   which is the right thing to degrade to — nothing is hidden, nothing is
+   stuck open. */
+
+.save-toast__slot {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  /* The slot is only a positioner; clicks pass through to the page except on
+     the toast itself. */
+  pointer-events: none;
+  padding: 0 16px calc(20px + env(safe-area-inset-bottom));
+}
+
+.save-toast {
+  display: none;
+  opacity: 0;
+  translate: 0 10px;
+
+  pointer-events: auto;
+  max-width: min(560px, 100%);
+  text-align: left;
+  padding: 13px 18px;
+  border: none;
+  border-left: 3px solid var(--ochre);
+  background: var(--ink);
+  color: var(--paper);
+  font: 400 14px/1.45 "IBM Plex Sans", sans-serif;
+  box-shadow: 0 6px 24px rgba(25, 26, 22, 0.28);
+  cursor: pointer;
+
+  transition:
+    opacity 300ms ease,
+    translate 300ms ease,
+    display 300ms allow-discrete;
+}
+
+.save-toast--on {
+  display: block;
+  opacity: 1;
+  translate: 0 0;
+}
+
+/* Where it animates FROM on first paint. Must come after the rule it starts
+   from, and the selector has to match the element's post-change state. */
+@starting-style {
+  .save-toast--on {
+    opacity: 0;
+    translate: 0 10px;
+  }
+}
+
+.save-toast:focus-visible {
+  outline: 2px solid var(--ochre);
+  outline-offset: 2px;
+}
+
+/* The one place in this app with a shadow and a dark ground: it is the only
+   thing that sits above the page rather than on it, and it has to read as
+   temporary. Motion is the whole point of it, so reduced motion keeps the
+   toast and drops the movement rather than dropping the toast. */
+@media (prefers-reduced-motion: reduce) {
+  .save-toast {
+    translate: 0 0;
+    transition:
+      opacity 200ms ease,
+      display 200ms allow-discrete;
+  }
+
+  @starting-style {
+    .save-toast--on {
+      translate: 0 0;
+    }
+  }
+}

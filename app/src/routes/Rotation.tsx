@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
-import { Button, Callout, GridRow, Pill } from "../components/ui";
+import { Pill, Button, GridRow, Callout, SaveToast } from "../components/ui";
 import { useWorkspace } from "../lib/workspace";
 import {
   deleteMove,
@@ -233,11 +233,7 @@ export default function Rotation() {
           <Callout tone="dashed">{error}</Callout>
         </div>
       )}
-      {note && (
-        <div style={{ paddingTop: 16 }}>
-          <Callout>{note}</Callout>
-        </div>
-      )}
+      <SaveToast note={note} onDone={() => setNote(null)} />
 
       {load.state === "loading" && (
         <p style={{ fontSize: 14, color: "var(--ink-muted)", padding: "16px 8px" }}>Loading…</p>

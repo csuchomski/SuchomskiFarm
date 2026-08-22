@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
-import { Button, Callout, GridRow } from "../components/ui";
+import { Button, GridRow, Callout, SaveToast } from "../components/ui";
 import { useWorkspace } from "../lib/workspace";
 import { animalPath, fetchAnimals, type RealAnimal } from "../lib/herd";
 import {
@@ -219,11 +219,7 @@ export default function Mobs() {
           <Callout>{error}</Callout>
         </div>
       )}
-      {note && (
-        <div style={{ paddingTop: 8 }}>
-          <Callout>{note}</Callout>
-        </div>
-      )}
+      <SaveToast note={note} onDone={() => setNote(null)} />
 
       {load.state === "ok" && (
         <>

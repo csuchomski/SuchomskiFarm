@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
-import { Button, Callout, GridRow, Pill, StatTile } from "../components/ui";
+import { Pill, Button, StatTile, GridRow, Callout, SaveToast } from "../components/ui";
 import { fetchStoreData, type ProductWithInventory } from "../lib/store-data";
 import {
   cancelOrder,
@@ -236,7 +236,7 @@ export default function StoreOrders() {
           </div>
 
           {error && <p style={{ fontSize: 13, color: "var(--red)", padding: "12px 0" }}>{error}</p>}
-          {note && <p style={{ fontSize: 13, color: "var(--herd-green)", padding: "12px 0" }}>{note}</p>}
+          <SaveToast note={note} onDone={() => setNote(null)} />
 
           {reserving && (
             <div className="order-form">

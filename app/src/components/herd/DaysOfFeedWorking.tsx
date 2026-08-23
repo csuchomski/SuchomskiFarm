@@ -1,4 +1,4 @@
-import { intakePerAcre, usableAcres, type ForageAssumptions } from "../../lib/grazing";
+import { intakePerAcre, type ForageAssumptions } from "../../lib/grazing";
 
 /**
  * Where "days of feed" came from, in the farmer's own figures.
@@ -7,13 +7,15 @@ import { intakePerAcre, usableAcres, type ForageAssumptions } from "../../lib/gr
  * them there is no way to tell a strip that is genuinely two days' grazing
  * from one built on this app's fallbacks.
  *
- * **Every line is recomputed from the same helpers the tile uses** —
- * `intakePerAcre` and `usableAcres` — rather than re-derived here. A working
- * that can disagree with the figure it explains is worse than no working.
+ * **Every line is recomputed from the same helper the tile uses** —
+ * `intakePerAcre` — rather than re-derived here. A working that can disagree
+ * with the figure it explains is worse than no working.
  *
- * The two deductions are shown even though nobody asked for them: without
- * them the sum does not tie out, and a reader who checks the arithmetic and
- * finds it wrong stops trusting the whole page.
+ * It reads as the two questions a grazier actually asks. What came off the
+ * acre, which the heights answer; and how much of that reached an animal,
+ * which is utilization. The middle line is printed even though nobody asked
+ * for it: without it the sum does not tie out, and a reader who checks the
+ * arithmetic and finds it wrong stops trusting the whole page.
  */
 export function DaysOfFeedWorking({
   assumptions,
@@ -30,8 +32,8 @@ export function DaysOfFeedWorking({
 }) {
   const a = assumptions;
   const perAcreEaten = intakePerAcre(a);
-  const grazable = usableAcres(acres, a);
-  const onOffer = grazable * perAcreEaten;
+  const takeDownPerAcre = a.standingLbDmPerAcre * (a.takeDownPct / 100);
+  const onOffer = acres * perAcreEaten;
   const totalLb = headCount !== null && avgWeightLb !== null ? headCount * avgWeightLb : null;
   const daily = totalLb === null ? null : totalLb * (a.intakePctBodyweight / 100);
 
@@ -46,18 +48,23 @@ export function DaysOfFeedWorking({
         <span className="tip-rows__label">Dry matter standing</span>
         <span className="tip-rows__value">{lb(a.standingLbDmPerAcre)}/acre</span>
 
-        <span className="tip-rows__label">They graze off</span>
+        <span className="tip-rows__label">Grazed off</span>
+        <span className="tip-rows__value">{pct(a.takeDownPct)}</span>
+
+        <span className="tip-rows__rule" />
+        <span className="tip-rows__label tip-rows__sum">Comes off an acre</span>
+        <span className="tip-rows__value tip-rows__sum">{lb(takeDownPerAcre)}</span>
+
+        <span className="tip-rows__label">Of that, eaten</span>
         <span className="tip-rows__value">{pct(a.utilizationPct)}</span>
 
-        <span className="tip-rows__aside">less {pct(a.tramplingLossPct)} trodden in</span>
+        <span className="tip-rows__aside">the rest goes under a hoof or round a pat</span>
 
         <span className="tip-rows__rule" />
         <span className="tip-rows__label tip-rows__sum">An acre feeds them</span>
         <span className="tip-rows__value tip-rows__sum">{lb(perAcreEaten)}</span>
 
-        <span className="tip-rows__aside">
-          over {acres.toFixed(2)} acres, less {pct(a.fouledAreaPct)} they won't graze round the dung
-        </span>
+        <span className="tip-rows__aside">over {acres.toFixed(2)} acres</span>
 
         <span className="tip-rows__rule" />
         <span className="tip-rows__label tip-rows__sum">In this strip</span>

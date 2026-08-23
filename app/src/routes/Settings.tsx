@@ -32,8 +32,8 @@ import Payments from "./Payments";
  *
  * **The grazing plan** was routed and on no rail at all — reachable only by
  * typing the URL. It holds recovery targets, pounds of dry matter per
- * acre-inch and the trampling and fouling percentages, which are the figures
- * every number on the Move page divides by. Invisible was the worst place for
+ * acre-inch and the utilization percentage, which are the figures every
+ * number on the Move page divides by. Invisible was the worst place for
  * them.
  *
  * **Accounts** is the chart of accounts, set up once and posted against

@@ -4,8 +4,7 @@ import { OpsShell, PageHeader } from "../components/shell/OpsShell";
 import { Pill, Button, GridRow, Callout, SaveToast } from "../components/ui";
 import { useWorkspace } from "../lib/workspace";
 import {
-  DEFAULT_FOULED_AREA_PCT,
-  DEFAULT_TRAMPLING_LOSS_PCT,
+  DEFAULT_UTILIZATION_PCT,
   addContingency,
   addResourceConcern,
   fetchContingencyPlans,
@@ -100,8 +99,7 @@ export default function GrazingPlan() {
   const [dmi, setDmi] = useState("");
   const [swardLb, setSwardLb] = useState("");
   const [grazeTo, setGrazeTo] = useState("");
-  const [trample, setTrample] = useState("");
-  const [fouled, setFouled] = useState("");
+  const [utilization, setUtilization] = useState("");
 
   const [concernCategory, setConcernCategory] = useState<ResourceCategory>("soil");
   const [concernText, setConcernText] = useState("");
@@ -167,8 +165,7 @@ export default function GrazingPlan() {
     setDmi(fresh || !p || p.defaultDmiPctBw === null ? "" : String(p.defaultDmiPctBw));
     setSwardLb(fresh || !p || p.lbDmPerAcreInch === null ? "" : String(p.lbDmPerAcreInch));
     setGrazeTo(fresh || !p || p.targetResidualHeightIn === null ? "" : String(p.targetResidualHeightIn));
-    setTrample(fresh || !p || p.tramplingLossPct === null ? "" : String(p.tramplingLossPct));
-    setFouled(fresh || !p || p.fouledAreaPct === null ? "" : String(p.fouledAreaPct));
+    setUtilization(fresh || !p || p.defaultUtilizationPct === null ? "" : String(p.defaultUtilizationPct));
     setEditing(true);
   };
 
@@ -202,8 +199,7 @@ export default function GrazingPlan() {
         defaultDmiPctBw: num(dmi),
         lbDmPerAcreInch: num(swardLb),
         targetResidualHeightIn: num(grazeTo),
-        tramplingLossPct: num(trample),
-        fouledAreaPct: num(fouled),
+        defaultUtilizationPct: num(utilization),
       });
       setEditing(false);
       return startingNew
@@ -357,20 +353,13 @@ export default function GrazingPlan() {
                 </label>
                 <label className="grz-field">
                   {/* The graze-down measures what left the sward, not what
-                      went into a cow. This is the gap: trodden in, lain on,
-                      knocked down going past. It comes off the dry matter in
-                      the forecast and in the record alike, because both start
-                      from a height that dropped. */}
-                  <span className="eyebrow">Trodden in, %</span>
-                  <input value={trample} onChange={(e) => setTrample(e.target.value)} inputMode="decimal" aria-label="Trodden in, %" />
-                </label>
-                <label className="grz-field">
-                  {/* Refused around dung. This one discounts the *area* and
-                      only in the forecast — the fringe they will not touch is
-                      still standing when the residual is read, so a measured
-                      height has already accounted for it. */}
-                  <span className="eyebrow">Fouled ground, %</span>
-                  <input value={fouled} onChange={(e) => setFouled(e.target.value)} inputMode="decimal" aria-label="Fouled ground, %" />
+                      went into a cow. This is the share of it that did. It
+                      comes off the dry matter in the forecast and in the
+                      record alike, because both start from a height that
+                      dropped — and it replaced two figures the app supplied,
+                      one off the forage and one off the acres. */}
+                  <span className="eyebrow">Utilization, %</span>
+                  <input value={utilization} onChange={(e) => setUtilization(e.target.value)} inputMode="decimal" aria-label="Utilization, %" />
                 </label>
                 <label className="grz-field">
                   <span className="eyebrow">Benchmark AUM/acre</span>
@@ -379,9 +368,11 @@ export default function GrazingPlan() {
               </div>
 
               <p className="grz-optional">
-                Left blank, the app uses {DEFAULT_TRAMPLING_LOSS_PCT}% trodden in and{" "}
-                {DEFAULT_FOULED_AREA_PCT}% fouled — its own figures for a daily-move mob, not this
-                farm's. Both are worth replacing with what you see on the ground.
+                Utilization is the share of what comes off the sward that the mob actually eats.
+                Twelve inches down to six is half the sward gone; utilization says how much of that
+                half went into an animal rather than under a hoof or round a pat. Left blank, the
+                app uses {DEFAULT_UTILIZATION_PCT}% — its own figure for a daily-move mob, not this
+                farm's, and worth replacing with what you see on the ground.
               </p>
 
               <div className="grz-form__actions">
@@ -450,8 +441,14 @@ export default function GrazingPlan() {
                         <input value={tDormant} onChange={(e) => setTDormant(e.target.value)} inputMode="numeric" aria-label="Recovery, dormant" />
                       </label>
                       <label className="grz-field">
-                        <span className="eyebrow">Utilization, %</span>
-                        <input value={tUtil} onChange={(e) => setTUtil(e.target.value)} inputMode="decimal" aria-label="Utilization, %" />
+                        {/* A target written down for this paddock, not the
+                            figure the forecast runs on. That one is the
+                            plan's, above, and it is deliberately one number
+                            for the farm rather than one per paddock — the
+                            Move page has no paddock-level override and this
+                            field must not read as though it did. */}
+                        <span className="eyebrow">Utilization target, %</span>
+                        <input value={tUtil} onChange={(e) => setTUtil(e.target.value)} inputMode="decimal" aria-label="Utilization target, %" />
                       </label>
                     </div>
                     <div className="grz-form__actions">
@@ -472,7 +469,7 @@ export default function GrazingPlan() {
                         {t === undefined
                           ? "no targets set"
                           : [
-                              t.targetUtilizationPct === null ? null : `${t.targetUtilizationPct}% utilization`,
+                              t.targetUtilizationPct === null ? null : `${t.targetUtilizationPct}% utilization target`,
                               `${(p.acresGrazable ?? 0).toFixed(2)} ac`,
                             ].filter(Boolean).join(" · ")}
                       </span>

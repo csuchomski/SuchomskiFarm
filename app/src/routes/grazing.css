@@ -48,6 +48,11 @@
 .grz-field input,
 .grz-field select {
   min-width: 0;
+  /* Sit on the row's floor. The fields are stretched flex items, so a label
+     that wraps to two lines ("lb DM per acre-inch" does, at most widths)
+     otherwise pushes its own box down and leaves one input hanging below the
+     line of the others. Labels stay top-aligned; only the boxes line up. */
+  margin-top: auto;
   /* The house rule is 44. These were 40 from before it was settled, and the
      plan gets edited on the same phone everything else does. */
   min-height: 44px;

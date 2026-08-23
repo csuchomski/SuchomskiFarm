@@ -107,7 +107,7 @@ const withPlan = (over: Partial<GrazingPlan> = {}): GrazingPlan => ({
   longTermGoals: null, immediateObjectives: null, benchmarkStockingRateAumPerAcre: null,
   monitoringCadenceKind: "every_rotation", monitoringCadenceValue: null,
   defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: null,
-  tramplingLossPct: null, fouledAreaPct: null, active: true, notes: null, ...over,
+  defaultUtilizationPct: null, tramplingLossPct: null, fouledAreaPct: null, active: true, notes: null, ...over,
 });
 
 beforeEach(() => {
@@ -483,13 +483,34 @@ describe("the graze-down, on the page", () => {
     fireEvent.change(screen.getByLabelText("Graze it down to, inches"), { target: { value: "4" } });
 
     // 8″ − 4″ = 4″ at 300 lb an acre-inch = 1,200 lb an acre off the plant —
-    // but that is what *disappeared*. This plan sets no trampling figure, so
-    // the app's 15% applies and 1,020 lb of it is eaten. The page says eaten,
-    // because saying "on offer" is what let the loss go unnoticed.
+    // but that is what *disappeared*, not what an animal ate. This plan sets
+    // no utilization, so the app's 85% stands and 1,020 lb of it is eaten.
+    // The page says eaten, because saying "on offer" is what let the
+    // difference go unnoticed.
     expect(screen.getByText(/8″ down to 4″/)).toBeTruthy();
     expect(screen.getByText(/1,020 lb DM an acre eaten/)).toBeTruthy();
-    expect(screen.getByText(/50% of what is standing/)).toBeTruthy();
-    expect(screen.getByText(/15% trodden in and 3% of the ground fouled/)).toBeTruthy();
+    expect(screen.getByText(/50% of what is standing comes off/)).toBeTruthy();
+    expect(screen.getByText(/85% of that is eaten/)).toBeTruthy();
+  });
+
+  it("names the farm's utilization as the farm's, and its own as its own", async () => {
+    // The parenthetical is the only thing separating a figure somebody stood
+    // in a paddock and chose from one this app supplied, and the two lead to
+    // different wire placements.
+    inP3();
+    weighEveryone();
+    plan = withPlan({ defaultUtilizationPct: 60 });
+    await mount();
+    fireEvent.change(screen.getByLabelText("Grass height, inches"), { target: { value: "8" } });
+    fireEvent.change(screen.getByLabelText("Graze it down to, inches"), { target: { value: "4" } });
+
+    // 1,200 off the plant, 60% of it eaten = 720.
+    expect(screen.getByText(/720 lb DM an acre eaten/)).toBeTruthy();
+    expect(screen.getByText(/60% of that is eaten/)).toBeTruthy();
+    // Attributed to the plan rather than to the app. The intake figure says
+    // the same thing a few words later, so this counts them.
+    expect(screen.getAllByText("(from your plan)").length).toBe(2);
+    expect(screen.queryByText("(this app's figure)")).toBeNull();
   });
 
   it("narrows the strip when they are to graze it harder", async () => {

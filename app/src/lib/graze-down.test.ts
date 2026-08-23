@@ -43,7 +43,10 @@ const plan = (over: Partial<GrazingPlan> = {}): GrazingPlan => ({
   longTermGoals: null, immediateObjectives: null, benchmarkStockingRateAumPerAcre: null,
   monitoringCadenceKind: "every_rotation", monitoringCadenceValue: null,
   defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: null,
-  tramplingLossPct: null, fouledAreaPct: null,
+  // Everything eaten, so these tests are about the graze-down and nothing
+  // else. Left null, the record path would apply the app's utilization and
+  // the arithmetic below would carry a factor that is not the subject.
+  defaultUtilizationPct: 100, tramplingLossPct: null, fouledAreaPct: null,
   active: true, notes: null, ...over,
 });
 
@@ -56,7 +59,9 @@ const target = (over: Partial<PlanPaddockTarget> = {}): PlanPaddockTarget => ({
 });
 
 const FALLBACK: ForageAssumptions = {
-  standingLbDmPerAcre: 2400, utilizationPct: 50, intakePctBodyweight: 3, tramplingLossPct: 0, fouledAreaPct: 0,
+  standingLbDmPerAcre: 2400, takeDownPct: 50,
+  utilizationPct: 100.0,
+  intakePctBodyweight: 3,
 };
 
 const ask = (over: Partial<Parameters<typeof assumptionsFor>[0]> = {}) =>
@@ -107,7 +112,7 @@ describe("the graze-down, as forage", () => {
     // 8″ in, 4″ out, at 300 lb an acre-inch = 1,200 lb an acre.
     const got = ask({ swardHeightIn: 8, grazeToIn: 4 });
     const usable =
-      got.assumptions.standingLbDmPerAcre * (got.assumptions.utilizationPct / 100);
+      got.assumptions.standingLbDmPerAcre * (got.assumptions.takeDownPct / 100);
     expect(usable).toBeCloseTo(1200, 6);
   });
 
@@ -119,20 +124,20 @@ describe("the graze-down, as forage", () => {
       targets: [target({ targetUtilizationPct: 50 })],
     });
     const usable =
-      got.assumptions.standingLbDmPerAcre * (got.assumptions.utilizationPct / 100);
+      got.assumptions.standingLbDmPerAcre * (got.assumptions.takeDownPct / 100);
     expect(usable).toBeCloseTo(1200, 6);
-    expect(got.sources.utilization).toBe("graze-down");
+    expect(got.sources.takeDown).toBe("graze-down");
   });
 
   it("makes utilization the outcome rather than the input", () => {
     // Taking 8″ down to 6″ is a quarter of the sward, whatever anyone typed.
-    expect(ask({ swardHeightIn: 8, grazeToIn: 6 }).assumptions.utilizationPct).toBeCloseTo(25, 6);
-    expect(ask({ swardHeightIn: 10, grazeToIn: 2 }).assumptions.utilizationPct).toBeCloseTo(80, 6);
+    expect(ask({ swardHeightIn: 8, grazeToIn: 6 }).assumptions.takeDownPct).toBeCloseTo(25, 6);
+    expect(ask({ swardHeightIn: 10, grazeToIn: 2 }).assumptions.takeDownPct).toBeCloseTo(80, 6);
   });
 
   it("leaves more standing when they are pulled off higher", () => {
-    const hard = ask({ swardHeightIn: 8, grazeToIn: 3 }).assumptions.utilizationPct;
-    const easy = ask({ swardHeightIn: 8, grazeToIn: 6 }).assumptions.utilizationPct;
+    const hard = ask({ swardHeightIn: 8, grazeToIn: 3 }).assumptions.takeDownPct;
+    const easy = ask({ swardHeightIn: 8, grazeToIn: 6 }).assumptions.takeDownPct;
     expect(easy).toBeLessThan(hard);
   });
 
@@ -141,23 +146,26 @@ describe("the graze-down, as forage", () => {
       grazeToIn: 4,
       targets: [target({ targetEntryHeightIn: 8 })],
     });
-    expect(got.assumptions.utilizationPct).toBeCloseTo(50, 6);
+    expect(got.assumptions.takeDownPct).toBeCloseTo(50, 6);
     expect(got.grazeDown.entryIn).toBe(8);
   });
 
-  it("keeps the typed percentage when there is no height to subtract from", () => {
+  it("falls back to the app's take-down when there is no height to subtract from", () => {
+    // A paddock's own targetUtilizationPct used to stand in here. Migration
+    // 062 stopped reading it: the column had come to hold two different
+    // meanings, and the one number the forecast wants is on the plan.
     const got = ask({ grazeToIn: 4, targets: [target({ targetUtilizationPct: 40 })] });
-    expect(got.assumptions.utilizationPct).toBe(40);
-    expect(got.sources.utilization).toBe("plan");
+    expect(got.assumptions.takeDownPct).toBe(50);
+    expect(got.sources.takeDown).toBe("default");
   });
 
   it("ignores a graze-down at or above the grass, rather than going negative", () => {
-    // Nothing to take. A zero or negative utilization would make the strip
+    // Nothing to take. A zero or negative take-down would make the strip
     // infinitely wide, which is the sort of thing that gets a paddock ruined.
     for (const to of [8, 9, 20]) {
       const got = ask({ swardHeightIn: 8, grazeToIn: to });
-      expect(got.assumptions.utilizationPct).toBe(50);
-      expect(got.sources.utilization).toBe("default");
+      expect(got.assumptions.takeDownPct).toBe(50);
+      expect(got.sources.takeDown).toBe("default");
       expect(got.grazeDown.residualIn).toBeNull();
     }
   });

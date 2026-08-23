@@ -89,7 +89,7 @@ const mob = (id: string, name: string): GrazingGroup => ({
 });
 
 const memberOf = (animalId: string, groupId: string): GrazingGroupMember => ({
-  id: `m-${animalId}`, groupId, animalId, joinedOn: "2026-08-01", leftOn: null,
+  id: `m-${animalId}`, groupId, animalId, joinedOn: "2026-08-01", leftOn: null, animalStatus: "active",
 });
 
 beforeEach(() => {

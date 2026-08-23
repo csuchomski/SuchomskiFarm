@@ -279,7 +279,8 @@ describe("who is in the mob", () => {
    */
   const roll = (over: Partial<GrazingGroupMember>[]): GrazingGroupMember[] =>
     over.map((o, i) => ({
-      id: `m${i}`, groupId: "mob", animalId: `a${i}`, joinedOn: "2026-04-01", leftOn: null, ...o,
+      id: `m${i}`, groupId: "mob", animalId: `a${i}`, joinedOn: "2026-04-01", leftOn: null,
+      animalStatus: "active", ...o,
     }));
 
   it("refuses to put her in the same mob twice", () => {

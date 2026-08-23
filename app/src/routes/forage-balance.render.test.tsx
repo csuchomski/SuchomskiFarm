@@ -63,8 +63,8 @@ vi.mock("../lib/grazing", async (importOriginal) => {
         headCountManual: null, avgWeightLbManual: null, active: true, notes: null },
     ]),
     fetchGroupMembers: vi.fn(async () => [
-      { id: "m1", groupId: "mob", animalId: "a1", joinedOn: null, leftOn: null },
-      { id: "m2", groupId: "mob", animalId: "a2", joinedOn: null, leftOn: null },
+      { id: "m1", groupId: "mob", animalId: "a1", joinedOn: null, leftOn: null, animalStatus: "active" },
+      { id: "m2", groupId: "mob", animalId: "a2", joinedOn: null, leftOn: null, animalStatus: "active" },
     ]),
     fetchLatestWeights: vi.fn(async () => new Map([["a1", 1100], ["a2", 1100]])),
     fetchActivePlan: vi.fn(async () => plan),

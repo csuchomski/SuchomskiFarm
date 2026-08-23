@@ -14,6 +14,7 @@ import {
   whereIs,
   type GrazingEvent,
   type GrazingGroup,
+  mobWeight,
   type GrazingGroupMember,
   type Paddock,
   type PlanPaddockTarget,
@@ -287,13 +288,39 @@ describe("whereIs", () => {
 
 describe("group head count and weight", () => {
   const members: GrazingGroupMember[] = [
-    { id: "m1", groupId: "mob", animalId: "a1", joinedOn: "2026-08-13", leftOn: null },
-    { id: "m2", groupId: "mob", animalId: "a2", joinedOn: "2026-08-13", leftOn: null },
-    { id: "m3", groupId: "mob", animalId: "a3", joinedOn: "2026-01-01", leftOn: "2026-06-01" },
+    { id: "m1", groupId: "mob", animalId: "a1", joinedOn: "2026-08-13", leftOn: null, animalStatus: "active" },
+    { id: "m2", groupId: "mob", animalId: "a2", joinedOn: "2026-08-13", leftOn: null, animalStatus: "active" },
+    { id: "m3", groupId: "mob", animalId: "a3", joinedOn: "2026-01-01", leftOn: "2026-06-01", animalStatus: "active" },
+    // Still in the mob on paper, gone from the farm in fact. Victor, until
+    // migration 061 — the Move page counted him and fed him.
+    { id: "m4", groupId: "mob", animalId: "a4", joinedOn: "2026-08-13", leftOn: null, animalStatus: "processed" },
   ];
 
   it("counts the members who are still in the mob", () => {
     expect(groupHeadCount(mob, members)).toBe(2);
+  });
+
+  it("doesn't count an animal that has left the farm", () => {
+    // Victor, 2026-08-23: recorded as processed and still holding an open
+    // membership, so the Move page counted six head, weighed him in with the
+    // rest and sized the strip to feed a bull calf that was not there.
+    //
+    // Migration 061 closes the membership when a disposition is recorded, but
+    // the animal form can set a status with no disposition at all and that
+    // path closes nothing — so the count has to check the animal too.
+    expect(groupHeadCount(mob, members)).toBe(2);
+    const stillHere = members.map((m) => ({ ...m, animalStatus: "active" }));
+    expect(groupHeadCount(mob, stillHere)).toBe(3);
+  });
+
+  it("leaves one out of the weight as well as the count", () => {
+    const weights = new Map([
+      ["a1", 1000],
+      ["a2", 1200],
+      ["a4", 600], // processed; his weight is not the mob's to carry
+    ]);
+    expect(mobWeight(members, "mob", weights)).toEqual({ totalLb: 2200, weighed: 2, missing: 0 });
+    expect(groupAvgWeightLb(mob, members, weights)).toBe(1100);
   });
 
   it("lets a stated figure override the members", () => {

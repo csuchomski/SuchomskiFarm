@@ -189,13 +189,16 @@ describe("the herd, grouped by mob", () => {
     members = herd.filter((a) => a.id !== "gone").map((a) => memberOf(a.id, "main"));
     await mount();
 
-    // Hidden altogether until inactive animals are asked for.
+    // Not on the page at all: this is the list of the herd, and he is not
+    // the herd any more.
     expect(screen.queryByText("Victor")).toBeNull();
     expect(headed()).not.toContain("Off the farm");
 
-    fireEvent.click(screen.getByLabelText(/Show 1 inactive/i));
+    // A search is asking for one animal in particular, which is a different
+    // act from opening the page — so that is what brings him back.
+    fireEvent.change(screen.getByLabelText(/search/i), { target: { value: "victor" } });
     await waitFor(() => expect(screen.getByText("Victor")).toBeTruthy());
-    expect(headed()).toEqual(["Main mob", "Not in a mob", "Off the farm"]);
+    expect(headed()).toContain("Off the farm");
 
     // And that heading is inert: no picker to put him anywhere.
     const off = [...document.querySelectorAll(".animals-mob")].find((el) =>

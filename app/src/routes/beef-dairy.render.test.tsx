@@ -141,8 +141,10 @@ describe("Animals, split by purpose", () => {
 
   it("says how the herd divides", async () => {
     await mount();
-    // Reference bulls aren't livestock and aren't counted.
-    expect(screen.getByText(/3 on file · 2 dairy · 1 beef/)).toBeTruthy();
+    // Reference bulls aren't livestock and aren't counted — and neither are
+    // animals that have left, which is why it counts the farm rather than
+    // the file.
+    expect(screen.getByText(/3 on the farm · 2 dairy · 1 beef/)).toBeTruthy();
   });
 
   it("shows only the dairy side when asked, and only the beef side", async () => {

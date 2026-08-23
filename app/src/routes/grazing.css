@@ -143,6 +143,15 @@
 }
 .grz-strip-stats__v { font-size: 21px; font-variant-numeric: tabular-nums; }
 
+/* The label and its "show me" mark on one line. `inline-flex` rather than
+   letting the button sit in the text flow, so the 44px target it carries
+   can't push the label onto a second line. */
+.grz-strip-stats__k {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .grz-wire__presets { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; }
 
 .grz-preset {

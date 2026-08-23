@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
-import { Button, Callout, SaveToast } from "../components/ui";
+import { Button, Callout, InfoTip, SaveToast } from "../components/ui";
+import { DaysOfFeedWorking } from "../components/herd/DaysOfFeedWorking";
 import { useWorkspace } from "../lib/workspace";
 import {
   assumptionsFor,
@@ -737,7 +738,20 @@ export default function Move() {
                     <div className="mono grz-strip-stats__v">
                       {strip.hoursOfFeed === null ? "—" : daysOfFeed(strip.hoursOfFeed)}
                     </div>
-                    <div className="eyebrow">Days of feed</div>
+                    {/* The one figure on this row that is five decisions deep,
+                        so it is the one that shows its working. */}
+                    <div className="eyebrow grz-strip-stats__k">
+                      Days of feed
+                      <InfoTip label="How days of feed is worked out">
+                        <DaysOfFeedWorking
+                          assumptions={assumed.assumptions}
+                          acres={strip.acres}
+                          headCount={head}
+                          avgWeightLb={avgWeight}
+                          hoursOfFeed={strip.hoursOfFeed}
+                        />
+                      </InfoTip>
+                    </div>
                   </div>
                   {/* What goes into them: the two heights, less what is
                       trodden in and the ground they will refuse. The label

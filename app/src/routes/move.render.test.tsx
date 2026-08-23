@@ -91,6 +91,7 @@ vi.mock("../lib/grazing", async (importOriginal) => {
     ]),
     fetchGroupMembers: vi.fn(async () => [1, 2, 3, 4, 5].map((n) => ({
       id: `m${n}`, groupId: "mob", animalId: `a${n}`, joinedOn: null, leftOn: null,
+      animalStatus: "active",
     }))),
     fetchLatestWeights: vi.fn(async () => weights),
     fetchActivePlan: vi.fn(async () => plan),
@@ -206,6 +207,23 @@ describe("what it already knows", () => {
     weighEveryone();
     await mount();
     expect(screen.getByText(/5,000 lb on grass/)).toBeTruthy();
+  });
+
+  it("leaves an animal that has left the farm out of the head count", async () => {
+    // Victor, 2026-08-23: processed, and still holding an open membership, so
+    // this page counted six head and sized the strip to feed him.
+    const g = await import("../lib/grazing");
+    vi.mocked(g.fetchGroupMembers).mockResolvedValueOnce(
+      [1, 2, 3, 4, 5].map((n) => ({
+        id: `m${n}`, groupId: "mob", animalId: `a${n}`, joinedOn: null, leftOn: null,
+        animalStatus: n === 5 ? "processed" : "active",
+      })),
+    );
+    weighEveryone();
+    await mount();
+    // 5,000 lb between the five; a5 weighs 700 and is not on the farm.
+    expect(screen.getByText(/4,300 lb on grass/)).toBeTruthy();
+    expect(screen.queryByText(/5,000 lb on grass/)).toBeNull();
   });
 
   it("says how many are unweighed rather than quietly totalling some", async () => {

@@ -4,6 +4,7 @@ export { Button } from "./Button";
 export { StatTile } from "./StatTile";
 export { GridRow } from "./GridRow";
 export { Callout } from "./Callout";
+export { InfoTip } from "./InfoTip";
 export { SaveToast } from "./SaveToast";
 export { ProgressBar } from "./ProgressBar";
 export { Sparkline, CurveChart } from "./Sparkline";

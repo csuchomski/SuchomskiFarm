@@ -71,7 +71,7 @@ const mob = (over: Partial<GrazingGroup> = {}): GrazingGroup => ({
 });
 
 const member = (id: string, animalId: string, over: Partial<GrazingGroupMember> = {}): GrazingGroupMember => ({
-  id, groupId: "mob", animalId, joinedOn: "2026-04-01", leftOn: null, ...over,
+  id, groupId: "mob", animalId, joinedOn: "2026-04-01", leftOn: null, animalStatus: "active", ...over,
 });
 
 beforeEach(() => {

@@ -58,7 +58,6 @@ export default function Animals() {
   // milked and one raises its calves, and almost nothing that applies to one
   // applies to the other.
   const [purposeFilter, setPurposeFilter] = useState<"all" | "dairy" | "beef">("all");
-  const [showInactive, setShowInactive] = useState(false);
   const [sort, setSort] = useState<SortKey>("name");
   const [nonce, setNonce] = useState(0);
   /** The animal under the cursor, and any error a move came back with. */
@@ -111,14 +110,24 @@ export default function Animals() {
   // Classes come from the data, so a class nobody anticipated still gets a
   // filter rather than being invisible.
   const classes = useMemo(() => [...new Set(all.map((a) => a.class))].sort(), [all]);
-  const inactiveCount = all.filter((a) => a.status !== "active").length;
-  const dairyCount = all.filter(isDairy).length;
-  const beefCount = all.length - dairyCount;
+  // Counted over the animals on the farm, because those are the ones this
+  // page shows. Counting the ones that have left as well left the heading
+  // saying five over a list of four.
+  const onFarm = useMemo(() => all.filter((a) => a.status === "active"), [all]);
+  const goneCount = all.length - onFarm.length;
+  const dairyCount = onFarm.filter(isDairy).length;
+  const beefCount = onFarm.length - dairyCount;
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = all.filter((a) => {
-      if (!showInactive && a.status !== "active") return false;
+      // Animals that have left the farm are off this list. It is the list of
+      // the herd, and they are not the herd any more — a heading of them
+      // under the mobs was one more thing to scroll past every time.
+      //
+      // A search is the way back to one: typing a name is asking for that
+      // animal in particular, which is a different act from opening the page.
+      if (a.status !== "active" && q === "") return false;
       if (classFilter !== "all" && a.class !== classFilter) return false;
       if (purposeFilter === "dairy" && !isDairy(a)) return false;
       if (purposeFilter === "beef" && isDairy(a)) return false;
@@ -142,7 +151,7 @@ export default function Animals() {
           return nameOf(a).localeCompare(nameOf(b));
       }
     });
-  }, [all, breeds, query, classFilter, purposeFilter, showInactive, sort]);
+  }, [all, breeds, query, classFilter, purposeFilter, sort]);
 
   // The two sides of the herd, as sections rather than as a filter that hides
   // one of them. `isDairy` is the same predicate the chips, the counts and
@@ -195,8 +204,16 @@ export default function Animals() {
    * in.
    */
   const groups = useMemo(() => {
+    // An animal that has left the farm is not in a mob and is not waiting to
+    // be put in one, so it takes no part in this grouping at all. It used to
+    // fall through to "Not in a mob" — a heading that means "needs
+    // assigning", takes drops, and offers a picker — which invited somebody
+    // to drag a processed bull calf onto next week's grazing.
+    const here = visible.filter((a) => a.status === "active");
+    const gone = visible.filter((a) => a.status !== "active");
+
     const byMob = new Map<string, RealAnimal[]>();
-    for (const a of visible) {
+    for (const a of here) {
       const key = mobOf.get(a.id) ?? "";
       const list = byMob.get(key);
       if (list) list.push(a);
@@ -217,7 +234,23 @@ export default function Animals() {
       ...(anyMob || loose.length > 0
         ? [{ mobId: null, mobName: "Not in a mob", target: true, rows: loose }]
         : []),
-    ].map((g) => ({ ...g, sides: sides(g.rows) }));
+      // Last, and only when something is actually there — this appears when
+      // "Show inactive" is ticked or a search turns one up, and never
+      // otherwise. `target: false` keeps it inert: no drop, no picker.
+      ...(gone.length > 0
+        ? [{ mobId: "gone" as string | null, mobName: "Off the farm", target: false, rows: gone }]
+        : []),
+    ].map((g) => ({
+      ...g,
+      gone: g.mobId === "gone",
+      // No dairy/beef split on the ones that have gone: "milked" over a dead
+      // cow is a sentence about something she is not doing. One nameless
+      // side renders the rows with no heading over them.
+      sides:
+        g.mobId === "gone"
+          ? [{ key: "gone", label: "", rows: g.rows, note: "" }]
+          : sides(g.rows),
+    }));
   }, [visible, mobs, mobOf]);
 
   /** A heading earns its place once there is more than one thing to head. A
@@ -256,7 +289,9 @@ export default function Animals() {
       <PageHeader
         eyebrow={
           result.state === "ok"
-            ? `${all.length} on file · ${dairyCount} dairy · ${beefCount} beef · ${all.length - inactiveCount} active`
+            ? `${onFarm.length} on the farm · ${dairyCount} dairy · ${beefCount} beef${
+                goneCount > 0 ? ` · ${goneCount} ${goneCount === 1 ? "has" : "have"} left` : ""
+              }`
             : "Herd"
         }
         title="Animals"
@@ -326,12 +361,6 @@ export default function Animals() {
           <option value="class">Sort: class</option>
         </select>
 
-        {inactiveCount > 0 && (
-          <label className="animals-toggle">
-            <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-            <span style={{ fontSize: 13 }}>Show {inactiveCount} inactive</span>
-          </label>
-        )}
       </div>
 
       {result.state === "loading" && (
@@ -355,9 +384,13 @@ export default function Animals() {
 
           {canDrag && (
             <p className="animals-drag-note">
-              <span className="mono">add</span> on a mob puts an animal in it;{" "}
-              <span className="mono">take one out</span> pulls her from hers. With a mouse, drag her
-              row onto a heading instead.
+              {/* Neutral, because this page lists steers and bulls too — and
+                  two sentences rather than one, because the mono words read
+                  as labels on controls and a semicolon between them made the
+                  whole thing look like a fragment. */}
+              <span className="mono">add</span> on a mob puts an animal in it.{" "}
+              <span className="mono">take one out</span> removes one from its mob. With a mouse, drag
+              a row onto a heading instead.
             </p>
           )}
 
@@ -371,7 +404,9 @@ export default function Animals() {
                   without a pointer. */}
               {showMobs && (
                 <div
-                  className={`animals-mob ${over === (group.mobId ?? "loose") ? "animals-mob--over" : ""}`}
+                  className={`animals-mob${group.gone ? " animals-mob--gone" : ""} ${
+                    over === (group.mobId ?? "loose") ? "animals-mob--over" : ""
+                  }`}
                   onDragOver={(e) => {
                     if (dragging === null || !group.target) return;
                     e.preventDefault();
@@ -486,9 +521,13 @@ export default function Animals() {
             </p>
           )}
 
-          {visible.length > 0 && visible.length !== all.length && (
+          {/* Counted against the farm, not the file. Against the file it said
+              "showing 4 of 5" on an unfiltered page for ever, because one
+              animal has left — which reads as something being hidden by a
+              filter nobody set. The heading already says how many have. */}
+          {visible.length > 0 && visible.length !== onFarm.length && (
             <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 12 }}>
-              Showing {visible.length} of {all.length}.
+              Showing {visible.length} of {onFarm.length}.
             </p>
           )}
         </>

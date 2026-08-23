@@ -160,7 +160,7 @@ describe("where the wire opens", () => {
 
 describe("what the mob weighs", () => {
   const members: GrazingGroupMember[] = [1, 2, 3, 4, 5].map((n) => ({
-    id: `m${n}`, groupId: "mob", animalId: `a${n}`, joinedOn: null, leftOn: null,
+    id: `m${n}`, groupId: "mob", animalId: `a${n}`, joinedOn: null, leftOn: null, animalStatus: "active",
   }));
 
   it("adds the real weights rather than multiplying an average", () => {

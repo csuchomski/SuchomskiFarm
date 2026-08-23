@@ -101,10 +101,10 @@ const pastures: Pasture[] = [
 ];
 const events: GrazingEvent[] = [];
 const members: GrazingGroupMember[] = [
-  { id: "m1", groupId: "mob", animalId: "a1", joinedOn: "2026-08-13", leftOn: null },
-  { id: "m2", groupId: "mob", animalId: "a2", joinedOn: "2026-08-13", leftOn: null },
-  { id: "m3", groupId: "mob", animalId: "a3", joinedOn: "2026-08-13", leftOn: null },
-  { id: "m4", groupId: "mob", animalId: "a4", joinedOn: "2026-08-13", leftOn: null },
+  { id: "m1", groupId: "mob", animalId: "a1", joinedOn: "2026-08-13", leftOn: null, animalStatus: "active" },
+  { id: "m2", groupId: "mob", animalId: "a2", joinedOn: "2026-08-13", leftOn: null, animalStatus: "active" },
+  { id: "m3", groupId: "mob", animalId: "a3", joinedOn: "2026-08-13", leftOn: null, animalStatus: "active" },
+  { id: "m4", groupId: "mob", animalId: "a4", joinedOn: "2026-08-13", leftOn: null, animalStatus: "active" },
 ];
 const weights = new Map<string, number>();
 const targets: PlanPaddockTarget[] = [];

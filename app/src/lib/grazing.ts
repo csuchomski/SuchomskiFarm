@@ -332,7 +332,22 @@ export interface GrazingGroupMember {
   animalId: string;
   joinedOn: string | null;
   leftOn: string | null;
+  /**
+   * The animal's status, carried on the membership so that anything counting
+   * a mob can see it without a second read.
+   *
+   * Migration 061 closes the membership when a disposition is recorded, so
+   * this should agree with `leftOn` — but the animal form can set a status
+   * directly, with no disposition, and that path closes nothing. Victor was
+   * on file as processed and still in the Main mob, which is how the Move
+   * page came to size a strip for six head when there were five.
+   */
+  animalStatus: string;
 }
+
+/** Members who are actually here: still in the mob, and still on the farm. */
+export const inTheMob = (m: GrazingGroupMember): boolean =>
+  m.leftOn === null && m.animalStatus === "active";
 
 // ─── feed and forage balance ───────────────────────────────────────────
 //
@@ -922,7 +937,7 @@ export function boardRows(input: {
 /** Head in a group: the members, unless a figure was stated. */
 export function groupHeadCount(group: GrazingGroup, members: GrazingGroupMember[]): number | null {
   if (group.headCountManual !== null) return group.headCountManual;
-  const open = members.filter((m) => m.groupId === group.id && m.leftOn === null);
+  const open = members.filter((m) => m.groupId === group.id && inTheMob(m));
   return open.length > 0 ? open.length : null;
 }
 
@@ -939,7 +954,7 @@ export function groupAvgWeightLb(
 ): number | null {
   if (group.avgWeightLbManual !== null) return group.avgWeightLbManual;
   const weights = members
-    .filter((m) => m.groupId === group.id && m.leftOn === null)
+    .filter((m) => m.groupId === group.id && inTheMob(m))
     .map((m) => latestWeightLb.get(m.animalId))
     .filter((w): w is number => w !== undefined);
   if (weights.length === 0) return null;
@@ -949,18 +964,34 @@ export function groupAvgWeightLb(
 // ─── the rest of the reads, and the writes ─────────────────────────────
 
 export async function fetchGroupMembers(farmId: string): Promise<GrazingGroupMember[]> {
-  const { data, error } = await herdSchema()
-    .from("grazing_group_members")
-    .select("id, group_id, animal_id, joined_on, left_on")
-    .eq("farm_id", farmId)
-    .is("deleted_at", null);
-  if (error) throw new Error(`herd.grazing_group_members: ${error.message}`);
-  return (data ?? []).map((r: Record<string, unknown>) => ({
+  // Two reads rather than an embedded select. The pages that count a mob —
+  // Move and Forage balance — do not otherwise load the animals at all, so
+  // the status has to come from here or not at all, and a plain second query
+  // behaves the same under RLS as the one beside it.
+  const [rows, animals] = await Promise.all([
+    herdSchema()
+      .from("grazing_group_members")
+      .select("id, group_id, animal_id, joined_on, left_on")
+      .eq("farm_id", farmId)
+      .is("deleted_at", null),
+    herdSchema().from("animals").select("id, status").eq("farm_id", farmId).is("deleted_at", null),
+  ]);
+  if (rows.error) throw new Error(`herd.grazing_group_members: ${rows.error.message}`);
+  if (animals.error) throw new Error(`herd.animals: ${animals.error.message}`);
+
+  const statusOf = new Map(
+    ((animals.data ?? []) as { id: string; status: string }[]).map((a) => [a.id, a.status]),
+  );
+
+  return (rows.data ?? []).map((r: Record<string, unknown>) => ({
     id: r.id as string,
     groupId: r.group_id as string,
     animalId: r.animal_id as string,
     joinedOn: (r.joined_on as string) ?? null,
     leftOn: (r.left_on as string) ?? null,
+    // An animal the read cannot see is not one to feed. Counting an unknown
+    // as active is the failure this whole change is about.
+    animalStatus: statusOf.get(r.animal_id as string) ?? "unknown",
   }));
 }
 
@@ -2234,7 +2265,7 @@ export function mobWeight(
   groupId: string,
   latestWeightLb: Map<string, number>,
 ): { totalLb: number | null; weighed: number; missing: number } {
-  const open = members.filter((m) => m.groupId === groupId && m.leftOn === null);
+  const open = members.filter((m) => m.groupId === groupId && inTheMob(m));
   const known = open.map((m) => latestWeightLb.get(m.animalId)).filter((w): w is number => w !== undefined);
   return {
     totalLb: known.length === 0 ? null : known.reduce((a, b) => a + b, 0),

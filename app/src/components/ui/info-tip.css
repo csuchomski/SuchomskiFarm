@@ -16,6 +16,11 @@
   width: 18px;
   height: 18px;
   padding: 0;
+  /* global.css gives every button a 44px min-height below 860px, for tap
+     targets. That is the right default and the wrong one here: it stretches
+     an 18px mark into a tall box beside an 11px label. The target is not
+     given up, it is moved to the pseudo-element below. */
+  min-height: 0;
 
   display: inline-flex;
   align-items: center;
@@ -50,16 +55,20 @@
 }
 
 .info-tip__panel {
-  position: absolute;
-  top: calc(100% + 10px);
-  left: -14px;
-  z-index: 20;
+  /* A popover, so it is painted in the top layer: nothing above it in the
+     tree can clip it and there is no z-index to pick. Without anchor
+     positioning the browser's own popover styles centre it in the viewport,
+     which is a fine place for a small panel of figures — so the anchoring
+     below is an enhancement rather than a requirement. */
+  position: fixed;
+  margin: 0;
+  border: 1px solid var(--ink);
+  padding: 14px 16px;
+  overflow: visible;
 
   display: block;
   width: max-content;
-  max-width: min(360px, 62vw);
-  padding: 14px 16px;
-  border: 1px solid var(--ink);
+  max-width: min(360px, calc(100vw - 24px));
   background: var(--paper);
   color: var(--ink);
   font: 400 13px/1.5 "IBM Plex Sans", sans-serif;
@@ -74,20 +83,46 @@
   box-shadow: 0 6px 24px rgba(25, 26, 22, 0.18);
 }
 
-/* On a phone the panel is a sheet across the bottom instead of a box hanging
-   off the number. Anchored to the number it gets clipped by whichever column
-   it happens to sit in, and half of these figures sit in the right-hand one. */
-@media (max-width: 640px) {
-  .info-tip__panel {
-    position: fixed;
-    top: auto;
-    left: 12px;
-    right: 12px;
-    bottom: calc(12px + env(safe-area-inset-bottom));
-    width: auto;
-    max-width: none;
-    z-index: 60;
+/* Tethered to the button, and left to the browser to keep on screen.
+   `position-area` puts it under the mark and running to the inline end; the
+   fallbacks are tried in order when that would overflow. Between them they
+   replace a viewport measurement and a bottom sheet on phones — and the
+   panel tracks its anchor on scroll with no scroll handler. */
+@supports (anchor-name: --a) {
+  .info-tip__button {
+    anchor-name: var(--tip-anchor);
   }
+
+  .info-tip__panel {
+    position-anchor: var(--tip-anchor);
+    position-area: block-end span-inline-end;
+    position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline, --tip-across;
+    /* Clears the centring the popover styles apply, so position-area takes
+       over. */
+    inset: auto;
+    margin: 8px 0 0;
+  }
+}
+
+/* The last resort, and on a phone the usual one.
+ *
+ * Measured rather than assumed: on a 390px screen the mark sits 306px in and
+ * the panel is 352px wide, so there is no side of it that fits — every flip
+ * was rejected and the browser fell back to the first position, hanging 268px
+ * off the right edge. Nothing aligned to that anchor can fit, so this stops
+ * aligning to it inline and pins to the screen instead, still directly under
+ * the mark. */
+@position-try --tip-across {
+  /* Reset first: with a position-area still in force, the insets below would
+     be measured inside that area rather than against the screen. */
+  position-area: none;
+  top: anchor(bottom);
+  bottom: auto;
+  left: 12px;
+  right: 12px;
+  width: auto;
+  max-width: none;
+  margin: 8px 0 0;
 }
 
 /* ── the working itself ──────────────────────────────────────────────── */

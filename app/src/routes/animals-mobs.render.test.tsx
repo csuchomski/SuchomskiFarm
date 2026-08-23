@@ -179,6 +179,32 @@ describe("the herd, grouped by mob", () => {
     expect(headed()).toEqual(["Main mob", "Not in a mob"]);
   });
 
+  it("keeps an animal that has left the farm out of the mob grouping", async () => {
+    // Victor, 2026-08-23. He was processed, so 061 closed his membership —
+    // which dropped him into "Not in a mob": a heading that means "needs
+    // assigning", takes drops and offers a picker. Nothing on this page
+    // should invite somebody to put him onto next week's grazing.
+    herd = [...herd, animal({ id: "gone", ear_tag: "9", barn_name: "Victor", status: "processed" })];
+    mobs = [mob("main", "Main mob")];
+    members = herd.filter((a) => a.id !== "gone").map((a) => memberOf(a.id, "main"));
+    await mount();
+
+    // Hidden altogether until inactive animals are asked for.
+    expect(screen.queryByText("Victor")).toBeNull();
+    expect(headed()).not.toContain("Off the farm");
+
+    fireEvent.click(screen.getByLabelText(/Show 1 inactive/i));
+    await waitFor(() => expect(screen.getByText("Victor")).toBeTruthy());
+    expect(headed()).toEqual(["Main mob", "Not in a mob", "Off the farm"]);
+
+    // And that heading is inert: no picker to put him anywhere.
+    const off = [...document.querySelectorAll(".animals-mob")].find((el) =>
+      el.textContent?.includes("Off the farm"),
+    )!;
+    expect(off.querySelector("button")).toBeNull();
+    expect(off.className).toContain("animals-mob--gone");
+  });
+
   it("heads a mob nobody is in yet, so a mob just made can be filled", async () => {
     members = herd.map((a) => memberOf(a.id, "main"));
     await mount();

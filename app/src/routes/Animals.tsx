@@ -195,8 +195,16 @@ export default function Animals() {
    * in.
    */
   const groups = useMemo(() => {
+    // An animal that has left the farm is not in a mob and is not waiting to
+    // be put in one, so it takes no part in this grouping at all. It used to
+    // fall through to "Not in a mob" — a heading that means "needs
+    // assigning", takes drops, and offers a picker — which invited somebody
+    // to drag a processed bull calf onto next week's grazing.
+    const here = visible.filter((a) => a.status === "active");
+    const gone = visible.filter((a) => a.status !== "active");
+
     const byMob = new Map<string, RealAnimal[]>();
-    for (const a of visible) {
+    for (const a of here) {
       const key = mobOf.get(a.id) ?? "";
       const list = byMob.get(key);
       if (list) list.push(a);
@@ -217,7 +225,23 @@ export default function Animals() {
       ...(anyMob || loose.length > 0
         ? [{ mobId: null, mobName: "Not in a mob", target: true, rows: loose }]
         : []),
-    ].map((g) => ({ ...g, sides: sides(g.rows) }));
+      // Last, and only when something is actually there — this appears when
+      // "Show inactive" is ticked or a search turns one up, and never
+      // otherwise. `target: false` keeps it inert: no drop, no picker.
+      ...(gone.length > 0
+        ? [{ mobId: "gone" as string | null, mobName: "Off the farm", target: false, rows: gone }]
+        : []),
+    ].map((g) => ({
+      ...g,
+      gone: g.mobId === "gone",
+      // No dairy/beef split on the ones that have gone: "milked" over a dead
+      // cow is a sentence about something she is not doing. One nameless
+      // side renders the rows with no heading over them.
+      sides:
+        g.mobId === "gone"
+          ? [{ key: "gone", label: "", rows: g.rows, note: "" }]
+          : sides(g.rows),
+    }));
   }, [visible, mobs, mobOf]);
 
   /** A heading earns its place once there is more than one thing to head. A
@@ -375,7 +399,9 @@ export default function Animals() {
                   without a pointer. */}
               {showMobs && (
                 <div
-                  className={`animals-mob ${over === (group.mobId ?? "loose") ? "animals-mob--over" : ""}`}
+                  className={`animals-mob${group.gone ? " animals-mob--gone" : ""} ${
+                    over === (group.mobId ?? "loose") ? "animals-mob--over" : ""
+                  }`}
                   onDragOver={(e) => {
                     if (dragging === null || !group.target) return;
                     e.preventDefault();

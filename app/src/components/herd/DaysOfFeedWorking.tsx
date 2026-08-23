@@ -1,4 +1,22 @@
-import { intakePerAcre, type ForageAssumptions } from "../../lib/grazing";
+import { intakePerAcre, type AssumptionSources, type ForageAssumptions } from "../../lib/grazing";
+
+/**
+ * Whose figure each line is.
+ *
+ * The point of the whole utilization change was that a number the farm chose
+ * and a number this app supplied should not look alike, and in a panel of
+ * tidy percentages they otherwise do. 85% reads as fact until it is labelled
+ * as a guess.
+ *
+ * Only the app's own are called out. Tagging all four would put a word beside
+ * every figure and make the arithmetic harder to follow, and the reader's
+ * question is never "which of these did I set" — it is "which of these did
+ * I not".
+ */
+function Whose({ source }: { source: string | undefined }) {
+  if (source === undefined || (source !== "default" && source !== "unset")) return null;
+  return <em className="tip-rows__whose">this app's figure</em>;
+}
 
 /**
  * Where "days of feed" came from, in the farmer's own figures.
@@ -19,12 +37,16 @@ import { intakePerAcre, type ForageAssumptions } from "../../lib/grazing";
  */
 export function DaysOfFeedWorking({
   assumptions,
+  sources,
   acres,
   headCount,
   avgWeightLb,
   hoursOfFeed,
 }: {
   assumptions: ForageAssumptions;
+  /** Where each figure came from. Optional: without it the panel still shows
+   * the working, it just cannot say which numbers are the farm's. */
+  sources?: AssumptionSources;
   acres: number;
   headCount: number | null;
   avgWeightLb: number | null;
@@ -45,17 +67,23 @@ export function DaysOfFeedWorking({
       <span className="tip-title">How this is worked out</span>
 
       <div className="tip-rows">
-        <span className="tip-rows__label">Dry matter standing</span>
+        <span className="tip-rows__label">
+          Dry matter standing <Whose source={sources?.standing} />
+        </span>
         <span className="tip-rows__value">{lb(a.standingLbDmPerAcre)}/acre</span>
 
-        <span className="tip-rows__label">Grazed off</span>
+        <span className="tip-rows__label">
+          Grazed off <Whose source={sources?.takeDown} />
+        </span>
         <span className="tip-rows__value">{pct(a.takeDownPct)}</span>
 
         <span className="tip-rows__rule" />
         <span className="tip-rows__label tip-rows__sum">Comes off an acre</span>
         <span className="tip-rows__value tip-rows__sum">{lb(takeDownPerAcre)}</span>
 
-        <span className="tip-rows__label">Of that, eaten</span>
+        <span className="tip-rows__label">
+          Of that, eaten <Whose source={sources?.utilization} />
+        </span>
         <span className="tip-rows__value">{pct(a.utilizationPct)}</span>
 
         <span className="tip-rows__aside">the rest goes under a hoof or round a pat</span>
@@ -77,7 +105,9 @@ export function DaysOfFeedWorking({
         </span>
         <span className="tip-rows__value">{totalLb === null ? "—" : lb(totalLb)}</span>
 
-        <span className="tip-rows__label">Eats each day</span>
+        <span className="tip-rows__label">
+          Eats each day <Whose source={sources?.intake} />
+        </span>
         <span className="tip-rows__value">{pct(a.intakePctBodyweight)} of that</span>
 
         <span className="tip-rows__rule" />

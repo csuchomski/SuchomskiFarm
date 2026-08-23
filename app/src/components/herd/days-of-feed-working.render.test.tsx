@@ -87,6 +87,39 @@ describe("what the ground offers", () => {
   });
 });
 
+describe("whose figure is whose", () => {
+  // A number the farm chose and a number this app supplied must not look
+  // alike. In a panel of tidy percentages they otherwise do, and 85% reads
+  // as fact until it is labelled as a guess.
+  const sources = {
+    standing: "height",
+    takeDown: "graze-down",
+    utilization: "default",
+    intake: "plan",
+  } as const;
+
+  it("marks the app's own figure and leaves the farm's alone", () => {
+    show({ sources });
+    // One tag, on the one line the farm did not set.
+    const tags = screen.getAllByText("this app's figure");
+    expect(tags.length).toBe(1);
+    expect(tags[0].closest(".tip-rows__label")!.textContent).toContain("Of that, eaten");
+  });
+
+  it("drops the tag once the farm sets one", () => {
+    show({ sources: { ...sources, utilization: "plan" } });
+    expect(screen.queryByText("this app's figure")).toBeNull();
+  });
+
+  it("says nothing either way when it has not been told", () => {
+    // The panel is used without sources in tests and could be elsewhere. It
+    // must not guess, and must not claim a figure is the farm's.
+    show();
+    expect(screen.queryByText("this app's figure")).toBeNull();
+    expect(screen.getByText("85%")).toBeTruthy();
+  });
+});
+
 describe("a mob with nothing on file", () => {
   it("says why there is no answer rather than showing a nonsense one", () => {
     const { container } = show({ headCount: null, avgWeightLb: null, hoursOfFeed: null });

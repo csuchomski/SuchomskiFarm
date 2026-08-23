@@ -743,6 +743,7 @@ export default function Move() {
                       <InfoTip label="How days of feed is worked out">
                         <DaysOfFeedWorking
                           assumptions={assumed.assumptions}
+                          sources={assumed.sources}
                           acres={strip.acres}
                           headCount={head}
                           avgWeightLb={avgWeight}

@@ -493,6 +493,25 @@ describe("the graze-down, on the page", () => {
     expect(screen.getByText(/85% of that is eaten/)).toBeTruthy();
   });
 
+  it("carries the sources into the working, not just into the prose", async () => {
+    // The panel and the paragraph under it must agree about whose figure the
+    // utilization is. Passing `assumptions` without `sources` would leave the
+    // panel showing a bare 85% that reads like the farm's own.
+    inP3();
+    weighEveryone();
+    plan = withPlan();
+    await mount();
+    fireEvent.change(screen.getByLabelText("Grass height, inches"), { target: { value: "8" } });
+    fireEvent.change(screen.getByLabelText("Graze it down to, inches"), { target: { value: "4" } });
+    fireEvent.click(screen.getByRole("button", { name: "How days of feed is worked out" }));
+
+    const panel = screen.getByRole("note");
+    const eaten = [...panel.querySelectorAll(".tip-rows__label")].find((l) =>
+      l.textContent!.startsWith("Of that, eaten"),
+    )!;
+    expect(eaten.textContent).toContain("this app's figure");
+  });
+
   it("names the farm's utilization as the farm's, and its own as its own", async () => {
     // The parenthetical is the only thing separating a figure somebody stood
     // in a paddock and chose from one this app supplied, and the two lead to

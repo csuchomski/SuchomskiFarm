@@ -91,7 +91,7 @@ const plan = (over: Partial<GrazingPlan> = {}): GrazingPlan => ({
   longTermGoals: null, immediateObjectives: null, benchmarkStockingRateAumPerAcre: null,
   monitoringCadenceKind: "every_n_days", monitoringCadenceValue: 30,
   defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: null,
-  tramplingLossPct: null, fouledAreaPct: null, active: true, notes: null, ...over,
+  defaultUtilizationPct: null, tramplingLossPct: null, fouledAreaPct: null, active: true, notes: null, ...over,
 });
 
 beforeEach(() => {
@@ -165,14 +165,21 @@ describe("with a plan in force", () => {
   it("carries every figure through an edit that did not touch them", async () => {
     /**
      * `save_grazing_plan` writes the whole row, so anything the editor fails
-     * to prefill is written back as null. These three are the figures behind
+     * to prefill is written back as null. These four are the figures behind
      * every calculation in the module — intake, the height-to-forage
-     * conversion, and the graze-down — and the farm sets them once and does
-     * not expect to set them again. Losing one to a rename would be silent:
-     * the app would carry on with its own fallback and label it as such in
-     * type too small to notice.
+     * conversion, the graze-down and utilization — and the farm sets them
+     * once and does not expect to set them again. Losing one to a rename
+     * would be silent: the app would carry on with its own fallback and
+     * label it as such in type too small to notice.
      */
-    plans = [plan({ defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: 6 })];
+    plans = [
+      plan({
+        defaultDmiPctBw: 3,
+        lbDmPerAcreInch: 300,
+        targetResidualHeightIn: 6,
+        defaultUtilizationPct: 72,
+      }),
+    ];
     await mount();
     fireEvent.click(screen.getByText("Edit"));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "2026 season, revised" } });
@@ -181,7 +188,7 @@ describe("with a plan in force", () => {
     await waitFor(() => expect(savedPlan).toHaveBeenCalledTimes(1));
     expect(savedPlan.mock.calls[0][1]).toMatchObject({
       defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: 6,
-  tramplingLossPct: null, fouledAreaPct: null,
+      defaultUtilizationPct: 72,
       monitoringCadenceValue: 30, periodStart: "2026-04-01", periodEnd: "2026-10-31",
     });
   });
@@ -196,6 +203,35 @@ describe("with a plan in force", () => {
 
     await waitFor(() => expect(savedPlan).toHaveBeenCalledTimes(1));
     expect(savedPlan.mock.calls[0][1].defaultDmiPctBw).toBe(2.6);
+  });
+
+  it("saves the utilization the farm typed, and shows it back", async () => {
+    // The whole point of the change: the share of the take-down that reaches
+    // an animal is the farm's figure now, not two the app supplied. If it
+    // does not survive a round trip the app quietly reverts to its own.
+    plans = [plan({ defaultUtilizationPct: 72 })];
+    await mount();
+    fireEvent.click(screen.getByText("Edit"));
+    expect((screen.getByLabelText("Utilization, %") as HTMLInputElement).value).toBe("72");
+    fireEvent.change(screen.getByLabelText("Utilization, %"), { target: { value: "65" } });
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() => expect(savedPlan).toHaveBeenCalledTimes(1));
+    expect(savedPlan.mock.calls[0][1].defaultUtilizationPct).toBe(65);
+  });
+
+  it("leaves utilization null when the farm has not set one, rather than writing the app's", async () => {
+    // A blank has to reach the database as a null. Writing 85 would turn the
+    // app's stated fallback into a figure that looks like the farm's, and
+    // nobody could tell afterwards which it was.
+    plans = [plan()];
+    await mount();
+    fireEvent.click(screen.getByText("Edit"));
+    expect((screen.getByLabelText("Utilization, %") as HTMLInputElement).value).toBe("");
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() => expect(savedPlan).toHaveBeenCalledTimes(1));
+    expect(savedPlan.mock.calls[0][1].defaultUtilizationPct).toBeNull();
   });
 
   it("shows the graze-down it has on file, so it is not set again each time", async () => {
@@ -273,7 +309,7 @@ describe("targets by paddock", () => {
     await mount();
     fireEvent.click(screen.getByText("Paddock 2"));
     expect((screen.getByLabelText("Recovery, growing") as HTMLInputElement).value).toBe("30");
-    expect((screen.getByLabelText("Utilization, %") as HTMLInputElement).value).toBe("50");
+    expect((screen.getByLabelText("Utilization target, %") as HTMLInputElement).value).toBe("50");
   });
 });
 

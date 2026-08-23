@@ -15,17 +15,20 @@ import { planStrip, type ForageAssumptions } from "../../lib/grazing";
  */
 
 // The Suchomski August 2026 plan: in at 12in, off at 6in, 200 lb DM per
-// acre-inch, 3% of bodyweight. Trampling and fouled are left blank on the
-// plan, so the app's own fallbacks stand.
+// acre-inch, 3% of bodyweight, and utilization left blank on the plan so the
+// app's own figure stands.
 const assumptions: ForageAssumptions = {
   standingLbDmPerAcre: 12 * 200,
-  utilizationPct: ((12 - 6) / 12) * 100,
+  takeDownPct: ((12 - 6) / 12) * 100,
+  utilizationPct: 85,
   intakePctBodyweight: 3,
-  tramplingLossPct: 15,
-  fouledAreaPct: 3,
 };
 
-const HOURS = 155.2;
+// Half an acre of it: 2,400 x 50% x 85% = 1,020 lb an acre, so 510 in the
+// strip, against a 153 lb day. The strip is deliberately not a whole acre so
+// that "an acre feeds them" and "in this strip" are different numbers and a
+// swap between them would fail rather than pass.
+const HOURS = 80;
 
 afterEach(cleanup);
 
@@ -33,7 +36,7 @@ const show = (over: Partial<Parameters<typeof DaysOfFeedWorking>[0]> = {}) =>
   render(
     <DaysOfFeedWorking
       assumptions={assumptions}
-      acres={1.0}
+      acres={0.5}
       headCount={6}
       avgWeightLb={850}
       hoursOfFeed={HOURS}
@@ -46,20 +49,23 @@ describe("what the ground offers", () => {
     show();
     expect(screen.getByText("2,400 lb/acre")).toBeTruthy();
     expect(screen.getByText("50%")).toBeTruthy();
+    expect(screen.getByText("85%")).toBeTruthy();
     expect(screen.getByText("5,100 lb")).toBeTruthy();
     expect(screen.getByText("3% of that")).toBeTruthy();
-    expect(screen.getByText(/6\.5 days/)).toBeTruthy();
+    expect(screen.getByText(/3\.3 days/)).toBeTruthy();
   });
 
-  it("names the two deductions, so the sum ties out", () => {
-    // Without them 2,400 x 50% is 1,200 and the next line says 1,020. A
-    // reader who checks the arithmetic and finds it wrong stops trusting the
-    // page, so the 15% and the 3% are on show even though they are the app's
-    // fallbacks rather than figures anybody typed.
+  it("shows the take-down before the utilization, so the sum ties out", () => {
+    // Utilization is a share of what came off, not of what was standing, so
+    // the take-down has to be on the page as its own figure. Without the
+    // 1,200 in the middle a reader sees 2,400 and then 1,020 and has to guess
+    // which two percentages were multiplied, in which order.
     show();
-    expect(screen.getByText(/less 15% trodden in/)).toBeTruthy();
-    expect(screen.getByText(/less 3% they won't graze round the dung/)).toBeTruthy();
+    expect(screen.getByText("Comes off an acre")).toBeTruthy();
+    expect(screen.getByText("1,200 lb")).toBeTruthy();
+    expect(screen.getByText("Of that, eaten")).toBeTruthy();
     expect(screen.getByText("1,020 lb")).toBeTruthy();
+    expect(screen.getByText(/the rest goes under a hoof or round a pat/)).toBeTruthy();
   });
 
   it("agrees with the tile it explains", () => {
@@ -67,17 +73,50 @@ describe("what the ground offers", () => {
     const strip = planStrip({
       paddock: { id: "p1", acresGrazable: 2.02, acresMeasured: 2.02, sweepLengthFt: 660 } as never,
       from: 0,
-      to: 1 / 2.02,
+      to: 0.5 / 2.02,
       headCount: 6,
       avgWeightLb: 850,
       assumptions,
     })!;
-    expect(Math.round(strip.lbDmOnOffer)).toBe(989);
-    expect((strip.hoursOfFeed! / 24).toFixed(1)).toBe("6.5");
+    expect(Math.round(strip.lbDmOnOffer)).toBe(510);
+    expect((strip.hoursOfFeed! / 24).toFixed(1)).toBe("3.3");
 
     show({ hoursOfFeed: strip.hoursOfFeed });
-    expect(screen.getByText("989 lb")).toBeTruthy();
-    expect(screen.getByText(/989 lb ÷ 153 lb a day/)).toBeTruthy();
+    expect(screen.getByText("510 lb")).toBeTruthy();
+    expect(screen.getByText(/510 lb ÷ 153 lb a day/)).toBeTruthy();
+  });
+});
+
+describe("whose figure is whose", () => {
+  // A number the farm chose and a number this app supplied must not look
+  // alike. In a panel of tidy percentages they otherwise do, and 85% reads
+  // as fact until it is labelled as a guess.
+  const sources = {
+    standing: "height",
+    takeDown: "graze-down",
+    utilization: "default",
+    intake: "plan",
+  } as const;
+
+  it("marks the app's own figure and leaves the farm's alone", () => {
+    show({ sources });
+    // One tag, on the one line the farm did not set.
+    const tags = screen.getAllByText("this app's figure");
+    expect(tags.length).toBe(1);
+    expect(tags[0].closest(".tip-rows__label")!.textContent).toContain("Of that, eaten");
+  });
+
+  it("drops the tag once the farm sets one", () => {
+    show({ sources: { ...sources, utilization: "plan" } });
+    expect(screen.queryByText("this app's figure")).toBeNull();
+  });
+
+  it("says nothing either way when it has not been told", () => {
+    // The panel is used without sources in tests and could be elsewhere. It
+    // must not guess, and must not claim a figure is the farm's.
+    show();
+    expect(screen.queryByText("this app's figure")).toBeNull();
+    expect(screen.getByText("85%")).toBeTruthy();
   });
 });
 
@@ -89,7 +128,7 @@ describe("a mob with nothing on file", () => {
     expect(container.querySelector(".tip-answer")).toBeNull();
     expect(screen.queryByText(/= .* days/)).toBeNull();
     // The ground's half still reads — it doesn't depend on the mob.
-    expect(screen.getByText("989 lb")).toBeTruthy();
+    expect(screen.getByText("510 lb")).toBeTruthy();
   });
 });
 

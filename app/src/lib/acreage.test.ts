@@ -122,7 +122,9 @@ describe("stripAcres", () => {
 
 describe("this morning's grass height", () => {
   const FALLBACK: ForageAssumptions = {
-    standingLbDmPerAcre: 2400, utilizationPct: 50, intakePctBodyweight: 3, tramplingLossPct: 0, fouledAreaPct: 0,
+    standingLbDmPerAcre: 2400, takeDownPct: 50,
+  utilizationPct: 100.0,
+  intakePctBodyweight: 3,
   };
 
   const plan = (over: Partial<GrazingPlan> = {}): GrazingPlan => ({
@@ -131,7 +133,7 @@ describe("this morning's grass height", () => {
     longTermGoals: null, immediateObjectives: null, benchmarkStockingRateAumPerAcre: null,
     monitoringCadenceKind: "every_rotation", monitoringCadenceValue: null,
     defaultDmiPctBw: 3, lbDmPerAcreInch: 300, targetResidualHeightIn: null,
-  tramplingLossPct: null, fouledAreaPct: null, active: true, notes: null, ...over,
+  defaultUtilizationPct: null, tramplingLossPct: null, fouledAreaPct: null, active: true, notes: null, ...over,
   });
 
   const ask = (over: Parameters<typeof assumptionsFor>[0] extends infer T ? Partial<T> : never) =>
@@ -185,7 +187,9 @@ describe("the forecast, on ground that is not a rectangle", () => {
    * which makes it the more consequential of the two.
    */
   const ASSUMPTIONS: ForageAssumptions = {
-    standingLbDmPerAcre: 2400, utilizationPct: 50, intakePctBodyweight: 3, tramplingLossPct: 0, fouledAreaPct: 0,
+    standingLbDmPerAcre: 2400, takeDownPct: 50,
+  utilizationPct: 100.0,
+  intakePctBodyweight: 3,
   };
 
   it("measures the strip it is forecasting, rather than its share of the sweep", () => {
@@ -214,7 +218,9 @@ describe("the forecast, on ground that is not a rectangle", () => {
 
 describe("placing the wire for a day", () => {
   const ASSUMPTIONS: ForageAssumptions = {
-    standingLbDmPerAcre: 2400, utilizationPct: 50, intakePctBodyweight: 3, tramplingLossPct: 0, fouledAreaPct: 0,
+    standingLbDmPerAcre: 2400, takeDownPct: 50,
+  utilizationPct: 100.0,
+  intakePctBodyweight: 3,
   };
   const day = (paddock: Paddock, from: number) =>
     widthForHours({ paddock, hours: 24, from, headCount: 5, avgWeightLb: 1000, assumptions: ASSUMPTIONS });

@@ -81,10 +81,9 @@ const strip = (
 
 const ASSUMPTIONS: ForageAssumptions = {
   standingLbDmPerAcre: 2400,
-  utilizationPct: 50,
+  takeDownPct: 50,
+  utilizationPct: 100.0,
   intakePctBodyweight: 3,
-  tramplingLossPct: 0,
-  fouledAreaPct: 0,
 };
 
 describe("sweepInWords", () => {

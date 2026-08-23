@@ -155,6 +155,17 @@
   color: var(--ink-soft);
 }
 
+/* "this app's figure", beside a number nobody on this farm chose. Quiet
+   enough that a panel of the farm's own numbers reads clean, and present
+   enough that a guess cannot pass for a measurement. It wraps under its
+   label on a narrow panel rather than squeezing the value column. */
+.tip-rows__whose {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
 .tip-rows__value {
   font-family: "IBM Plex Mono", monospace;
   font-variant-numeric: tabular-nums;

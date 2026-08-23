@@ -6,8 +6,7 @@ import { DaysOfFeedWorking } from "../components/herd/DaysOfFeedWorking";
 import { useWorkspace } from "../lib/workspace";
 import {
   assumptionsFor,
-  DEFAULT_FOULED_AREA_PCT,
-  DEFAULT_TRAMPLING_LOSS_PCT,
+  DEFAULT_UTILIZATION_PCT,
   drawnSliceAcres,
   fetchActivePlan,
   fetchForageAvailability,
@@ -113,10 +112,9 @@ const WIDTH = 720;
 /** Used only where the farm's records are silent, and labelled as such. */
 const FALLBACK: ForageAssumptions = {
   standingLbDmPerAcre: 2400,
-  utilizationPct: 50,
+  takeDownPct: 50,
+  utilizationPct: DEFAULT_UTILIZATION_PCT,
   intakePctBodyweight: 3,
-  tramplingLossPct: DEFAULT_TRAMPLING_LOSS_PCT,
-  fouledAreaPct: DEFAULT_FOULED_AREA_PCT,
 };
 
 const nowIso = () => new Date().toISOString();
@@ -259,7 +257,7 @@ export default function Move() {
       : {
           assumptions: FALLBACK,
           sources: {
-            standing: "default", utilization: "default", intake: "default", losses: "default",
+            standing: "default", takeDown: "default", utilization: "default", intake: "default",
           } as const,
           grazeDown: { entryIn: null, residualIn: null, source: "none" },
         };
@@ -745,6 +743,7 @@ export default function Move() {
                       <InfoTip label="How days of feed is worked out">
                         <DaysOfFeedWorking
                           assumptions={assumed.assumptions}
+                          sources={assumed.sources}
                           acres={strip.acres}
                           headCount={head}
                           avgWeightLb={avgWeight}
@@ -753,9 +752,9 @@ export default function Move() {
                       </InfoTip>
                     </div>
                   </div>
-                  {/* What goes into them: the two heights, less what is
-                      trodden in and the ground they will refuse. The label
-                      says "eat" and now means it. */}
+                  {/* What goes into them: the two heights give what came off
+                      the sward, utilization gives the share of it that
+                      reached an animal. The label says "eat" and means it. */}
                   <div>
                     <div className="mono grz-strip-stats__v">
                       {Math.round(strip.lbDmOnOffer).toLocaleString()}
@@ -840,29 +839,25 @@ export default function Move() {
                       {Math.round(
                         (assumed.grazeDown.entryIn! - assumed.grazeDown.residualIn) *
                           (load.state === "ok" ? (load.plan?.lbDmPerAcreInch ?? 0) : 0) *
-                          (1 - assumed.assumptions.tramplingLossPct / 100),
+                          (assumed.assumptions.utilizationPct / 100),
                       ).toLocaleString()}{" "}
                       lb DM an acre eaten <em>({grazeWord(assumed.grazeDown.source)})</em> —{" "}
-                      {Math.round(assumed.assumptions.utilizationPct)}% of what is standing comes
-                      off, less what goes under a hoof.{" "}
+                      {Math.round(assumed.assumptions.takeDownPct)}% of what is standing comes off,
+                      and {Math.round(assumed.assumptions.utilizationPct)}% of that is eaten{" "}
+                      <em>({sourceWord(assumed.sources.utilization)})</em>.{" "}
                     </>
                   ) : (
                     <>
                       {assumed.assumptions.standingLbDmPerAcre.toLocaleString()} lb DM/acre standing{" "}
                       <em>({sourceWord(assumed.sources.standing)})</em>,{" "}
-                      {assumed.assumptions.utilizationPct}% utilization{" "}
+                      {assumed.assumptions.takeDownPct}% of it grazed off, and{" "}
+                      {assumed.assumptions.utilizationPct}% of that eaten{" "}
                       <em>({sourceWord(assumed.sources.utilization)})</em>.{" "}
                     </>
                   )}
                   Intake at {assumed.assumptions.intakePctBodyweight}% of body weight{" "}
                   <em>({sourceWord(assumed.sources.intake)})</em>.{" "}
-                  {/* Named rather than folded in silently: they are the
-                      difference between what leaves the sward and what feeds
-                      a cow, and a forecast that hides them reads as if the
-                      mob ate every blade that vanished. */}
-                  {assumed.assumptions.tramplingLossPct}% trodden in and{" "}
-                  {assumed.assumptions.fouledAreaPct}% of the ground fouled{" "}
-                  <em>({sourceWord(assumed.sources.losses)})</em>. A forecast, not a measurement.
+                  A forecast, not a measurement.
                 </p>
               )}
 

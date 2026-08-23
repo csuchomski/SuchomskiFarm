@@ -355,9 +355,13 @@ export default function Animals() {
 
           {canDrag && (
             <p className="animals-drag-note">
-              <span className="mono">add</span> on a mob puts an animal in it;{" "}
-              <span className="mono">take one out</span> pulls her from hers. With a mouse, drag her
-              row onto a heading instead.
+              {/* Neutral, because this page lists steers and bulls too — and
+                  two sentences rather than one, because the mono words read
+                  as labels on controls and a semicolon between them made the
+                  whole thing look like a fragment. */}
+              <span className="mono">add</span> on a mob puts an animal in it.{" "}
+              <span className="mono">take one out</span> removes one from its mob. With a mouse, drag
+              a row onto a heading instead.
             </p>
           )}
 

@@ -30,7 +30,9 @@ import {
   standingOf,
   stripWidthFt,
   sweepInWords,
+  sweepToForWidthFt,
   widthForHours,
+  FT_PER_YD,
   type ForageAssumptions,
   type ForageAvailability,
   type ForageRemoval,
@@ -120,6 +122,19 @@ const FALLBACK: ForageAssumptions = {
 const nowIso = () => new Date().toISOString();
 const today = () => new Date().toISOString().slice(0, 10);
 
+/** Feet or yards, remembered between mornings. Same storage this app already
+ * uses for the picked business — per browser, and no worse than losing it. */
+const WIDTH_UNIT_KEY = "grazer.wireWidthUnit";
+
+function readWidthUnit(): "ft" | "yd" {
+  try {
+    return localStorage.getItem(WIDTH_UNIT_KEY) === "yd" ? "yd" : "ft";
+  } catch {
+    // A private window, or site data blocked. Feet is the default anyway.
+    return "ft";
+  }
+}
+
 export default function Move() {
   const { farmId } = useWorkspace();
   const [load, setLoad] = useState<Load>({ state: "loading" });
@@ -139,6 +154,20 @@ export default function Move() {
   const [cutting, setCutting] = useState(false);
   const [cutYield, setCutYield] = useState("");
   const [cutOn, setCutOn] = useState(today);
+
+  /**
+   * The width box.
+   *
+   * `widthUnit` is remembered, because it is a habit rather than a decision:
+   * a farm that steps its wire off in yards thinks in yards every morning and
+   * should not re-pick it every morning. `widthDraft` is what is typed, and
+   * null the rest of the time — while it is null the box reads the wire, so
+   * dragging updates it. Holding the wire's width in the box at all times
+   * instead would fight the typist: "12" on its way to "120" would place a
+   * wire, redraw, and round the box back to something else mid-keystroke.
+   */
+  const [widthUnit, setWidthUnit] = useState<"ft" | "yd">(readWidthUnit);
+  const [widthDraft, setWidthDraft] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!farmId) {
@@ -326,6 +355,63 @@ export default function Move() {
         })
       : null;
 
+  // ── typing the width ────────────────────────────────────────────────
+  //
+  // The wire is dragged with a finger on a phone held in the other hand, in a
+  // paddock, and a finger is worth about ten feet. Some strips are stepped
+  // off and known — a 60-foot break, the same one as yesterday — and those
+  // want typing rather than aiming for.
+
+  /**
+   * Move the wire, from anywhere that is not the box.
+   *
+   * Clearing the draft is the point: a wire dragged or placed by a preset has
+   * to show up in the box, and a stale draft would leave the box reading the
+   * width somebody typed two moves ago.
+   */
+  const placeWire = (to: number) => {
+    setWireTo(to);
+    setWidthDraft(null);
+  };
+
+  /** Back to the opening wire the page works out for itself. */
+  const clearWire = () => {
+    setWireTo(null);
+    setWidthDraft(null);
+  };
+
+  /** Whole units, because nobody sets a wire to a tenth of a foot. */
+  const widthNow =
+    strip?.widthFt == null
+      ? null
+      : Math.round(widthUnit === "yd" ? strip.widthFt / FT_PER_YD : strip.widthFt);
+
+  /** What the box shows: what is being typed, or what the wire is at. */
+  const widthValue = widthDraft ?? (widthNow === null ? "" : String(widthNow));
+
+  const typeWidth = (text: string) => {
+    setWidthDraft(text);
+    if (dest === null) return;
+    const n = Number(text.trim());
+    // An empty or half-typed box leaves the wire where it is rather than
+    // throwing it to one end. "6" on the way to "60" is not a request.
+    if (text.trim() === "" || !Number.isFinite(n) || n <= 0) return;
+    const to = sweepToForWidthFt(dest, backLine, widthUnit === "yd" ? n * FT_PER_YD : n);
+    if (to !== null) setWireTo(Math.max(backLine + MIN_STRIP, to));
+  };
+
+  const switchUnit = (unit: "ft" | "yd") => {
+    setWidthUnit(unit);
+    // The wire does not move: the same strip is being read in another unit.
+    // Dropping the draft is what makes it re-read, converted.
+    setWidthDraft(null);
+    try {
+      localStorage.setItem(WIDTH_UNIT_KEY, unit);
+    } catch {
+      // Not worth telling anyone about. The choice holds for this visit.
+    }
+  };
+
   // ── the drawing ─────────────────────────────────────────────────────
 
   const drawn = useMemo(() => {
@@ -364,16 +450,16 @@ export default function Move() {
       // The back line may go anywhere ahead of itself — that is what skipping
       // a section means — but never back over ground already taken.
       setBackOverride(f);
-      if (wireTo !== null && wireTo <= f) setWireTo(null);
+      if (wireTo !== null && wireTo <= f) clearWire();
     } else {
-      setWireTo(Math.max(backLine + MIN_STRIP, f));
+      placeWire(Math.max(backLine + MIN_STRIP, f));
     }
   };
 
   const goTo = (paddock: Paddock | null) => {
     setDestId(paddock?.id ?? null);
     setBackOverride(null);
-    setWireTo(null);
+    clearWire();
     setMovingBack(false);
     setError(null);
   };
@@ -707,7 +793,7 @@ export default function Move() {
               : movingBack
                 ? `Tap where the back line goes. Everything behind it counts as left behind — that is how a section, or a paddock cut for hay, gets skipped.`
                 : stripped
-                  ? "Drag the wire. The dashed line behind them is the back line."
+                  ? "Drag the wire, or set the width below. The dashed line behind them is the back line."
                   : `${dest.name} has no sweep direction, so it is taken whole.`}
           </p>
 
@@ -798,17 +884,17 @@ export default function Move() {
                           ground is not half the distance unless the unit is a
                           rectangle. */}
                       <button type="button" className="grz-preset"
-                        onClick={() => halfDayWidth !== null && setWireTo(Math.min(1, backLine + halfDayWidth))}>
+                        onClick={() => halfDayWidth !== null && placeWire(Math.min(1, backLine + halfDayWidth))}>
                         Half a day
                       </button>
                       <button type="button" className="grz-preset"
-                        onClick={() => setWireTo(Math.min(1, backLine + dayWidth))}>
+                        onClick={() => placeWire(Math.min(1, backLine + dayWidth))}>
                         A day
                       </button>
                     </>
                   )}
                   {!nothingLeft && (
-                    <button type="button" className="grz-preset" onClick={() => setWireTo(1)}>
+                    <button type="button" className="grz-preset" onClick={() => placeWire(1)}>
                       The rest of it
                     </button>
                   )}
@@ -820,6 +906,49 @@ export default function Move() {
                   >
                     {movingBack ? "Done with the back line" : "Move the back line"}
                   </button>
+                </div>
+              )}
+
+              {/* A wire that is stepped off rather than aimed at.
+
+                  Dragging is right for "about a day's worth" and wrong for
+                  "the same 60-foot break as yesterday": a finger on a phone
+                  held in a paddock is worth about ten feet. Hidden while the
+                  back line is being moved, because then the number would be
+                  answering a different question. */}
+              {stripped && !nothingLeft && !movingBack && (
+                <div className="mv-width">
+                  <label className="mv-width__field">
+                    <span className="eyebrow">Or set the width</span>
+                    <span className="mv-width__entry">
+                      <input
+                        value={widthValue}
+                        onChange={(e) => typeWidth(e.target.value)}
+                        onBlur={() => setWidthDraft(null)}
+                        inputMode="numeric"
+                        aria-label={`Strip width, ${widthUnit === "yd" ? "yards" : "feet"}`}
+                        disabled={dest?.sweepLengthFt == null}
+                      />
+                      <span className="mv-width__units" role="group" aria-label="Width unit">
+                        {(["ft", "yd"] as const).map((u) => (
+                          <button
+                            key={u}
+                            type="button"
+                            className={`grz-preset mv-width__unit${widthUnit === u ? " grz-preset--on" : ""}`}
+                            aria-pressed={widthUnit === u}
+                            onClick={() => switchUnit(u)}
+                          >
+                            {u}
+                          </button>
+                        ))}
+                      </span>
+                    </span>
+                  </label>
+                  <p className="mv-width__note">
+                    {dest?.sweepLengthFt == null
+                      ? `${dest?.name} has no sweep length on file, so a width here has nothing to measure against. It is on the paddock's record.`
+                      : `Measured along the sweep, from the back line. ${dest.name} runs ${Math.round(dest.sweepLengthFt).toLocaleString()}′ end to end.`}
+                  </p>
                 </div>
               )}
 

@@ -127,6 +127,12 @@ afterEach(() => {
   plan = null;
   moved.mockClear();
   cut.mockClear();
+  // The width unit is deliberately remembered between visits, and jsdom keeps
+  // one localStorage for the whole file — so without this the first test that
+  // picks yards silently puts every later test in yards. That is not
+  // hypothetical: it made "leaves the wire alone" measure 270ft while calling
+  // it 90, and pass, because the round trip works in either unit.
+  localStorage.clear();
 });
 
 const mount = async () => {
@@ -783,5 +789,148 @@ describe("the far end of a paddock", () => {
     const draft = moved.mock.calls[0][1];
     expect(draft.sweptFrom).toBeCloseTo(0.7, 6);
     expect(draft.sweptTo).toBe(1);
+  });
+});
+
+describe("typing the width of the strip", () => {
+  /**
+   * The wire is dragged with a finger, on a phone held in one hand, standing
+   * in a paddock. A finger is worth about ten feet — fine for "about a day's
+   * worth" and useless for "the same 60-foot break as yesterday". Some
+   * strips are stepped off and known, and those want typing.
+   *
+   * Paddock 3 runs 425ft end to end and the mob is 20% of the way along it,
+   * so the arithmetic below is against a back line at 0.2.
+   */
+  const inP3 = () => events.push(strip("s1", "p3", 0, 0.2, null));
+
+  /** The Width tile, which is the readout the typed figure has to agree with. */
+  const widthShown = () => {
+    const tiles = [...document.querySelectorAll(".grz-strip-stats > div")];
+    const tile = tiles.find((d) => d.querySelector(".eyebrow")?.textContent === "Width")!;
+    return tile.querySelector(".grz-strip-stats__v")!.textContent;
+  };
+
+  const box = () => screen.getByLabelText(/^Strip width,/) as HTMLInputElement;
+
+  it("puts the wire exactly where the typed width says", async () => {
+    inP3();
+    weighEveryone();
+    await mount();
+    fireEvent.change(box(), { target: { value: "90" } });
+
+    // 90ft of a 425ft sweep, starting at the back line — and the readout
+    // beside it has to say 90, not 88. That is the whole point of an exact
+    // inverse rather than a search that stops when it is close.
+    expect(widthShown()).toBe("90′");
+    expect(wirePct().wire).toBe(41); // 20% + 90/425
+  });
+
+  it("reads the wire back when it is dragged or set by a preset", async () => {
+    inP3();
+    weighEveryone();
+    await mount();
+    fireEvent.change(box(), { target: { value: "90" } });
+    expect(box().value).toBe("90");
+
+    // "The rest of it" takes the wire to the far fence; the box has to follow
+    // rather than sit on a width nobody is using any more.
+    fireEvent.click(onward("The rest of it"));
+    expect(wirePct().wire).toBe(100);
+    expect(box().value).toBe("340"); // the 80% of 425ft that is left
+  });
+
+  it("changes unit without moving the wire", async () => {
+    inP3();
+    weighEveryone();
+    await mount();
+    fireEvent.change(box(), { target: { value: "90" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "yd" }));
+    // Same strip, said in yards. The wire must not shift under the farmer
+    // because they changed how they are reading it.
+    expect(widthShown()).toBe("90′");
+    expect(box().value).toBe("30");
+    expect(screen.getByLabelText("Strip width, yards")).toBeTruthy();
+  });
+
+  it("takes yards as yards", async () => {
+    inP3();
+    weighEveryone();
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "yd" }));
+    fireEvent.change(box(), { target: { value: "30" } });
+    expect(widthShown()).toBe("90′");
+  });
+
+  it("leaves the wire alone while a number is still being typed", async () => {
+    inP3();
+    weighEveryone();
+    await mount();
+    fireEvent.change(box(), { target: { value: "90" } });
+    const at90 = wirePct().wire;
+
+    // Clearing the box on the way to another number must not throw the wire
+    // to one end of the paddock.
+    fireEvent.change(box(), { target: { value: "" } });
+    expect(wirePct().wire).toBe(at90);
+    expect(box().value).toBe("");
+
+    // And on blur it goes back to reading the wire rather than staying blank.
+    fireEvent.blur(box());
+    expect(box().value).toBe("90");
+  });
+
+  it("never runs the wire past the far fence", async () => {
+    inP3();
+    weighEveryone();
+    await mount();
+    // 900ft of a 425ft paddock, from 20% along.
+    fireEvent.change(box(), { target: { value: "900" } });
+    expect(wirePct().wire).toBe(100);
+  });
+
+  it("says why, rather than offering a box that cannot work", async () => {
+    // A paddock can be swept — it has a heading — and still have no sweep
+    // length measured. There is then no width to set one by, and a box that
+    // silently did nothing would be worse than one that says so.
+    paddocks = paddocks.map((p) => (p.id === "p3" ? { ...p, sweepLengthFt: null } : p));
+    inP3();
+    weighEveryone();
+    await mount();
+    expect(box().disabled).toBe(true);
+    expect(screen.getByText(/has no sweep length on file/)).toBeTruthy();
+  });
+
+  it("remembers feet or yards between mornings", async () => {
+    // A habit, not a decision: a farm that steps its wire off in yards thinks
+    // in yards every morning and should not re-pick it every morning.
+    inP3();
+    weighEveryone();
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "yd" }));
+    cleanup();
+
+    await mount();
+    expect(screen.getByLabelText("Strip width, yards")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "yd" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("opens in feet when nothing has been picked", async () => {
+    // Guards the test above from passing on a leaked choice, and the app from
+    // opening in a unit nobody chose.
+    inP3();
+    weighEveryone();
+    await mount();
+    expect(screen.getByLabelText("Strip width, feet")).toBeTruthy();
+  });
+
+  it("is not on the page while the back line is being moved", async () => {
+    // The number would be answering a different question there.
+    inP3();
+    weighEveryone();
+    await mount();
+    fireEvent.click(onward("Move the back line"));
+    expect(screen.queryByLabelText(/^Strip width,/)).toBeNull();
   });
 });

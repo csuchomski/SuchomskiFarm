@@ -648,6 +648,63 @@
   color: var(--paper);
 }
 
+/* ── typing the wire's width ──────────────────────────────────────────
+   Same shape as the grass-height field above it, because it is the same
+   act: a figure taken off the ground and typed in. */
+
+.mv-width {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.mv-width__field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+
+/* The box and its two unit buttons read as one control, so they sit on one
+   line and share a baseline. */
+.mv-width__entry { display: flex; align-items: stretch; gap: 6px; }
+
+.mv-width__entry input {
+  min-width: 0;
+  /* Wide enough for four digits of feet — the longest sweep on this farm is
+     three — and no wider, so it does not read as a text field. */
+  width: 6ch;
+  min-height: 44px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 20px/1 "IBM Plex Mono", monospace;
+  padding: 0 10px;
+}
+
+.mv-width__entry input:focus-visible { outline: 2px solid var(--herd-green); outline-offset: 1px; }
+
+/* A paddock with no sweep length has no width to set. The box stays in place
+   rather than vanishing, with the reason written under it. */
+.mv-width__entry input:disabled {
+  border-color: var(--hairline);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+.mv-width__units { display: flex; gap: 4px; }
+
+/* Narrower than a worded preset: "ft" and "yd" do not need the padding that
+   "The rest of it" does, and two wide buttons here would out-shout the
+   presets on the line above. */
+.mv-width__unit { padding: 9px; min-width: 44px; text-align: center; }
+
+.mv-width__note {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  margin: 0;
+  flex: 1 1 240px;
+  max-width: 56ch;
+}
+
 .mv-cut { border-top: 1px solid var(--hairline); margin-top: 14px; padding-top: 12px; }
 
 .mv-onward { display: flex; flex-wrap: wrap; gap: 6px; padding: 16px 0 0; }

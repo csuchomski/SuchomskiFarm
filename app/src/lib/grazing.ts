@@ -2100,6 +2100,40 @@ export function sweepToForAcres(
   return (lo + hi) / 2;
 }
 
+/** Feet in a yard. Named because `* 3` in the middle of geometry reads as a
+ * factor of three rather than a change of unit. */
+export const FT_PER_YD = 3;
+
+/**
+ * Where the wire goes to make the strip a given number of feet wide.
+ *
+ * The exact inverse of the `widthFt` a strip reports, and deliberately not a
+ * bisection like `sweepToForAcres`. Width along the sweep is linear in the
+ * fraction — `widthFt = (to − from) × sweepLengthFt` — because the sweep
+ * length is a straight measurement across the unit and does not care what
+ * shape the ground either side of it is. Acres are the ones that need
+ * searching, since a slice of a triangle is not proportional to its depth.
+ *
+ * So a typed width lands on exactly the width typed, and the readout beside
+ * the wire agrees with what was asked for rather than being a foot or two off
+ * from a search that stopped early.
+ *
+ * Null when the paddock has no sweep length on file — there is no width to
+ * place a wire by, and the caller has to say so rather than guess one.
+ */
+export function sweepToForWidthFt(
+  paddock: Paddock,
+  from: number,
+  widthFt: number,
+): number | null {
+  const sweep = paddock.sweepLengthFt;
+  if (sweep === null || sweep <= 0) return null;
+  if (!Number.isFinite(widthFt) || widthFt <= 0) return null;
+  // Past the far fence is the far fence. The caller's floor still applies on
+  // the near side; this end is the one the ground decides.
+  return Math.min(1, from + widthFt / sweep);
+}
+
 /**
  * The width that would hold them for a given number of hours — the question
  * asked backwards, which is how the wire actually gets placed.

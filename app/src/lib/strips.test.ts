@@ -8,6 +8,7 @@ import {
   stripAcres,
   stripWidthFt,
   sweepBands,
+  sweepToForWidthFt,
   sweepInWords,
   sweptSoFar,
   widthForHours,
@@ -284,5 +285,50 @@ describe("widthForHours", () => {
     expect(widthForHours({
       paddock: p3, hours: 24, headCount: 5, avgWeightLb: null, assumptions: ASSUMPTIONS,
     })).toBeNull();
+  });
+});
+
+describe("sweepToForWidthFt", () => {
+  /**
+   * The wire placed by typing a width rather than aiming a finger at one.
+   *
+   * The property that matters is that it round-trips: place the wire at a
+   * width and the strip reports that width back. A near-miss here would show
+   * up as a farmer typing 60 and reading 58 beside it, which is worse than
+   * not offering the box.
+   */
+  it("lands on exactly the width asked for", () => {
+    // 400ft sweep. 100ft is a quarter of it.
+    expect(sweepToForWidthFt(p3, 0, 100)).toBeCloseTo(0.25, 10);
+    // And it round-trips through the figure the readout shows.
+    const to = sweepToForWidthFt(p3, 0, 100)!;
+    expect(stripWidthFt(strip("a", 0, to, NOW, null), p3)).toBeCloseTo(100, 6);
+  });
+
+  it("measures from the back line, not from the gate", () => {
+    // Half the unit already grazed: a 100ft break starts where they stopped.
+    expect(sweepToForWidthFt(p3, 0.5, 100)).toBeCloseTo(0.75, 10);
+    const to = sweepToForWidthFt(p3, 0.5, 100)!;
+    expect(stripWidthFt(strip("a", 0.5, to, NOW, null), p3)).toBeCloseTo(100, 6);
+  });
+
+  it("stops at the far fence rather than running past it", () => {
+    // 900ft of a 400ft paddock is the whole paddock, not 2.25 of them.
+    expect(sweepToForWidthFt(p3, 0, 900)).toBe(1);
+    expect(sweepToForWidthFt(p3, 0.9, 100)).toBe(1);
+  });
+
+  it("says no rather than guessing, when there is nothing to measure by", () => {
+    // A paddock with no sweep length has no width. Returning 0 or the whole
+    // unit would place a wire on an invented measurement.
+    expect(sweepToForWidthFt({ ...p3, sweepLengthFt: null }, 0, 100)).toBeNull();
+    expect(sweepToForWidthFt({ ...p3, sweepLengthFt: 0 }, 0, 100)).toBeNull();
+  });
+
+  it("ignores a width that is not one", () => {
+    // What a half-typed or cleared box produces.
+    expect(sweepToForWidthFt(p3, 0, 0)).toBeNull();
+    expect(sweepToForWidthFt(p3, 0, -50)).toBeNull();
+    expect(sweepToForWidthFt(p3, 0, Number.NaN)).toBeNull();
   });
 });

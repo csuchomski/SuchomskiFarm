@@ -82,7 +82,7 @@ export default function Mobs() {
     const [groups, members, animals, weights] = await Promise.all([
       fetchGrazingGroups(farmId),
       fetchGroupMembers(farmId),
-      fetchAnimals(),
+      fetchAnimals(farmId),
       fetchLatestWeights(farmId),
     ]);
     setLoad({ state: "ok", groups, members, animals, weights });

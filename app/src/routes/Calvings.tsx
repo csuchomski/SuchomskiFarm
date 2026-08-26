@@ -95,12 +95,12 @@ export default function Calvings() {
     const [calvings, outcomes, animals, breedings, breeds, composition, overrides, bySpecies] = await Promise.all([
       fetchCalvings(farmId),
       fetchCalfOutcomes(farmId),
-      fetchAnimals(),
+      fetchAnimals(farmId),
       fetchBreedings(farmId),
       fetchBreeds(farmId),
       fetchComposition(farmId),
       fetchOverrides(farmId),
-      fetchGestationDays(),
+      fetchGestationDays(farmId),
     ]);
     setLoad({
       state: "ok",

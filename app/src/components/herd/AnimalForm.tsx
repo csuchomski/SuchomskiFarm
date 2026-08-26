@@ -125,13 +125,15 @@ export function AnimalForm({
     let cancelled = false;
     // A failure here isn't worth blocking the form for — the fallback
     // options are still usable.
-    fetchAttributeOptions()
-      .then((o) => !cancelled && setDbOptions(o))
-      .catch(() => {});
+    if (farmId !== null) {
+      fetchAttributeOptions(farmId)
+        .then((o) => !cancelled && setDbOptions(o))
+        .catch(() => {});
+    }
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [farmId]);
 
   const options = useMemo(() => {
     const fromHerd = (key: keyof typeof FALLBACK, pick: (a: RealAnimal) => string) =>

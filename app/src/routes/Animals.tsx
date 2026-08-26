@@ -69,17 +69,24 @@ export default function Animals() {
 
   useEffect(() => {
     let cancelled = false;
+    // Every read below is one farm's. The guard is up here rather than
+    // repeated per call because the animals themselves now need it too —
+    // a herd is a farm's herd, and an unscoped read listed all of them.
+    if (farmId === null) {
+      setResult({ state: "error", message: "No farm on this business." });
+      return;
+    }
     (async () => {
-      const rows = await fetchAnimals();
+      const rows = await fetchAnimals(farmId);
       const breeds = await fetchBreedComposition(rows.map((r) => r.id));
-      // The breeding column needs her whole repro record. Null when there is
-      // no farm — the column then reads "—" rather than the page failing.
-      const repro = farmId ? await fetchAlertInputs(farmId, new Date().toISOString().slice(0, 10)) : null;
+      // The breeding column needs her whole repro record.
+      const repro = await fetchAlertInputs(farmId, new Date().toISOString().slice(0, 10));
       // The mob is the unit the farm actually works in — what gets moved, what
       // gets counted at the gate — so it is what this list is grouped by.
-      const [mobs, members] = farmId
-        ? await Promise.all([fetchGrazingGroups(farmId), fetchGroupMembers(farmId)])
-        : [[] as GrazingGroup[], [] as GrazingGroupMember[]];
+      const [mobs, members] = await Promise.all([
+        fetchGrazingGroups(farmId),
+        fetchGroupMembers(farmId),
+      ]);
       if (!cancelled) setResult({ state: "ok", rows, breeds, repro, mobs, members });
     })().catch(
       (err) => !cancelled && setResult({ state: "error", message: err instanceof Error ? err.message : String(err) }),

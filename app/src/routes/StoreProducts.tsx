@@ -91,7 +91,7 @@ export default function StoreProducts() {
     if (businessId === null) return;
     const [data, animals, lactations, milkProduct, standing] = await Promise.all([
       fetchStoreData({ businessId, farmId }),
-      fetchAnimals(),
+      farmId ? fetchAnimals(farmId) : Promise.resolve([] as RealAnimal[]),
       farmId ? fetchLactations(farmId) : Promise.resolve([] as RealLactation[]),
       // Asked for separately because fetchStoreData doesn't select
       // type_code, and matching on the name alone would call "Milk soap"

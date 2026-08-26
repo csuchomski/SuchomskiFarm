@@ -54,7 +54,7 @@ export default function Lactations() {
     let cancelled = false;
     setLoad({ state: "loading" });
 
-    Promise.all([fetchLactations(farmId), fetchAnimals(), fetchProductionRecords(farmId)])
+    Promise.all([fetchLactations(farmId), fetchAnimals(farmId), fetchProductionRecords(farmId)])
       .then(
         ([lactations, animals, records]) =>
           !cancelled && setLoad({ state: "ok", lactations, animals, records }),

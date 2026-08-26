@@ -149,10 +149,16 @@ export async function fetchCalfOutcomes(farmId: string): Promise<CalfOutcome[]> 
  * policy, and drawing someone else's 60 days would be a lie in the shape of
  * a rule.
  */
-export async function fetchVoluntaryWaitDays(): Promise<number | null> {
+export async function fetchVoluntaryWaitDays(farmId: string): Promise<number | null> {
+  // Scoped to the farm, and that is not a refinement. Every farm holds this
+  // key, so without the filter `maybeSingle()` sees one row per farm the
+  // user belongs to and throws "multiple (or no) rows returned" the moment
+  // they belong to two. It read as a broken page rather than as a missing
+  // filter, which is what an unscoped read looks like until it isn't.
   const { data, error } = await herdSchema()
     .from("settings")
     .select("value")
+    .eq("farm_id", farmId)
     .eq("key", "voluntary_waiting_period_days")
     .maybeSingle();
   if (error) throw new Error(`herd.settings: ${error.message}`);
@@ -165,8 +171,16 @@ export async function fetchVoluntaryWaitDays(): Promise<number | null> {
  * constant here — they're editable, and a due date computed from a number
  * the farm doesn't hold would drift the moment somebody changed it.
  */
-export async function fetchGestationDays(): Promise<Record<string, number>> {
-  const { data, error } = await herdSchema().from("settings").select("key, value").like("key", "gestation_days_%");
+export async function fetchGestationDays(farmId: string): Promise<Record<string, number>> {
+  // Same reason as above, with a quieter failure: unscoped, this collapses
+  // several farms' rows into one map by purpose, and the last one read wins.
+  // A due date would then be computed from another farm's gestation length
+  // with nothing on the page to say so.
+  const { data, error } = await herdSchema()
+    .from("settings")
+    .select("key, value")
+    .eq("farm_id", farmId)
+    .like("key", "gestation_days_%");
   if (error) throw new Error(`herd.settings: ${error.message}`);
 
   const out: Record<string, number> = {};

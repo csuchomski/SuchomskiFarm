@@ -66,7 +66,7 @@ export default function Breeds() {
       fetchBreeds(farmId),
       fetchComposition(farmId),
       fetchOverrides(farmId),
-      fetchAnimals(),
+      fetchAnimals(farmId),
     ]);
     setLoad({ state: "ok", breeds, composition, overrides, animals });
   }, [farmId]);

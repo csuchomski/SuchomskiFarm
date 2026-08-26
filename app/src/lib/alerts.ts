@@ -93,7 +93,7 @@ export interface AlertInputs {
 export async function fetchAlertInputs(farmId: string, today: string): Promise<AlertInputs> {
   const [animals, calvings, outcomes, breedings, checks, breeds, composition, overrides, bySpecies, wait] =
     await Promise.all([
-      fetchAnimals(),
+      fetchAnimals(farmId),
       fetchCalvings(farmId),
       fetchCalfOutcomes(farmId),
       fetchBreedings(farmId),
@@ -101,8 +101,8 @@ export async function fetchAlertInputs(farmId: string, today: string): Promise<A
       fetchBreeds(farmId),
       fetchComposition(farmId),
       fetchOverrides(farmId),
-      fetchGestationDays(),
-      fetchVoluntaryWaitDays(),
+      fetchGestationDays(farmId),
+      fetchVoluntaryWaitDays(farmId),
     ]);
 
   return {

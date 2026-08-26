@@ -53,7 +53,8 @@ vi.mock("../lib/herd", async (importOriginal) => ({
   // Mirrors the real one: the URL carries her tag, or her id when she has no
   // tag to be found by. See animalPath.
   fetchAnimalByTag: vi.fn(
-    async (key: string) => herd.find((a) => (a.ear_tag.trim() === "" ? a.id === key : a.ear_tag === key)) ?? null,
+    async (_farmId: string, key: string) =>
+      herd.find((a) => (a.ear_tag.trim() === "" ? a.id === key : a.ear_tag === key)) ?? null,
   ),
   fetchAnimals: vi.fn(async () => herd),
   fetchBreedComposition: vi.fn(async () => new Map([["a1", [{ breedId: "b1", name: "Jersey", percent: 100 }]]])),

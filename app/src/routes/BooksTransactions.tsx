@@ -130,9 +130,11 @@ export default function BooksTransactions() {
   const canAttribute = Boolean(farmId);
 
   useEffect(() => {
-    if (!canAttribute) return;
+    // Testing farmId rather than canAttribute: they mean the same thing, but
+    // only one of them narrows the type.
+    if (farmId === null) return;
     let cancelled = false;
-    Promise.all([fetchAnimals(), fetchExpenseCategories()])
+    Promise.all([fetchAnimals(farmId), fetchExpenseCategories()])
       .then(([a, c]) => {
         if (cancelled) return;
         setAnimals(a);
@@ -144,7 +146,7 @@ export default function BooksTransactions() {
     return () => {
       cancelled = true;
     };
-  }, [canAttribute]);
+  }, [farmId]);
 
   const rowIds = rows.map((t) => t.id).join(",");
   useEffect(() => {

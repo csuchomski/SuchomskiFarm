@@ -115,7 +115,7 @@ export default function Sires() {
       return;
     }
     const [animals, lots, composition, breeds] = await Promise.all([
-      fetchAnimals(),
+      fetchAnimals(farmId),
       fetchSemenLots(farmId),
       fetchComposition(farmId),
       fetchHerdBreeds(farmId),

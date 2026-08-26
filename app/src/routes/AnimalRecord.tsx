@@ -77,9 +77,16 @@ export default function AnimalRecord() {
     let cancelled = false;
     setResult({ state: "loading" });
 
+    // A tag is unique within a farm, not across them, so there is no animal
+    // to look up until it is known which farm is being asked about.
+    if (farmId === null) {
+      setResult({ state: "notfound" });
+      return;
+    }
+
     (async () => {
       try {
-        const animal = await fetchAnimalByTag(tag);
+        const animal = await fetchAnimalByTag(farmId, tag);
         if (cancelled) return;
         if (!animal) {
           setResult({ state: "notfound" });
@@ -88,7 +95,7 @@ export default function AnimalRecord() {
 
         // The herd is small enough to fetch whole — it resolves parents,
         // offspring and every ancestor in the chart from one read.
-        const all = await fetchAnimals();
+        const all = await fetchAnimals(farmId);
         const composition = await fetchBreedComposition(all.map((a) => a.id));
         if (cancelled) return;
 

@@ -69,7 +69,7 @@ vi.mock("../lib/grazing", async (importOriginal) => ({
 vi.mock("../lib/herd", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/herd")>()),
   fetchAnimals: vi.fn(async () => animals),
-  fetchAnimalByTag: vi.fn(async (tag: string) => animals.find((a) => a.ear_tag === tag) ?? null),
+  fetchAnimalByTag: vi.fn(async (_farmId: string, tag: string) => animals.find((a) => a.ear_tag === tag) ?? null),
   fetchBreedComposition: vi.fn(async () => new Map()),
 }));
 
@@ -248,7 +248,11 @@ describe("An animal's record", () => {
     );
     // The record tab opens on her life, so this is the sentinel for
   // "the page has finished loading" now.
-  await screen.findByText("What she has done");
+  // 5s rather than the 1s default. AnimalRecord loads several things before
+  // it renders, and under a full parallel run that occasionally takes longer
+  // than a second — which failed here as a missing element rather than as a
+  // slow one. Same treatment as animal-money.render.test.tsx.
+  await screen.findByText("What she has done", undefined, { timeout: 5000 });
   };
 
   it("has no lactation section for a beef cow", async () => {

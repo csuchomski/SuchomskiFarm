@@ -87,10 +87,20 @@ export interface BreedShare {
   percent: number;
 }
 
-export async function fetchAnimals(): Promise<RealAnimal[]> {
+/**
+ * Every animal on one farm.
+ *
+ * `farm_id` is filtered here and not left to RLS. RLS answers "may this user
+ * see this row", and the answer is yes for every farm they belong to — which
+ * is one farm until it is three, and then the Animals page lists another
+ * farm's herd without anything looking wrong. The demo farms in migration 063
+ * are what made that visible.
+ */
+export async function fetchAnimals(farmId: string): Promise<RealAnimal[]> {
   const { data, error } = await herdSchema()
     .from("animals")
     .select(ANIMAL_COLUMNS)
+    .eq("farm_id", farmId)
     .is("deleted_at", null)
     .order("barn_name");
   if (error) throw new Error(`herd.animals: ${error.message}`);
@@ -117,11 +127,15 @@ export const animalPath = (animal: { id: string; ear_tag: string }): string =>
 
 /** Resolve what `animalPath` produced: a tag, or an id for an animal that has
  *  no tag to be found by. */
-export async function fetchAnimalByTag(tagOrId: string): Promise<RealAnimal | null> {
+export async function fetchAnimalByTag(farmId: string, tagOrId: string): Promise<RealAnimal | null> {
   const column = UUID.test(tagOrId) ? "id" : "ear_tag";
+  // Scoped to the farm because migration 059 made a tag unique *within* a
+  // farm, not across the database. Two farms both have an "0001", and
+  // maybeSingle() on the pair throws rather than picking one.
   const { data, error } = await herdSchema()
     .from("animals")
     .select(ANIMAL_COLUMNS)
+    .eq("farm_id", farmId)
     .eq(column, tagOrId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -194,6 +208,10 @@ export async function fetchBreedComposition(animalIds: string[]): Promise<Map<st
       .select("animal_id, breed_id, percent")
       .in("animal_id", animalIds)
       .is("deleted_at", null),
+    // Deliberately not filtered by farm. This builds an id-keyed lookup, and
+    // the only ids ever looked up in it came from breed_composition rows
+    // that are already scoped to these animals. A wider map costs a few
+    // rows; threading a farm id through here would buy nothing.
     herdSchema().from("breeds").select("id, code, name").is("deleted_at", null),
   ]);
   if (compRes.error) throw new Error(`herd.breed_composition: ${compRes.error.message}`);
@@ -277,10 +295,11 @@ export const ANIMAL_ATTRIBUTES = ["sex", "class", "purpose", "origin", "status"]
  * doesn't exist yet — migration 013 hasn't run — so callers can fall back to
  * deriving options from the herd rather than showing nothing.
  */
-export async function fetchAttributeOptions(): Promise<AttributeOptions | null> {
+export async function fetchAttributeOptions(farmId: string): Promise<AttributeOptions | null> {
   const { data, error } = await herdSchema()
     .from("attribute_options")
     .select("attribute, code, label, sort_order")
+    .eq("farm_id", farmId)
     .eq("active", true)
     .is("deleted_at", null)
     .order("sort_order");

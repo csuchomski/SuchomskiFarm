@@ -84,7 +84,9 @@ vi.mock("../lib/animal-money", async (importOriginal) => ({
 vi.mock("../lib/herd", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/herd")>()),
   fetchAnimals: vi.fn(async () => [martha, dutton]),
-  fetchAnimalByTag: vi.fn(async (tag: string) => [martha, dutton].find((a) => a.ear_tag === tag) ?? null),
+  fetchAnimalByTag: vi.fn(
+    async (_farmId: string, tag: string) => [martha, dutton].find((a) => a.ear_tag === tag) ?? null,
+  ),
   fetchBreedComposition: vi.fn(async () => new Map()),
 }));
 

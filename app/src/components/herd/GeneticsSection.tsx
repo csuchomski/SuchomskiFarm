@@ -52,9 +52,13 @@ export function GeneticsSection({
   useEffect(() => {
     let cancelled = false;
     setLoad({ state: "loading" });
+    if (farmId === null) {
+      setLoad({ state: "ok", conditions: [], statuses: [], markers: [] });
+      return;
+    }
     (async () => {
       const [conditions, statuses, markers] = await Promise.all([
-        fetchConditions(),
+        fetchConditions(farmId),
         fetchConditionStatuses([animalId]),
         fetchMarkers([animalId]),
       ]);
@@ -65,7 +69,7 @@ export function GeneticsSection({
     return () => {
       cancelled = true;
     };
-  }, [animalId]);
+  }, [animalId, farmId]);
 
   if (load.state === "loading") {
     return <Section>{<p style={{ fontSize: 14, color: "var(--ink-muted)" }}>Loading genetics…</p>}</Section>;

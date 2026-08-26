@@ -72,7 +72,7 @@ export default function Depreciation() {
       return;
     }
     const [animals, assumptions, valuations, lactations, calvings, production] = await Promise.all([
-      fetchAnimals(),
+      fetchAnimals(farmId),
       fetchAssumptions(farmId),
       fetchValuations(farmId),
       fetchLactations(farmId),

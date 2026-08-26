@@ -124,10 +124,12 @@ const CONDITION_COLUMNS = "id, code, name, inheritance, species_scope";
 const STATUS_COLUMNS = "id, animal_id, condition_id, status, source, recorded_on";
 const MARKER_COLUMNS = "id, animal_id, marker_code, genotype, tested_on, source";
 
-export async function fetchConditions(): Promise<GeneticCondition[]> {
+export async function fetchConditions(farmId: string): Promise<GeneticCondition[]> {
+  // A picker, so a wider read shows every farm's conditions three times over.
   const { data, error } = await herdSchema()
     .from("genetic_conditions")
     .select(CONDITION_COLUMNS)
+    .eq("farm_id", farmId)
     .eq("active", true)
     .is("deleted_at", null)
     .order("code");
@@ -378,10 +380,13 @@ export interface Breed {
   species_type: string;
 }
 
-export async function fetchBreeds(): Promise<Breed[]> {
+export async function fetchBreeds(farmId: string): Promise<Breed[]> {
+  // A picker too. Each farm is seeded its own breed list, so unscoped this
+  // offers the same breed once per farm you belong to.
   const { data, error } = await herdSchema()
     .from("breeds")
     .select("id, code, name, species_type")
+    .eq("farm_id", farmId)
     .eq("active", true)
     .is("deleted_at", null)
     .order("name");

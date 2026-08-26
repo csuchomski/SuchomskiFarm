@@ -46,18 +46,22 @@ const COLS = "56px 1fr 120px 120px 120px";
 const COLS_SM = "44px 1fr 96px";
 
 export default function Genetics() {
-  const { business } = useWorkspace();
+  const { business, farmId } = useWorkspace();
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [sireId, setSireId] = useState("");
   const [damId, setDamId] = useState("");
 
   useEffect(() => {
     let cancelled = false;
+    if (farmId === null) {
+      setLoad({ state: "ok", animals: [], conditions: [], statuses: [], markers: [] });
+      return;
+    }
     (async () => {
-      const animals = await fetchAnimals();
+      const animals = await fetchAnimals(farmId);
       const ids = animals.map((a) => a.id);
       const [conditions, statuses, markers] = await Promise.all([
-        fetchConditions(),
+        fetchConditions(farmId),
         fetchConditionStatuses(ids),
         fetchMarkers(ids),
       ]);
@@ -68,7 +72,7 @@ export default function Genetics() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [farmId]);
 
   const animals = load.state === "ok" ? load.animals : EMPTY_ANIMALS;
   const conditions = load.state === "ok" ? load.conditions : EMPTY_CONDITIONS;

@@ -45,13 +45,15 @@ export function BreedEditor({
 
   useEffect(() => {
     let cancelled = false;
-    fetchBreeds()
-      .then((b) => !cancelled && setBreeds(b))
-      .catch((err) => !cancelled && setError(err instanceof Error ? err.message : String(err)));
+    if (farmId !== null) {
+      fetchBreeds(farmId)
+        .then((b) => !cancelled && setBreeds(b))
+        .catch((err) => !cancelled && setError(err instanceof Error ? err.message : String(err)));
+    }
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [farmId]);
 
   const entries: BreedEntry[] = rows
     .filter((r) => r.breedId !== "")

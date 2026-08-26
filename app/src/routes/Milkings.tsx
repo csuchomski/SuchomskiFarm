@@ -63,7 +63,7 @@ export default function Milkings() {
       return;
     }
     const [animals, lactations, records, product] = await Promise.all([
-      fetchAnimals(),
+      fetchAnimals(farmId),
       fetchLactations(farmId),
       fetchProductionRecords(farmId),
       fetchMilkProduct(businessId),

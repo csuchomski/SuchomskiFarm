@@ -30,6 +30,7 @@ import StoreSchedules from "./routes/StoreSchedules";
 import StoreForecast from "./routes/StoreForecast";
 import BooksTransactions from "./routes/BooksTransactions";
 import BooksAccounts from "./routes/BooksAccounts";
+import BooksCashFlow from "./routes/BooksCashFlow";
 import BooksReports from "./routes/BooksReports";
 import BooksBalanceSheet from "./routes/BooksBalanceSheet";
 import BooksTaxes from "./routes/BooksTaxes";
@@ -92,6 +93,7 @@ export default function App() {
                 <Route path="/books/transactions" element={<BooksTransactions />} />
                 <Route path="/books/accounts" element={<BooksAccounts />} />
                 <Route path="/books/reports" element={<BooksReports />} />
+                <Route path="/books/cash-flow" element={<BooksCashFlow />} />
                 <Route path="/books/balance-sheet" element={<BooksBalanceSheet />} />
                 <Route path="/books/taxes" element={<BooksTaxes />} />
               </Route>

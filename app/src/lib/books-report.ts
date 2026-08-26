@@ -157,6 +157,122 @@ export function byMonth(transactions: RealTransaction[], types: TypeMap): MonthT
   return filled;
 }
 
+export interface CashMonth {
+  /** "2026-07" */
+  month: string;
+  /** Cash in hand on the first of the month, before anything posted. */
+  opening: number;
+  received: number;
+  /** Positive. What left, said as a quantity rather than a negative. */
+  spent: number;
+  net: number;
+  /** Cash in hand at the end of the month. */
+  closing: number;
+  entries: number;
+}
+
+/**
+ * Cash in hand, month by month: what it opened at, what moved, where it
+ * closed.
+ *
+ * This is the question Reports does not answer. Reports totals income and
+ * expenses by category and by month, which says what the business *earned
+ * and spent* — it never says what is in the bank, or that a good month still
+ * left you short because the previous three did not.
+ *
+ * ── The part that is easy to get wrong ──────────────────────────────────
+ *
+ * **A window has to carry the past forward.** Ask for the last three months
+ * and the opening balance of the first of them is not the account's opening
+ * balance — it is the opening balance plus every movement in all the months
+ * before it. Starting a three-month view from the original opening balance
+ * would show this farm opening June with $454.54 when it has been trading
+ * since 2026, and every closing figure after it would inherit the error.
+ *
+ * So this takes **every** transaction the business has, and windows at the
+ * end. `broughtForward` is what the window opens with, and is on the page
+ * under that name rather than being folded silently into the first month.
+ *
+ * ── Transfers ───────────────────────────────────────────────────────────
+ *
+ * Neutral, via `signedAmount`, and correctly so for a total: moving money
+ * between two of your own accounts does not change how much you have. It
+ * does mean these figures are cash *across all accounts* and not per
+ * account — the ledger records one row for a movement rather than a matched
+ * pair, so which account received it is not recorded and a per-account
+ * history would be a guess.
+ */
+export function cashFlow(input: {
+  /** Every transaction for the business, not a windowed subset. */
+  transactions: RealTransaction[];
+  types: TypeMap;
+  /** Cash held before the first transaction ever — the accounts' opening
+   * balances added up. */
+  openingCash: number;
+  /** "YYYY-MM", inclusive. Omitted means from the first month with activity. */
+  from?: string;
+  /** "YYYY-MM", inclusive. Omitted means to the last month with activity. */
+  to?: string;
+}): { rows: CashMonth[]; broughtForward: number } {
+  const { transactions, types, openingCash, from, to } = input;
+
+  const moved = new Map<string, { received: number; spent: number; entries: number }>();
+  for (const t of transactions) {
+    const month = t.date.slice(0, 7);
+    const row = moved.get(month) ?? { received: 0, spent: 0, entries: 0 };
+    const signed = signedAmount(t, types);
+    if (signed > 0) row.received += signed;
+    else if (signed < 0) row.spent += -signed;
+    row.entries += 1;
+    moved.set(month, row);
+  }
+
+  const active = [...moved.keys()].sort();
+  // No transactions at all: the business still holds whatever it opened
+  // with, and saying so beats an empty page that reads like no money.
+  if (active.length === 0) return { rows: [], broughtForward: round2(openingCash) };
+
+  // A window never starts before the ledger does. "12 months" against a
+  // ledger that opens in March would otherwise lead with six identical rows
+  // holding the opening balance and saying nothing, pushing the months that
+  // have something to say off the bottom of the screen.
+  const requested = from ?? active[0];
+  const first = requested < active[0] ? active[0] : requested;
+  const last = to ?? active[active.length - 1];
+  if (last < first) return { rows: [], broughtForward: round2(openingCash) };
+
+  // Everything before the window, folded into the figure the window opens
+  // with. Months are compared as strings, which sorts correctly because
+  // they are zero-padded ISO.
+  let carried = openingCash;
+  for (const [month, row] of moved) {
+    if (month < first) carried += row.received - row.spent;
+  }
+  const broughtForward = round2(carried);
+
+  const rows: CashMonth[] = [];
+  let running = broughtForward;
+  for (const month of monthRange(first, last)) {
+    const row = moved.get(month) ?? { received: 0, spent: 0, entries: 0 };
+    const opening = round2(running);
+    const received = round2(row.received);
+    const spent = round2(row.spent);
+    const closing = round2(opening + received - spent);
+    rows.push({
+      month,
+      opening,
+      received,
+      spent,
+      net: round2(received - spent),
+      closing,
+      entries: row.entries,
+    });
+    running = closing;
+  }
+
+  return { rows, broughtForward };
+}
+
 /** Every "YYYY-MM" from first to last inclusive. */
 export function monthRange(first: string, last: string): string[] {
   const out: string[] = [];

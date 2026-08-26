@@ -66,6 +66,12 @@ const strip = (
   sweptFrom: from, sweptTo: to, grazedShape: null,
 });
 
+const mob = (id: string, name: string, active = true) => ({
+  id, name, species: "cattle", class: "mixed",
+  headCountManual: null, avgWeightLbManual: null, active, notes: null,
+});
+
+let groups = [mob("mob", "Main mob")];
 let paddocks = [1, 2, 3, 4, 5].map(unit);
 const events: GrazingEvent[] = [];
 const removals: ForageRemoval[] = [];
@@ -85,10 +91,7 @@ vi.mock("../lib/grazing", async (importOriginal) => {
     fetchGrazingEvents: vi.fn(async () => events),
     fetchForageRemovals: vi.fn(async () => removals),
     fetchForageAvailability: vi.fn(async () => availability),
-    fetchGrazingGroups: vi.fn(async () => [
-      { id: "mob", name: "Main mob", species: "cattle", class: "mixed",
-        headCountManual: null, avgWeightLbManual: null, active: true, notes: null },
-    ]),
+    fetchGrazingGroups: vi.fn(async () => groups),
     fetchGroupMembers: vi.fn(async () => [1, 2, 3, 4, 5].map((n) => ({
       id: `m${n}`, groupId: "mob", animalId: `a${n}`, joinedOn: null, leftOn: null,
       animalStatus: "active",
@@ -118,6 +121,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   cleanup();
+  groups = [mob("mob", "Main mob")];
   paddocks = [1, 2, 3, 4, 5].map(unit);
   events.length = 0;
   removals.length = 0;
@@ -932,5 +936,132 @@ describe("typing the width of the strip", () => {
     await mount();
     fireEvent.click(onward("Move the back line"));
     expect(screen.queryByLabelText(/^Strip width,/)).toBeNull();
+  });
+});
+
+describe("more than one mob", () => {
+  /**
+   * `groups[0]` left three of Green Pastures' four mobs with no route to this
+   * page at all. The switcher is the fix, and the order it comes back in is
+   * the point of it.
+   */
+  const stripFor = (id: string, groupId: string, paddockId: string, entered: string): GrazingEvent => ({
+    ...strip(id, paddockId, 0, 0.2, null),
+    groupId,
+    enteredAt: entered,
+  });
+
+  const chip = (name: string) =>
+    [...document.querySelectorAll("button.mv-mob")].find((b) => b.textContent?.startsWith(name))!;
+
+  it("shows nothing at all when there is only one mob", async () => {
+    // A single-mob farm must not gain a control it has no use for.
+    events.push(strip("s1", "p3", 0, 0.2, null));
+    await mount();
+    expect(document.querySelectorAll("button.mv-mob")).toHaveLength(0);
+  });
+
+  it("lists every mob, longest-standing first", async () => {
+    groups = [mob("a", "Finishers"), mob("b", "Main mob"), mob("c", "Yearlings")];
+    events.push(
+      stripFor("s1", "a", "p1", "2026-08-13T06:00:00.000Z"), // today
+      stripFor("s2", "b", "p2", "2026-08-10T06:00:00.000Z"), // 3 days
+      stripFor("s3", "c", "p3", "2026-08-12T06:00:00.000Z"), // 1 day
+    );
+    await mount();
+
+    const names = [...document.querySelectorAll("button.mv-mob")].map((b) => b.textContent);
+    expect(names[0]).toMatch(/^Main mob/);
+    expect(names[1]).toMatch(/^Yearlings/);
+    expect(names[2]).toMatch(/^Finishers/);
+  });
+
+  it("opens on the mob that has stood longest", async () => {
+    groups = [mob("a", "Finishers"), mob("b", "Main mob")];
+    events.push(
+      stripFor("s1", "a", "p1", "2026-08-13T06:00:00.000Z"),
+      stripFor("s2", "b", "p2", "2026-08-09T06:00:00.000Z"),
+    );
+    await mount();
+    expect(screen.getByText(/is in/).textContent).toMatch(/Main mob is in Paddock 2/);
+    expect(chip("Main mob").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("switches the whole page to the mob that is tapped", async () => {
+    // Three mobs on purpose. The one tapped is neither `groups[0]` nor the
+    // roster's default, so this fails both if the switcher does nothing and
+    // if the page quietly went back to reading the first of the array.
+    groups = [mob("a", "Finishers"), mob("b", "Main mob"), mob("c", "Yearlings")];
+    events.push(
+      stripFor("s1", "a", "p1", "2026-08-13T06:00:00.000Z"), // today
+      stripFor("s2", "b", "p2", "2026-08-09T06:00:00.000Z"), // longest — the default
+      stripFor("s3", "c", "p3", "2026-08-12T06:00:00.000Z"), // 1 day
+    );
+    await mount();
+    fireEvent.click(chip("Yearlings"));
+
+    expect(screen.getByText(/is in/).textContent).toMatch(/Yearlings is in Paddock 3/);
+    expect(chip("Yearlings").getAttribute("aria-pressed")).toBe("true");
+    expect(chip("Main mob").getAttribute("aria-pressed")).toBe("false");
+    expect(chip("Finishers").getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("says where each mob is and how long it has been there", async () => {
+    groups = [mob("a", "Finishers"), mob("b", "Main mob")];
+    events.push(
+      stripFor("s1", "a", "p1", "2026-08-13T06:00:00.000Z"),
+      stripFor("s2", "b", "p2", "2026-08-10T06:00:00.000Z"),
+    );
+    await mount();
+    expect(chip("Main mob").textContent).toContain("P2 · 3 days in");
+    expect(chip("Finishers").textContent).toContain("P1 · in today");
+  });
+
+  it("marks a mob with nowhere to be, rather than calling it freshly moved", async () => {
+    groups = [mob("a", "Dry cows"), mob("b", "Main mob")];
+    events.push(stripFor("s2", "b", "p2", "2026-08-10T06:00:00.000Z"));
+    await mount();
+    expect(chip("Dry cows").textContent).toContain("not on pasture");
+    expect(chip("Dry cows").textContent).not.toContain("in today");
+  });
+
+  it("drops the last mob's destination when another is picked", async () => {
+    // Everything the form holds belongs to the mob that was selected.
+    // Carrying a destination across would place this mob's wire in a paddock
+    // chosen for a different one.
+    groups = [mob("a", "Finishers"), mob("b", "Main mob")];
+    events.push(
+      stripFor("s1", "a", "p1", "2026-08-13T06:00:00.000Z"),
+      stripFor("s2", "b", "p2", "2026-08-09T06:00:00.000Z"),
+    );
+    weighEveryone();
+    await mount();
+
+    // Send Main mob somewhere other than where it stands.
+    fireEvent.click(onward("P4"));
+    expect(screen.getByText(/is in/).textContent).toMatch(/moving on to Paddock 4/);
+
+    fireEvent.click(chip("Finishers"));
+    // Finishers is in P1 and going nowhere — not inheriting P4.
+    expect(screen.getByText(/is in/).textContent).toMatch(/Finishers is in Paddock 1/);
+    expect(screen.getByText(/is in/).textContent).not.toMatch(/moving on/);
+  });
+
+  it("logs the move against the mob that is selected", async () => {
+    // The one that would be silently wrong: the right paddock, the wrong mob.
+    // Again three, so "c" is neither the array's first nor the default.
+    groups = [mob("a", "Finishers"), mob("b", "Main mob"), mob("c", "Yearlings")];
+    events.push(
+      stripFor("s1", "a", "p1", "2026-08-13T06:00:00.000Z"),
+      stripFor("s2", "b", "p2", "2026-08-09T06:00:00.000Z"),
+      stripFor("s3", "c", "p3", "2026-08-12T06:00:00.000Z"),
+    );
+    weighEveryone();
+    await mount();
+    fireEvent.click(chip("Yearlings"));
+    fireEvent.click(screen.getByText("Log the move"));
+
+    await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
+    expect(moved.mock.calls[0][1].groupId).toBe("c");
   });
 });

@@ -22,6 +22,7 @@ import {
   inRotation,
   isSwept,
   logMove,
+  mobRoster,
   mobWeight,
   openingWire,
   planStrip,
@@ -119,6 +120,21 @@ const FALLBACK: ForageAssumptions = {
   intakePctBodyweight: 3,
 };
 
+/**
+ * How long a mob has stood where it is.
+ *
+ * No colour on it, deliberately. Marking one "overdue" would need a figure
+ * for how long a mob may stay in a paddock, and the schema holds no such
+ * thing — recovery targets are about how long ground rests once they leave,
+ * which is a different question. The row is sorted longest-first, so the
+ * order carries the signal without inventing a threshold to colour against.
+ */
+function daysInWords(days: number | null): string {
+  if (days === null) return "";
+  if (days === 0) return "in today";
+  return days === 1 ? "1 day in" : `${days} days in`;
+}
+
 const nowIso = () => new Date().toISOString();
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -141,6 +157,9 @@ export default function Move() {
 
   /** Null means "wherever they are". Set only when moving on or skipping. */
   const [destId, setDestId] = useState<string | null>(null);
+  /** Which mob is being moved. Null until one is picked, which resolves to
+   *  whichever the roster puts first — the one standing longest. */
+  const [groupId, setGroupId] = useState<string | null>(null);
   const [wireTo, setWireTo] = useState<number | null>(null);
   const [backOverride, setBackOverride] = useState<number | null>(null);
   const [movingBack, setMovingBack] = useState(false);
@@ -198,7 +217,27 @@ export default function Move() {
 
   const [unitPx, measureSvg] = useMapScale();
 
-  const group = load.state === "ok" ? (load.groups[0] ?? null) : null;
+  /**
+   * Every mob and where it stands, longest-standing first.
+   *
+   * This used to be `load.groups[0]`, which on a farm with four mobs left
+   * three of them with no route to this page at all.
+   */
+  const roster = useMemo(
+    () =>
+      load.state === "ok"
+        ? mobRoster({ groups: load.groups, paddocks: load.paddocks, events: load.events, nowIso: nowIso() })
+        : [],
+    [load],
+  );
+
+  // The picked mob, or the one the roster puts first. Falling back by
+  // position rather than holding a default in state keeps the two in step
+  // when a mob is moved and the order changes underneath.
+  const group: GrazingGroup | null =
+    (groupId === null ? undefined : roster.find((r) => r.group.id === groupId)?.group) ??
+    roster[0]?.group ??
+    null;
 
   const standing = useMemo(() => {
     if (load.state !== "ok" || group === null) return null;
@@ -456,6 +495,25 @@ export default function Move() {
     }
   };
 
+  /**
+   * Switch to another mob.
+   *
+   * Everything the form is holding belongs to the mob that was selected — the
+   * destination, the back line, the wire, the heights. Carrying any of it
+   * across would place this mob's wire using the last one's figures.
+   */
+  const goToMob = (id: string) => {
+    setGroupId(id);
+    setDestId(null);
+    setBackOverride(null);
+    clearWire();
+    setMovingBack(false);
+    setHeight("");
+    setGrazeTo("");
+    setAteTo("");
+    setError(null);
+  };
+
   const goTo = (paddock: Paddock | null) => {
     setDestId(paddock?.id ?? null);
     setBackOverride(null);
@@ -579,6 +637,38 @@ export default function Move() {
 
       {load.state === "ok" && group !== null && (
         <>
+          {/* Which mob, when there is more than one.
+              Longest-standing first, because the question at the gate is not
+              which mobs exist but which one has been in the same paddock
+              longest. A single-mob farm sees nothing here at all. */}
+          {roster.length > 1 && (
+            <div className="mv-mobs" role="group" aria-label="Which mob">
+              {roster.map((r) => {
+                const on = r.group.id === group.id;
+                return (
+                  <button
+                    key={r.group.id}
+                    type="button"
+                    className={`mv-mob${on ? " mv-mob--on" : ""}`}
+                    aria-pressed={on}
+                    onClick={() => goToMob(r.group.id)}
+                  >
+                    {r.group.name}
+                    <span className="mv-mob__where">
+                      {r.paddock === null ? (
+                        "not on pasture"
+                      ) : (
+                        <>
+                          {r.paddock.code ?? r.paddock.name} · {daysInWords(r.daysIn)}
+                        </>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <p className="mv-where">
             {standing?.paddock ? (
               <>

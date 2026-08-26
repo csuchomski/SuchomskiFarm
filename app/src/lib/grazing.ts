@@ -2906,6 +2906,61 @@ export async function recordRemoval(farmId: string, draft: RemovalDraft): Promis
 // back line is where yesterday's wire ended, and the next unit is the one
 // after this in the round. Everything the one-page move opens with.
 
+/** A mob, where it is standing, and how long it has been there. */
+export interface MobStanding {
+  group: GrazingGroup;
+  /** The unit it is in now. Null when it is off pasture. */
+  paddock: Paddock | null;
+  /**
+   * Whole days since it walked in. Null when it is off pasture — which is
+   * not the same as zero, and a switcher that showed "0 days" for a mob
+   * with nowhere to be would read as "just moved".
+   */
+  daysIn: number | null;
+}
+
+/**
+ * Every active mob and where it stands, longest-standing first.
+ *
+ * The Move page took `groups[0]` and left the rest unreachable, which was
+ * survivable on a farm with one mob and is a page with three quarters of its
+ * work missing on a farm with four.
+ *
+ * Sorted by days in rather than by name because the switcher is read at the
+ * gate in the morning: the question is not which mobs exist but which one has
+ * been standing longest. A mob off pasture sorts last — it needs putting
+ * somewhere, but it is not overdue a move.
+ */
+export function mobRoster(input: {
+  groups: GrazingGroup[];
+  paddocks: Paddock[];
+  events: GrazingEvent[];
+  nowIso: string;
+}): MobStanding[] {
+  const { groups, paddocks, events, nowIso } = input;
+  const now = Date.parse(nowIso);
+
+  return groups
+    .filter((g) => g.active)
+    .map((group) => {
+      const open = whereIs(group.id, events);
+      const paddock = open === null ? null : (paddocks.find((p) => p.id === open.paddockId) ?? null);
+      const entered = open === null ? NaN : Date.parse(open.enteredAt);
+      const daysIn =
+        open === null || Number.isNaN(entered) || Number.isNaN(now)
+          ? null
+          : Math.max(0, Math.floor((now - entered) / 86_400_000));
+      return { group, paddock, daysIn };
+    })
+    .sort((a, b) => {
+      // Off pasture last, then longest standing, then by name so the order
+      // is stable when two mobs moved on the same day.
+      if ((a.daysIn === null) !== (b.daysIn === null)) return a.daysIn === null ? 1 : -1;
+      if (a.daysIn !== null && b.daysIn !== null && a.daysIn !== b.daysIn) return b.daysIn - a.daysIn;
+      return a.group.name.localeCompare(b.group.name);
+    });
+}
+
 export interface Standing {
   /** The unit they are in now. Null when they are off pasture. */
   paddock: Paddock | null;

@@ -113,6 +113,10 @@ export const allGroups: NavGroup[] = [
       { label: "Transactions", to: "/books/transactions" },
       { label: "Balance sheet", to: "/books/balance-sheet" },
       { label: "Reports", to: "/books/reports" },
+      // Next to Reports because they are read together and are not the same
+      // question: Reports says what was earned and spent, this says what is
+      // in the bank and how it got there.
+      { label: "Cash flow", to: "/books/cash-flow" },
       { label: "Taxes", to: "/books/taxes" },
       // Cattle depreciation. It sat under Herd, which is where the animals
       // are — but what it produces is a tax figure, and this is where the

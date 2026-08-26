@@ -79,3 +79,22 @@
     gap: 0;
   }
 }
+
+/* ── cash flow ────────────────────────────────────────────────────────
+   What the period opened with, said before the table rather than folded
+   into the first month's opening figure. A reader who cannot see where
+   the running balance started has no way to check the column. */
+
+.cash-carried {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  background: var(--paper-tint);
+  max-width: 72ch;
+}
+
+.cash-carried strong {
+  color: var(--ink);
+  font-weight: 500;
+}

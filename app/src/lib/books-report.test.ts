@@ -6,6 +6,7 @@ import {
   defaultAccountFor,
   byCategory,
   byMonth,
+  cashFlow,
   inRange,
   monthLabel,
   monthRange,
@@ -320,5 +321,129 @@ describe("defaultAccountFor", () => {
 
   it("starts on nothing rather than another business's account", () => {
     expect(defaultAccountFor(accounts, [], 99)).toBe("");
+  });
+});
+
+describe("cashFlow", () => {
+  /**
+   * Cash in hand, month by month. The figure Reports never shows: a good
+   * month can still leave you short because the three before it were not.
+   */
+  const ledger = [
+    tx({ id: 1, date: "2026-05-10", type: "income", amount: 1000 }),
+    tx({ id: 2, date: "2026-06-04", type: "expense", amount: 400 }),
+    tx({ id: 3, date: "2026-06-20", type: "expense", amount: 100 }),
+    tx({ id: 4, date: "2026-07-16", type: "income", amount: 20 }),
+  ];
+
+  it("runs the balance forward from one month into the next", () => {
+    const { rows } = cashFlow({ transactions: ledger, types, openingCash: 500 });
+    expect(rows.map((r) => [r.month, r.opening, r.received, r.spent, r.closing])).toEqual([
+      ["2026-05", 500, 1000, 0, 1500],
+      ["2026-06", 1500, 0, 500, 1000],
+      ["2026-07", 1000, 20, 0, 1020],
+    ]);
+    // Each month opens exactly where the last one closed. Anything else and
+    // the column is decoration rather than a balance.
+    for (let i = 1; i < rows.length; i++) expect(rows[i].opening).toBe(rows[i - 1].closing);
+  });
+
+  it("carries everything before the window into what the window opens with", () => {
+    // The bug this is here to stop: asking for July alone and being told it
+    // opened on the account's original $500, when four months of trading
+    // happened first. Every closing figure after it would inherit that.
+    const { rows, broughtForward } = cashFlow({
+      transactions: ledger, types, openingCash: 500, from: "2026-07",
+    });
+    expect(broughtForward).toBe(1000);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].opening).toBe(1000);
+    expect(rows[0].closing).toBe(1020);
+  });
+
+  it("ends a window where it is asked to, not where the ledger ends", () => {
+    const { rows } = cashFlow({
+      transactions: ledger, types, openingCash: 500, from: "2026-05", to: "2026-06",
+    });
+    expect(rows.map((r) => r.month)).toEqual(["2026-05", "2026-06"]);
+    expect(rows[1].closing).toBe(1000);
+  });
+
+  it("shows a quiet month rather than skipping it", () => {
+    // A gap in the sequence would make the balance appear to jump, and a
+    // month with no entries is exactly the month worth seeing.
+    const { rows } = cashFlow({
+      transactions: [
+        tx({ id: 1, date: "2026-05-10", type: "income", amount: 100 }),
+        tx({ id: 2, date: "2026-08-10", type: "expense", amount: 30 }),
+      ],
+      types,
+      openingCash: 0,
+    });
+    expect(rows.map((r) => r.month)).toEqual(["2026-05", "2026-06", "2026-07", "2026-08"]);
+    const june = rows[1];
+    expect([june.received, june.spent, june.entries]).toEqual([0, 0, 0]);
+    // Quiet, not empty: the cash it holds is still the cash it holds.
+    expect(june.opening).toBe(100);
+    expect(june.closing).toBe(100);
+  });
+
+  it("leaves a transfer out, because it does not change what is held", () => {
+    // The ledger records one row for a movement between two accounts rather
+    // than a matched pair. Counting it would spend money that never left.
+    const { rows } = cashFlow({
+      transactions: [
+        tx({ id: 1, date: "2026-07-01", type: "income", amount: 100 }),
+        tx({ id: 2, date: "2026-07-02", type: "transfer", amount: 60 }),
+      ],
+      types,
+      openingCash: 0,
+    });
+    expect(rows[0].closing).toBe(100);
+    expect(rows[0].received).toBe(100);
+    expect(rows[0].spent).toBe(0);
+    // Still counted as something that happened, so the row is not silently
+    // identical to a month in which nothing was recorded at all.
+    expect(rows[0].entries).toBe(2);
+  });
+
+  it("says what is held when nothing has been posted yet", () => {
+    // A new business holds its opening balance. Returning nothing would read
+    // as no money rather than no entries.
+    const { rows, broughtForward } = cashFlow({ transactions: [], types, openingCash: 852.64 });
+    expect(rows).toEqual([]);
+    expect(broughtForward).toBe(852.64);
+  });
+
+  it("does not accumulate a floating-point tail down the column", () => {
+    // Thirty entries of 0.1 is where a running total starts reading
+    // 3.0000000000000004, and this column is money.
+    const { rows } = cashFlow({
+      transactions: Array.from({ length: 30 }, (_, i) =>
+        tx({ id: i, date: `2026-0${(i % 3) + 1}-05`, type: "income", amount: 0.1 }),
+      ),
+      types,
+      openingCash: 0,
+    });
+    expect(rows[rows.length - 1].closing).toBe(3);
+    for (const r of rows) expect(r.closing).toBe(Math.round(r.closing * 100) / 100);
+  });
+
+  it("does not lead with months from before the ledger existed", () => {
+    // Twelve months against a ledger that opens in May would otherwise put
+    // six identical rows on top, each holding the opening balance and saying
+    // nothing, pushing the real months off the screen.
+    const { rows, broughtForward } = cashFlow({
+      transactions: ledger, types, openingCash: 500, from: "2025-09", to: "2026-07",
+    });
+    expect(rows[0].month).toBe("2026-05");
+    expect(broughtForward).toBe(500);
+  });
+
+  it("returns nothing for a window that runs backwards", () => {
+    const { rows } = cashFlow({
+      transactions: ledger, types, openingCash: 0, from: "2026-08", to: "2026-05",
+    });
+    expect(rows).toEqual([]);
   });
 });

@@ -1115,15 +1115,28 @@ describe("more than one pasture", () => {
     paddocks = paddocks.map((p, i) => ({ ...p, pastureId: i < 3 ? "north" : "creek" }));
   };
 
-  const pastureChip = (name: string) =>
-    [...document.querySelectorAll(".mv-pastures button")].find((b) => b.textContent?.startsWith(name))!;
+  /**
+   * The locator's pasture segment, opened.
+   *
+   * Opening is idempotent the same way "Elsewhere" is: the bar's segment is
+   * the one thing that toggles, and it is only pressed when shut.
+   */
+  const openPastures = () => {
+    const seg = document.querySelector(".mv-loc__seg");
+    if (seg && seg.getAttribute("aria-expanded") === "false") fireEvent.click(seg);
+  };
+
+  const pastureChip = (name: string) => {
+    openPastures();
+    return [...document.querySelectorAll(".mv-loc__opt")].find((b) => b.textContent?.startsWith(name))!;
+  };
 
   it("shows no pasture picker on a farm with one", async () => {
     pastures = [pasture("north", "North Pasture")];
     paddocks = paddocks.map((p) => ({ ...p, pastureId: "north" }));
     events.push(strip("s1", "p3", 0, 0.2, null));
     await mount();
-    expect(document.querySelectorAll(".mv-pastures button")).toHaveLength(0);
+    expect(document.querySelector(".mv-locator")).toBeNull();
   });
 
   it("shows none at all when no paddock carries a pasture", async () => {
@@ -1131,7 +1144,7 @@ describe("more than one pasture", () => {
     // The page has to read as it always did rather than scoping to nothing.
     events.push(strip("s1", "p3", 0, 0.2, null));
     await mount();
-    expect(document.querySelectorAll(".mv-pastures button")).toHaveLength(0);
+    expect(document.querySelector(".mv-locator")).toBeNull();
     // Every other paddock on the farm is still reachable — the whole farm is
     // one scope when nothing carries a pasture.
     expect(candidates().sort()).toEqual(["Paddock 1", "Paddock 2", "Paddock 4", "Paddock 5"]);
@@ -1365,5 +1378,121 @@ describe("where else they could go", () => {
     events.push(strip("open", "p1", 0, 0.2, null));
     await mount();
     expect(onward("Elsewhere…")).toBeUndefined();
+  });
+});
+
+describe("the locator bar", () => {
+  /**
+   * One line saying where on the farm you are, however deep the ground goes.
+   *
+   * The rule that keeps it out of the way is that a level holding one thing
+   * gets no segment — which is why a farm with one pasture sees no bar, and
+   * why the farm level is absent until properties land.
+   */
+  const inPastures = () => {
+    pastures = [pasture("north", "North Pasture"), pasture("creek", "Creek Pasture")];
+    paddocks = paddocks.map((p, i) => ({ ...p, pastureId: i < 3 ? "north" : "creek" }));
+  };
+
+  const openPastures = () => {
+    const seg = document.querySelector(".mv-loc__seg");
+    if (seg && seg.getAttribute("aria-expanded") === "false") fireEvent.click(seg);
+  };
+
+  const locator = () =>
+    document.querySelector(".mv-locator")?.textContent?.replace(/[▾▸]/g, " ").replace(/\s+/g, " ").trim() ?? null;
+
+  it("reads pasture then paddock", async () => {
+    inPastures();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    expect(locator()).toBe("North Pasture Paddock 1");
+  });
+
+  it("follows the mob when it is moving on", async () => {
+    inPastures();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    fireEvent.click(screen.getByText("On to Paddock 2"));
+    expect(locator()).toBe("North Pasture Paddock 2");
+  });
+
+  it("keeps the siblings shut until the segment is tapped", async () => {
+    // A bar that opened on load would be a chip row with extra steps.
+    inPastures();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    expect(document.querySelectorAll(".mv-loc__opt")).toHaveLength(0);
+    expect(document.querySelector(".mv-loc__seg")!.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(document.querySelector(".mv-loc__seg")!);
+    expect(document.querySelectorAll(".mv-loc__opt")).toHaveLength(2);
+  });
+
+  it("shuts again on a second tap", async () => {
+    inPastures();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    fireEvent.click(document.querySelector(".mv-loc__seg")!);
+    fireEvent.click(document.querySelector(".mv-loc__seg")!);
+    expect(document.querySelectorAll(".mv-loc__opt")).toHaveLength(0);
+  });
+
+  it("shuts when a pasture is taken, and the bar says the new one", async () => {
+    inPastures();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    openPastures();
+    fireEvent.click([...document.querySelectorAll(".mv-loc__opt")].find((b) => b.textContent!.startsWith("Creek"))!);
+
+    expect(document.querySelectorAll(".mv-loc__opt")).toHaveLength(0);
+    // No paddock chosen in Creek yet, and the bar says so rather than
+    // showing a paddock from the pasture just left.
+    expect(locator()).toBe("Creek Pasture no paddock yet");
+  });
+
+  it("shuts when the mob changes", async () => {
+    // Left open, it would be offering the last mob's siblings over the top
+    // of the new mob's ground.
+    inPastures();
+    groups = [mob("a", "Main mob"), mob("b", "Yearlings")];
+    events.push(
+      { ...strip("s1", "p1", 0, 0.2, null), groupId: "a", enteredAt: "2026-08-09T06:00:00.000Z" },
+      { ...strip("s2", "p4", 0, 0.2, null), groupId: "b", enteredAt: "2026-08-12T06:00:00.000Z" },
+    );
+    await mount();
+    openPastures();
+    fireEvent.click([...document.querySelectorAll("button.mv-mob")].find((b) => b.textContent!.startsWith("Yearlings"))!);
+    expect(document.querySelectorAll(".mv-loc__opt")).toHaveLength(0);
+    expect(locator()).toBe("Creek Pasture Paddock 4");
+  });
+
+  it("says how much ground each sibling holds", async () => {
+    inPastures();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    openPastures();
+    const creek = [...document.querySelectorAll(".mv-loc__opt")].find((b) => b.textContent!.startsWith("Creek"))!;
+    expect(creek.textContent).toMatch(/2 paddocks · \d+ ac/);
+  });
+
+  it("marks which sibling is the one you are in", async () => {
+    inPastures();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    openPastures();
+    const opts = [...document.querySelectorAll(".mv-loc__opt")];
+    expect(opts.filter((b) => b.getAttribute("aria-pressed") === "true").map((b) => b.textContent!.slice(0, 13)))
+      .toEqual(["North Pasture"]);
+  });
+
+  it("shows no bar at all on a farm with one pasture", async () => {
+    // The collapse rule: a level holding one thing is not a choice, and the
+    // page has to read exactly as it did before any of this.
+    pastures = [pasture("north", "North Pasture")];
+    paddocks = paddocks.map((p) => ({ ...p, pastureId: "north" }));
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    expect(document.querySelector(".mv-locator")).toBeNull();
   });
 });

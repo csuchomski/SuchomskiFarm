@@ -583,11 +583,86 @@
 /* The pasture row sits under the mob row and reads as the same kind of
    choice — narrower ground rather than a different herd. Set apart by a
    hairline above it so two rows of chips do not read as one long list. */
-.mv-pastures {
+/* ── the locator ──────────────────────────────────────────────────────
+   Where on the farm, in one line however deep the ground goes. A chip row
+   per level would stack above the map and push it off a phone; this stays
+   one line and opens a level's siblings underneath it. */
+
+.mv-locator {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
   border-top: 1px solid var(--hairline);
   margin-top: 10px;
-  padding-top: 10px;
+  padding-top: 8px;
 }
+
+.mv-loc__seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 400 15px/1.2 "IBM Plex Sans", sans-serif;
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  /* Negative left margin so the text lines up with the paragraph under it
+     while the tap target keeps its padding. */
+  padding: 10px 8px;
+  margin-left: -8px;
+  min-height: 44px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--hairline);
+  text-underline-offset: 4px;
+}
+
+.mv-loc__seg:hover { text-decoration-color: var(--ink-faint); }
+.mv-loc__seg:focus-visible { outline: 2px solid var(--herd-green); outline-offset: 2px; }
+.mv-loc__seg--open { text-decoration-color: var(--ink); }
+
+.mv-loc__caret { font-size: 10px; color: var(--ink-muted); }
+.mv-loc__sep { color: var(--ink-faint); font-size: 13px; }
+.mv-loc__here { font-size: 15px; color: var(--ink-soft); padding: 0 4px; }
+
+/* The siblings of whichever segment is open. Under the bar rather than
+   beside it: a menu that hangs off the segment would be off the right edge
+   on a phone at the third level down. */
+.mv-loc__panel {
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+  background: var(--paper);
+  /* Capped so it reads as a menu on a desk rather than a table: a filled row
+     a thousand pixels wide for one pasture name is a lot of ink. */
+  max-width: 34rem;
+}
+
+.mv-loc__opt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  width: 100%;
+  text-align: left;
+  font: 400 14px/1.35 "IBM Plex Sans", sans-serif;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink);
+  padding: 10px 8px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.mv-loc__opt:last-child { border-bottom: 0; }
+.mv-loc__opt:hover { background: var(--paper-tint); }
+.mv-loc__opt:focus-visible { outline: 2px solid var(--herd-green); outline-offset: -2px; }
+
+.mv-loc__opt--on { background: var(--ink); color: var(--paper); }
+.mv-loc__opt--on:hover { background: var(--ink); }
+.mv-loc__opt--on .mv-loc__optnote { color: var(--paper-tint); }
+
+.mv-loc__optnote { font-size: 12.5px; color: var(--ink-muted); }
 
 .mv-where { font-size: 15px; color: var(--ink-soft); padding: 12px 0 4px; }
 .mv-rest { color: var(--ink-muted); }

@@ -183,6 +183,8 @@ export default function Move() {
   const [pastureOverride, setPastureOverride] = useState<string | null>(null);
   /** Whether the ranked list of somewhere-else is open. */
   const [elsewhere, setElsewhere] = useState(false);
+  /** Which segment of the locator bar has its siblings showing, if any. */
+  const [locatorOn, setLocatorOn] = useState<"pasture" | null>(null);
   /** Which mob is being moved. Null until one is picked, which resolves to
    *  whichever the roster puts first — the one standing longest. */
   const [groupId, setGroupId] = useState<string | null>(null);
@@ -275,9 +277,22 @@ export default function Move() {
    *  against this, so a paddock in another pasture is still reachable. */
   const allUnits = load.state === "ok" ? inRotation(load.paddocks) : [];
 
-  // Where they are, unless they are being moved on.
-  const dest: Paddock | null =
-    destId !== null ? (allUnits.find((p) => p.id === destId) ?? null) : (standing?.paddock ?? null);
+  /**
+   * Where they are, unless they are being moved on.
+   *
+   * The one case that is neither: a pasture has been picked deliberately and
+   * the mob is standing somewhere else. Falling back to where they stand then
+   * would put a paddock from North Pasture at the end of a bar that says
+   * Creek — and would leave the wire, the strip figures and the Log button
+   * all working on ground the map is not drawing. Nothing is chosen yet, and
+   * the page says so.
+   */
+  const dest: Paddock | null = (() => {
+    if (destId !== null) return allUnits.find((p) => p.id === destId) ?? null;
+    const at = standing?.paddock ?? null;
+    if (at === null) return null;
+    return pastureOverride !== null && at.pastureId !== pastureOverride ? null : at;
+  })();
 
   /**
    * The pasture being worked in.
@@ -302,6 +317,9 @@ export default function Move() {
    * exactly as it did before.
    */
   const units = paddocksInPasture(allUnits, pastureId);
+
+  /** The pasture the bar is standing in, when it is one the farm uses. */
+  const here = pastures.find((p) => p.pasture.id === pastureId) ?? null;
 
   /**
    * Where else they could go, best-rested first.
@@ -504,6 +522,7 @@ export default function Move() {
   const goToPasture = (id: string) => {
     setPastureOverride(id);
     setElsewhere(false);
+    setLocatorOn(null);
     setDestId(null);
     setBackOverride(null);
     clearWire();
@@ -620,6 +639,7 @@ export default function Move() {
     setGroupId(id);
     setPastureOverride(null);
     setElsewhere(false);
+    setLocatorOn(null);
     setDestId(null);
     setBackOverride(null);
     clearWire();
@@ -635,6 +655,7 @@ export default function Move() {
     // has done its job the moment one is picked.
     setPastureOverride(null);
     setElsewhere(false);
+    setLocatorOn(null);
     setDestId(paddock?.id ?? null);
     setBackOverride(null);
     clearWire();
@@ -789,23 +810,55 @@ export default function Move() {
             </div>
           )}
 
-          {/* Which pasture. Only when the farm has more than one — the same
-              rule the mob row follows, so a farm with one of each sees
-              neither control. */}
+          {/*
+            Where on the farm — one line, however deep the ground goes.
+
+            Green Pastures runs pastures inside farms and paddocks inside
+            those. A chip row per level would stack three rows above the map
+            and push the map, which is the thing you came here to touch, off
+            the bottom of a phone. A breadcrumb is one line at any depth, and
+            a segment opens its siblings underneath rather than beside.
+
+            Levels holding one thing get no segment, so a farm with a single
+            pasture sees no bar at all and the page reads exactly as it did.
+            That rule is why the farm level is absent today: one farm per
+            business until properties land.
+
+            The paddock is the end of the crumb and is not a picker. Which
+            paddock to graze is a recovery decision, and it is made against
+            rest days and acres — which is the "Elsewhere" list further down,
+            and the map. A third way in would be a third way to get it wrong.
+          */}
           {pastures.length > 1 && (
-            <div className="mv-mobs mv-pastures" role="group" aria-label="Which pasture">
+            <nav className="mv-locator" aria-label="Where on the farm">
+              <button
+                type="button"
+                className={`mv-loc__seg${locatorOn === "pasture" ? " mv-loc__seg--open" : ""}`}
+                aria-expanded={locatorOn === "pasture"}
+                onClick={() => setLocatorOn(locatorOn === "pasture" ? null : "pasture")}
+              >
+                {here?.pasture.name ?? "All ground"}
+                <span className="mv-loc__caret" aria-hidden="true">▾</span>
+              </button>
+              <span className="mv-loc__sep" aria-hidden="true">▸</span>
+              <span className="mv-loc__here">{dest?.name ?? "no paddock yet"}</span>
+            </nav>
+          )}
+
+          {locatorOn === "pasture" && (
+            <div className="mv-loc__panel" role="group" aria-label="Which pasture">
               {pastures.map(({ pasture, paddocks: n, acres }) => {
                 const on = pasture.id === pastureId;
                 return (
                   <button
                     key={pasture.id}
                     type="button"
-                    className={`mv-mob${on ? " mv-mob--on" : ""}`}
+                    className={`mv-loc__opt${on ? " mv-loc__opt--on" : ""}`}
                     aria-pressed={on}
                     onClick={() => goToPasture(pasture.id)}
                   >
-                    {pasture.name}
-                    <span className="mv-mob__where">
+                    <span className="mv-loc__optname">{pasture.name}</span>
+                    <span className="mv-loc__optnote">
                       {n} paddock{n === 1 ? "" : "s"} · {Math.round(acres)} ac
                     </span>
                   </button>

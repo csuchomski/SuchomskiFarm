@@ -580,6 +580,15 @@
 
 .mv-mob--on .mv-mob__where { color: var(--paper-tint); }
 
+/* The pasture row sits under the mob row and reads as the same kind of
+   choice — narrower ground rather than a different herd. Set apart by a
+   hairline above it so two rows of chips do not read as one long list. */
+.mv-pastures {
+  border-top: 1px solid var(--hairline);
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
 .mv-where { font-size: 15px; color: var(--ink-soft); padding: 12px 0 4px; }
 .mv-rest { color: var(--ink-muted); }
 
@@ -634,6 +643,7 @@
    the drawing is capped and letterboxed rather than left to its own
    proportions. `viewBoxPoint` takes the gutters off the touch. */
 .mv-figure .pm-svg { height: min(56vh, 560px); }
+
 
 /* `--pm-unit` is viewBox units per screen pixel, set by the page from the
    drawing's measured size. It undoes the map's scale so these read the same

@@ -16,6 +16,7 @@ import {
   fetchGroupMembers,
   fetchLatestWeights,
   fetchPaddocks,
+  fetchPastures,
   fetchPlanPaddockTargets,
   grazeDownTo,
   groupHeadCount,
@@ -24,6 +25,8 @@ import {
   logMove,
   mobRoster,
   mobWeight,
+  paddocksInPasture,
+  pasturesInUse,
   openingWire,
   planStrip,
   readinessDays,
@@ -42,6 +45,7 @@ import {
   type GrazingGroupMember,
   type GrazingPlan,
   type Paddock,
+  type Pasture,
   type PlanPaddockTarget,
 } from "../lib/grazing";
 import {
@@ -104,6 +108,7 @@ type Load =
       removals: ForageRemoval[];
       availability: ForageAvailability[];
       groups: GrazingGroup[];
+      pastures: Pasture[];
       members: GrazingGroupMember[];
       weights: Map<string, number>;
       targets: PlanPaddockTarget[];
@@ -157,6 +162,10 @@ export default function Move() {
 
   /** Null means "wherever they are". Set only when moving on or skipping. */
   const [destId, setDestId] = useState<string | null>(null);
+  /** A pasture picked deliberately, rather than the one the mob is standing
+   *  in. Cleared the moment a paddock is chosen, because the paddock says
+   *  which pasture it is in. */
+  const [pastureOverride, setPastureOverride] = useState<string | null>(null);
   /** Which mob is being moved. Null until one is picked, which resolves to
    *  whichever the roster puts first — the one standing longest. */
   const [groupId, setGroupId] = useState<string | null>(null);
@@ -193,9 +202,10 @@ export default function Move() {
       setLoad({ state: "error", message: "No farm on this business." });
       return;
     }
-    const [paddocks, events, removals, availability, groups, members, weights, plan] =
+    const [paddocks, pastures, events, removals, availability, groups, members, weights, plan] =
       await Promise.all([
         fetchPaddocks(farmId),
+        fetchPastures(farmId),
         fetchGrazingEvents(farmId),
         fetchForageRemovals(farmId),
         fetchForageAvailability(farmId),
@@ -205,7 +215,7 @@ export default function Move() {
         fetchActivePlan(farmId),
       ]);
     const targets = plan ? await fetchPlanPaddockTargets(plan.id) : [];
-    setLoad({ state: "ok", paddocks, events, removals, availability, groups, members, weights, targets, plan });
+    setLoad({ state: "ok", paddocks, pastures, events, removals, availability, groups, members, weights, targets, plan });
   }, [farmId]);
 
   useEffect(() => {
@@ -244,11 +254,37 @@ export default function Move() {
     return standingOf({ groupId: group.id, paddocks: load.paddocks, events: load.events });
   }, [load, group]);
 
-  const units = load.state === "ok" ? inRotation(load.paddocks) : [];
+  /** Every paddock on the farm, in rotation order. Destinations resolve
+   *  against this, so a paddock in another pasture is still reachable. */
+  const allUnits = load.state === "ok" ? inRotation(load.paddocks) : [];
 
   // Where they are, unless they are being moved on.
   const dest: Paddock | null =
-    destId !== null ? (units.find((p) => p.id === destId) ?? null) : (standing?.paddock ?? null);
+    destId !== null ? (allUnits.find((p) => p.id === destId) ?? null) : (standing?.paddock ?? null);
+
+  /**
+   * The pasture being worked in.
+   *
+   * The paddock decides it — a mob standing in North Pasture is working in
+   * North Pasture — and the override only matters between picking another
+   * pasture and picking a paddock inside it.
+   */
+  const pastureId: string | null = pastureOverride ?? dest?.pastureId ?? null;
+
+  /** The pastures with ground in them, in the order the farm is walked. */
+  const pastures = useMemo(
+    () => (load.state === "ok" ? pasturesInUse(load.paddocks.filter((p) => p.active), load.pastures) : []),
+    [load],
+  );
+
+  /**
+   * What the map draws and the picker offers.
+   *
+   * On a farm that uses pastures this is one pasture's worth; on a farm that
+   * does not, `paddocksInPasture` hands back everything and the page reads
+   * exactly as it did before.
+   */
+  const units = paddocksInPasture(allUnits, pastureId);
 
   const movingOn = dest !== null && dest.id !== standing?.paddock?.id;
 
@@ -413,6 +449,22 @@ export default function Move() {
     setWidthDraft(null);
   };
 
+  /**
+   * Work in another pasture.
+   *
+   * The destination goes with it: a paddock chosen in North Pasture is not a
+   * destination in Creek Pasture, and leaving it set would draw a map of one
+   * pasture with the wire on ground outside it.
+   */
+  const goToPasture = (id: string) => {
+    setPastureOverride(id);
+    setDestId(null);
+    setBackOverride(null);
+    clearWire();
+    setMovingBack(false);
+    setError(null);
+  };
+
   /** Back to the opening wire the page works out for itself. */
   const clearWire = () => {
     setWireTo(null);
@@ -453,13 +505,29 @@ export default function Move() {
 
   // ── the drawing ─────────────────────────────────────────────────────
 
+  /**
+   * The drawing.
+   *
+   * Fitted to the pasture being worked in, not to the farm. Green Pastures
+   * is 1,579 acres; fitting to all of it drew 46 shapes the size of postage
+   * stamps and made the wire unusable.
+   *
+   * The design called for the rest of the farm drawn faint around the edge,
+   * for orientation. It is not here, because it could not be seen: the
+   * viewBox is fitted to the pasture with 14px of padding, and on the seeded
+   * farm the next pasture's block starts 2,600ft beyond that — so every one
+   * of those outlines rendered outside the frame and was clipped. Widening
+   * the fit to catch them would undo the zoom that is the whole point. The
+   * pasture row above the map says which ground is next door, in words.
+   */
   const drawn = useMemo(() => {
     if (load.state !== "ok") return null;
-    const withRings = units
+    const here = units
       .map((p) => ({ paddock: p, ring: asPolygonRing(p.boundary) }))
       .filter((u): u is { paddock: Paddock; ring: LonLat[] } => u.ring !== null);
-    const projection = fitPasture(withRings.map((u) => u.ring), { width: WIDTH, padding: 14 });
-    return projection === null ? null : { units: withRings, projection };
+
+    const projection = fitPasture(here.map((u) => u.ring), { width: WIDTH, padding: 14 });
+    return projection === null ? null : { units: here, projection };
   }, [load, units]);
 
   const destRing: Local[] | null =
@@ -504,6 +572,7 @@ export default function Move() {
    */
   const goToMob = (id: string) => {
     setGroupId(id);
+    setPastureOverride(null);
     setDestId(null);
     setBackOverride(null);
     clearWire();
@@ -515,6 +584,9 @@ export default function Move() {
   };
 
   const goTo = (paddock: Paddock | null) => {
+    // The paddock says which pasture it is in, so a deliberate pasture choice
+    // has done its job the moment one is picked.
+    setPastureOverride(null);
     setDestId(paddock?.id ?? null);
     setBackOverride(null);
     clearWire();
@@ -662,6 +734,31 @@ export default function Move() {
                           {r.paddock.code ?? r.paddock.name} · {daysInWords(r.daysIn)}
                         </>
                       )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Which pasture. Only when the farm has more than one — the same
+              rule the mob row follows, so a farm with one of each sees
+              neither control. */}
+          {pastures.length > 1 && (
+            <div className="mv-mobs mv-pastures" role="group" aria-label="Which pasture">
+              {pastures.map(({ pasture, paddocks: n, acres }) => {
+                const on = pasture.id === pastureId;
+                return (
+                  <button
+                    key={pasture.id}
+                    type="button"
+                    className={`mv-mob${on ? " mv-mob--on" : ""}`}
+                    aria-pressed={on}
+                    onClick={() => goToPasture(pasture.id)}
+                  >
+                    {pasture.name}
+                    <span className="mv-mob__where">
+                      {n} paddock{n === 1 ? "" : "s"} · {Math.round(acres)} ac
                     </span>
                   </button>
                 );

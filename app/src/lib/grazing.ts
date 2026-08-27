@@ -2906,6 +2906,59 @@ export async function recordRemoval(farmId: string, draft: RemovalDraft): Promis
 // back line is where yesterday's wire ended, and the next unit is the one
 // after this in the round. Everything the one-page move opens with.
 
+/**
+ * The paddocks the Move page should be working in.
+ *
+ * A farm of 46 paddocks drawn on one map is 46 postage stamps, and a picker
+ * with 46 buttons is not a picker. Scoping to a pasture is what makes both
+ * usable — but only on a farm that has pastures.
+ *
+ * `pastureId` null means "no pasture chosen", and returns everything. So does
+ * a farm that never filled `pasture_id` in: scoping to a pasture nobody
+ * assigned would show an empty map and no way to get off it, which is worse
+ * than the crowded map it was meant to fix.
+ */
+export function paddocksInPasture(paddocks: Paddock[], pastureId: string | null): Paddock[] {
+  if (pastureId === null) return paddocks;
+  const inside = paddocks.filter((p) => p.pastureId === pastureId);
+  return inside.length === 0 ? paddocks : inside;
+}
+
+/**
+ * The pastures that actually hold ground, in rotation order.
+ *
+ * Derived from the paddocks rather than read straight off the pastures table,
+ * because a pasture with nothing in it is a row somebody made and never used
+ * — offering it as somewhere to move a mob would be offering an empty field.
+ *
+ * Ordered by where each pasture's ground sits in the round, so the picker
+ * reads in the order the farm is actually walked rather than alphabetically.
+ */
+export function pasturesInUse(
+  paddocks: Paddock[],
+  pastures: Pasture[],
+): { pasture: Pasture; paddocks: number; acres: number }[] {
+  const counted = new Map<string, { paddocks: number; acres: number; order: number }>();
+
+  for (const p of paddocks) {
+    if (p.pastureId === null) continue;
+    const row = counted.get(p.pastureId) ?? { paddocks: 0, acres: 0, order: Number.MAX_SAFE_INTEGER };
+    row.paddocks += 1;
+    row.acres += p.acresGrazable ?? p.acresMeasured ?? 0;
+    if (p.rotationOrder !== null) row.order = Math.min(row.order, p.rotationOrder);
+    counted.set(p.pastureId, row);
+  }
+
+  return pastures
+    .filter((pa) => counted.has(pa.id))
+    .map((pa) => {
+      const row = counted.get(pa.id)!;
+      return { pasture: pa, paddocks: row.paddocks, acres: Math.round(row.acres * 100) / 100, order: row.order };
+    })
+    .sort((a, b) => a.order - b.order || a.pasture.name.localeCompare(b.pasture.name))
+    .map(({ pasture, paddocks: n, acres }) => ({ pasture, paddocks: n, acres }));
+}
+
 /** A mob, where it is standing, and how long it has been there. */
 export interface MobStanding {
   group: GrazingGroup;

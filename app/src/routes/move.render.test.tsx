@@ -71,7 +71,12 @@ const mob = (id: string, name: string, active = true) => ({
   headCountManual: null, avgWeightLbManual: null, active, notes: null,
 });
 
+const pasture = (id: string, name: string) => ({
+  id, name, code: id.toUpperCase(), acres: null, notes: null, active: true, boundary: null,
+});
+
 let groups = [mob("mob", "Main mob")];
+let pastures: ReturnType<typeof pasture>[] = [];
 let paddocks = [1, 2, 3, 4, 5].map(unit);
 const events: GrazingEvent[] = [];
 const removals: ForageRemoval[] = [];
@@ -88,6 +93,7 @@ vi.mock("../lib/grazing", async (importOriginal) => {
   return {
     ...actual,
     fetchPaddocks: vi.fn(async () => paddocks),
+    fetchPastures: vi.fn(async () => pastures),
     fetchGrazingEvents: vi.fn(async () => events),
     fetchForageRemovals: vi.fn(async () => removals),
     fetchForageAvailability: vi.fn(async () => availability),
@@ -122,6 +128,7 @@ afterEach(() => {
   vi.useRealTimers();
   cleanup();
   groups = [mob("mob", "Main mob")];
+  pastures = [];
   paddocks = [1, 2, 3, 4, 5].map(unit);
   events.length = 0;
   removals.length = 0;
@@ -1063,5 +1070,133 @@ describe("more than one mob", () => {
 
     await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
     expect(moved.mock.calls[0][1].groupId).toBe("c");
+  });
+});
+
+describe("more than one pasture", () => {
+  /**
+   * Green Pastures is 46 paddocks over 1,579 acres. Drawn as one map that is
+   * 46 postage stamps, and offered as one picker it is 46 buttons. Scoping to
+   * a pasture is what makes both usable — without breaking the farms that
+   * have only one.
+   */
+  const inPastures = () => {
+    pastures = [pasture("north", "North Pasture"), pasture("creek", "Creek Pasture")];
+    // P1–P3 north, P4–P5 creek. Rotation order already runs 1..5.
+    paddocks = paddocks.map((p, i) => ({ ...p, pastureId: i < 3 ? "north" : "creek" }));
+  };
+
+  const pastureChip = (name: string) =>
+    [...document.querySelectorAll(".mv-pastures button")].find((b) => b.textContent?.startsWith(name))!;
+
+  it("shows no pasture picker on a farm with one", async () => {
+    pastures = [pasture("north", "North Pasture")];
+    paddocks = paddocks.map((p) => ({ ...p, pastureId: "north" }));
+    events.push(strip("s1", "p3", 0, 0.2, null));
+    await mount();
+    expect(document.querySelectorAll(".mv-pastures button")).toHaveLength(0);
+  });
+
+  it("shows none at all when no paddock carries a pasture", async () => {
+    // Green Pastures was in exactly this state before the seed was fixed.
+    // The page has to read as it always did rather than scoping to nothing.
+    events.push(strip("s1", "p3", 0, 0.2, null));
+    await mount();
+    expect(document.querySelectorAll(".mv-pastures button")).toHaveLength(0);
+    // P5 rather than P4: the next unit in the round renders as "On to
+    // Paddock 4", so asking for its code finds nothing and proves nothing.
+    expect(onward("P5")).toBeTruthy();
+  });
+
+  it("offers only the paddocks of the pasture the mob is standing in", async () => {
+    inPastures();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+
+    // North holds P1–P3. P2 is the next in the round so it reads "On to
+    // Paddock 2"; P3 is on offer by code, and Creek's P4 and P5 are not.
+    expect(onward("P3")).toBeTruthy();
+    const offered = [...document.querySelectorAll("button.grz-preset")].map((b) => b.textContent);
+    expect(offered).not.toContain("P4");
+    expect(offered).not.toContain("P5");
+  });
+
+  it("draws only that pasture's paddocks, and fits the map to them", async () => {
+    inPastures();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+
+    // North's three, and nothing of Creek's two. Fitting to all five is what
+    // made Green Pastures 46 postage stamps.
+    expect([...svg().querySelectorAll("path.pm-unit-hit")]).toHaveLength(3);
+    expect(svg().querySelectorAll("text.pm-label")).toHaveLength(3);
+  });
+
+  it("moves to another pasture and offers its paddocks instead", async () => {
+    inPastures();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    fireEvent.click(pastureChip("Creek Pasture"));
+
+    expect(pastureChip("Creek Pasture").getAttribute("aria-pressed")).toBe("true");
+    expect(onward("P4")).toBeTruthy();
+    expect([...document.querySelectorAll("button.grz-preset")].map((b) => b.textContent)).not.toContain("P2");
+  });
+
+  it("drops the destination when the pasture changes", async () => {
+    // A paddock chosen in North is not a destination in Creek, and leaving it
+    // set would draw one pasture with the wire on ground outside it.
+    inPastures();
+    weighEveryone();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+
+    fireEvent.click(onward("P3"));
+    expect(screen.getByText(/is in/).textContent).toMatch(/moving on to Paddock 3/);
+
+    fireEvent.click(pastureChip("Creek Pasture"));
+    expect(screen.getByText(/is in/).textContent).not.toMatch(/moving on/);
+  });
+
+  it("follows the paddock back when one is picked in another pasture", async () => {
+    // Picking a paddock settles the pasture, so the two can never disagree.
+    inPastures();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+
+    fireEvent.click(pastureChip("Creek Pasture"));
+    fireEvent.click(onward("P5"));
+    expect(pastureChip("Creek Pasture").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText(/is in/).textContent).toMatch(/moving on to Paddock 5/);
+  });
+
+  it("says how much ground each pasture holds", async () => {
+    inPastures();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    expect(pastureChip("North Pasture").textContent).toMatch(/3 paddocks · \d+ ac/);
+    expect(pastureChip("Creek Pasture").textContent).toMatch(/2 paddocks · \d+ ac/);
+  });
+
+  it("goes back to the mob's own pasture when the mob changes", async () => {
+    inPastures();
+    groups = [mob("a", "Main mob"), mob("b", "Yearlings")];
+    events.push(
+      { ...strip("s1", "p1", 0, 0.2, null), groupId: "a", enteredAt: "2026-08-09T06:00:00.000Z" },
+      { ...strip("s2", "p4", 0, 0.2, null), groupId: "b", enteredAt: "2026-08-12T06:00:00.000Z" },
+    );
+    await mount();
+
+    // Main mob stands in North. Wander to Creek, then switch mob.
+    fireEvent.click(pastureChip("Creek Pasture"));
+    const yearlings = [...document.querySelectorAll("button.mv-mob")].find((b) =>
+      b.textContent?.startsWith("Yearlings"),
+    )!;
+    fireEvent.click(yearlings);
+
+    // Yearlings are in P4, which is Creek — and that is where the page is,
+    // because the mob decided it rather than the leftover override.
+    expect(screen.getByText(/is in/).textContent).toMatch(/Yearlings is in Paddock 4/);
+    expect(pastureChip("Creek Pasture").getAttribute("aria-pressed")).toBe("true");
   });
 });

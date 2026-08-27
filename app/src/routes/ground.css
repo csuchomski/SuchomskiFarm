@@ -8,6 +8,61 @@
   margin: 16px 0 20px;
 }
 
+/* ── a property, and the pastures on it ────────────────────────────────
+   The band only appears on a farm that has named more than a block of
+   ground. Its rule is doubled and its name is set larger than a pasture's,
+   because the one thing a reader must never do is mistake which level a
+   heading is at when both are on the page. */
+
+.gnd-property {
+  margin-top: 34px;
+  /* The pastures inside are inset, so the band reads as containing them
+     rather than sitting beside them. Small on a phone, where 16px of the
+     screen is a lot to give up. */
+  --gnd-inset: 8px;
+}
+
+.gnd-property__head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  border-top: 3px double var(--ink);
+  padding: 12px 0 10px;
+}
+
+.gnd-property__name {
+  font-size: 27px;
+  font-weight: 400;
+  margin: 0;
+  line-height: 1.15;
+}
+
+.gnd-property__sub {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin: 4px 0 0;
+}
+
+.gnd-property > .gnd-pasture,
+.gnd-property > .gnd-quiet {
+  margin-left: var(--gnd-inset);
+}
+
+@media (min-width: 720px) {
+  .gnd-property { --gnd-inset: 20px; }
+}
+
+/* The pastures nobody has placed, once places exist. Plain, because it is
+   not a place — it is the absence of one. */
+.gnd-unplaced {
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--ink-muted);
+  margin: 34px 0 0;
+}
+
 .gnd-pasture {
   margin-top: 28px;
 }

@@ -42,6 +42,7 @@ const pasture = (id: string, name: string): Pasture => ({
   acres: null,
   notes: null,
   active: true,
+  propertyId: null,
   boundary: null,
 });
 

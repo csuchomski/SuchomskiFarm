@@ -40,7 +40,7 @@ vi.mock("../../lib/grazing", async (importOriginal) => {
 });
 
 const pastures: Pasture[] = [
-  { id: "home", name: "Home place", code: null, acres: 62.5, notes: null, active: true, boundary: null },
+  { id: "home", name: "Home place", code: null, acres: 62.5, notes: null, active: true, propertyId: null, boundary: null },
 ];
 
 const onImported = vi.fn();

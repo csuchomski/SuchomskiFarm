@@ -45,6 +45,31 @@ export type PaddockUnitType = "permanent" | "temporary" | "virtual";
  * paddocks' acres — that sum is what is fenced and grazable, and the
  * difference between the two is the lane, the woods and the pond.
  */
+/** Owned, leased, or grazed on somebody else's say-so. */
+export type Tenure = "owned" | "leased" | "shared" | "other";
+
+/**
+ * A deeded or leased place. The home farm, the Vollmer, the Miller lease.
+ *
+ * The level above the pasture, added in 064 for farms whose ground is spread
+ * across a county. A farm that never adds one never sees the level — every
+ * pasture on file predates properties and carries a null `propertyId`.
+ */
+export interface Property {
+  id: string;
+  name: string;
+  code: string | null;
+  /** What the deed or the lease says, which is not the sum of its pastures'
+   *  fenced acres. Both are worth keeping. */
+  acres: number | null;
+  tenure: Tenure;
+  /** Only ever set on leased or shared ground; the server nulls it out when
+   *  a place moves back to owned. */
+  leaseEnds: string | null;
+  notes: string | null;
+  active: boolean;
+}
+
 export interface Pasture {
   id: string;
   name: string;
@@ -52,6 +77,9 @@ export interface Pasture {
   acres: number | null;
   notes: string | null;
   active: boolean;
+  /** Which place this ground is on. Null on every pasture that predates
+   *  properties, and on farms that never use them. */
+  propertyId: string | null;
   /** GeoJSON as stored, unparsed. Written by the KML import (053), never by
    *  the edit form — see the migration for why they are kept apart. */
   boundary: unknown | null;
@@ -612,7 +640,7 @@ export async function fetchPaddocks(farmId: string): Promise<Paddock[]> {
 export async function fetchPastures(farmId: string): Promise<Pasture[]> {
   const { data, error } = await herdSchema()
     .from("pastures")
-    .select("id, name, code, acres, notes, active, boundary")
+    .select("id, name, code, acres, notes, active, property_id, boundary")
     .eq("farm_id", farmId)
     .is("deleted_at", null)
     .order("name");
@@ -625,7 +653,29 @@ export async function fetchPastures(farmId: string): Promise<Pasture[]> {
     acres: num(r.acres),
     notes: (r.notes as string) ?? null,
     active: Boolean(r.active),
+    propertyId: (r.property_id as string) ?? null,
     boundary: r.boundary ?? null,
+  }));
+}
+
+export async function fetchProperties(farmId: string): Promise<Property[]> {
+  const { data, error } = await herdSchema()
+    .from("properties")
+    .select("id, name, code, acres, tenure, lease_ends, notes, active")
+    .eq("farm_id", farmId)
+    .is("deleted_at", null)
+    .order("name");
+  if (error) throw new Error(`herd.properties: ${error.message}`);
+
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    name: r.name as string,
+    code: (r.code as string) ?? null,
+    acres: num(r.acres),
+    tenure: (r.tenure as Tenure) ?? "owned",
+    leaseEnds: (r.lease_ends as string) ?? null,
+    notes: (r.notes as string) ?? null,
+    active: Boolean(r.active),
   }));
 }
 
@@ -1312,12 +1362,50 @@ export async function deleteMove(farmId: string, eventId: string): Promise<void>
 // belongs to, that a name is not already taken, and above all that ground the
 // herd has been on is retired rather than removed.
 
+export interface PropertyEdit {
+  name: string;
+  code: string | null;
+  acres: number | null;
+  tenure: Tenure;
+  leaseEnds: string | null;
+  notes: string | null;
+  active: boolean;
+}
+
+/** Add one when `id` is null, change it when it isn't. Returns its id. */
+export async function saveProperty(
+  farmId: string,
+  id: string | null,
+  edit: PropertyEdit,
+): Promise<string> {
+  const { data, error } = await herdSchema().rpc("save_property", {
+    p_farm_id: farmId,
+    p_id: id,
+    p_name: edit.name,
+    p_code: edit.code,
+    p_acres: edit.acres,
+    p_tenure: edit.tenure,
+    p_lease_ends: edit.leaseEnds,
+    p_notes: edit.notes,
+    p_active: edit.active,
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+/** Refuses while it still holds pastures, and says how many. */
+export async function deleteProperty(farmId: string, id: string): Promise<void> {
+  const { error } = await herdSchema().rpc("delete_property", { p_farm_id: farmId, p_id: id });
+  if (error) throw new Error(error.message);
+}
+
 export interface PastureEdit {
   name: string;
   code: string | null;
   acres: number | null;
   notes: string | null;
   active: boolean;
+  propertyId: string | null;
 }
 
 /** Add one when `id` is null, change it when it isn't. Returns its id. */
@@ -1334,6 +1422,7 @@ export async function savePasture(
     p_acres: edit.acres,
     p_notes: edit.notes,
     p_active: edit.active,
+    p_property_id: edit.propertyId,
   });
   if (error) throw new Error(error.message);
   return data as string;

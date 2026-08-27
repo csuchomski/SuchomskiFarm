@@ -72,7 +72,7 @@ const mob = (id: string, name: string, active = true) => ({
 });
 
 const pasture = (id: string, name: string) => ({
-  id, name, code: id.toUpperCase(), acres: null, notes: null, active: true, boundary: null,
+  id, name, code: id.toUpperCase(), acres: null, notes: null, active: true, propertyId: null, boundary: null,
 });
 
 let groups = [mob("mob", "Main mob")];

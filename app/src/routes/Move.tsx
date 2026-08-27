@@ -6,6 +6,7 @@ import { DaysOfFeedWorking } from "../components/herd/DaysOfFeedWorking";
 import { useWorkspace } from "../lib/workspace";
 import {
   assumptionsFor,
+  boardRows,
   DEFAULT_UTILIZATION_PCT,
   drawnSliceAcres,
   fetchActivePlan,
@@ -16,13 +17,20 @@ import {
   fetchGroupMembers,
   fetchLatestWeights,
   fetchPaddocks,
+  fetchPastures,
   fetchPlanPaddockTargets,
+  fetchProperties,
   grazeDownTo,
   groupHeadCount,
   inRotation,
   isSwept,
   logMove,
+  mobRoster,
   mobWeight,
+  paddocksInPasture,
+  pasturesInProperty,
+  pasturesInUse,
+  propertiesInUse,
   openingWire,
   planStrip,
   readinessDays,
@@ -33,6 +41,7 @@ import {
   sweepToForWidthFt,
   widthForHours,
   FT_PER_YD,
+  type BoardRow,
   type ForageAssumptions,
   type ForageAvailability,
   type ForageRemoval,
@@ -41,7 +50,9 @@ import {
   type GrazingGroupMember,
   type GrazingPlan,
   type Paddock,
+  type Pasture,
   type PlanPaddockTarget,
+  type Property,
 } from "../lib/grazing";
 import {
   asPolygonRing,
@@ -103,6 +114,8 @@ type Load =
       removals: ForageRemoval[];
       availability: ForageAvailability[];
       groups: GrazingGroup[];
+      properties: Property[];
+      pastures: Pasture[];
       members: GrazingGroupMember[];
       weights: Map<string, number>;
       targets: PlanPaddockTarget[];
@@ -118,6 +131,34 @@ const FALLBACK: ForageAssumptions = {
   utilizationPct: DEFAULT_UTILIZATION_PCT,
   intakePctBodyweight: 3,
 };
+
+/**
+ * How long a mob has stood where it is.
+ *
+ * No colour on it, deliberately. Marking one "overdue" would need a figure
+ * for how long a mob may stay in a paddock, and the schema holds no such
+ * thing — recovery targets are about how long ground rests once they leave,
+ * which is a different question. The row is sorted longest-first, so the
+ * order carries the signal without inventing a threshold to colour against.
+ */
+function daysInWords(days: number | null): string {
+  if (days === null) return "";
+  if (days === 0) return "in today";
+  return days === 1 ? "1 day in" : `${days} days in`;
+}
+
+/**
+ * How long a candidate has been sitting.
+ *
+ * "Never grazed" rather than a dash, because on a farm that has just added
+ * ground the difference between "no record" and "no rest" is the whole
+ * decision.
+ */
+function restWords(r: BoardRow): string {
+  if (r.rest.state === "occupied") return "occupied";
+  if (r.rest.state === "never") return "never grazed";
+  return `${r.rest.days}d`;
+}
 
 const nowIso = () => new Date().toISOString();
 const today = () => new Date().toISOString().slice(0, 10);
@@ -141,6 +182,21 @@ export default function Move() {
 
   /** Null means "wherever they are". Set only when moving on or skipping. */
   const [destId, setDestId] = useState<string | null>(null);
+  /** A pasture picked deliberately, rather than the one the mob is standing
+   *  in. Cleared the moment a paddock is chosen, because the paddock says
+   *  which pasture it is in. */
+  const [pastureOverride, setPastureOverride] = useState<string | null>(null);
+  /** A place picked deliberately, on the same terms as the pasture: cleared
+   *  the moment a pasture or a paddock is chosen, because those say which
+   *  place they are on. */
+  const [propertyOverride, setPropertyOverride] = useState<string | null>(null);
+  /** Whether the ranked list of somewhere-else is open. */
+  const [elsewhere, setElsewhere] = useState(false);
+  /** Which segment of the locator bar has its siblings showing, if any. */
+  const [locatorOn, setLocatorOn] = useState<"property" | "pasture" | null>(null);
+  /** Which mob is being moved. Null until one is picked, which resolves to
+   *  whichever the roster puts first — the one standing longest. */
+  const [groupId, setGroupId] = useState<string | null>(null);
   const [wireTo, setWireTo] = useState<number | null>(null);
   const [backOverride, setBackOverride] = useState<number | null>(null);
   const [movingBack, setMovingBack] = useState(false);
@@ -174,9 +230,11 @@ export default function Move() {
       setLoad({ state: "error", message: "No farm on this business." });
       return;
     }
-    const [paddocks, events, removals, availability, groups, members, weights, plan] =
+    const [paddocks, properties, pastures, events, removals, availability, groups, members, weights, plan] =
       await Promise.all([
         fetchPaddocks(farmId),
+        fetchProperties(farmId),
+        fetchPastures(farmId),
         fetchGrazingEvents(farmId),
         fetchForageRemovals(farmId),
         fetchForageAvailability(farmId),
@@ -186,7 +244,7 @@ export default function Move() {
         fetchActivePlan(farmId),
       ]);
     const targets = plan ? await fetchPlanPaddockTargets(plan.id) : [];
-    setLoad({ state: "ok", paddocks, events, removals, availability, groups, members, weights, targets, plan });
+    setLoad({ state: "ok", paddocks, properties, pastures, events, removals, availability, groups, members, weights, targets, plan });
   }, [farmId]);
 
   useEffect(() => {
@@ -198,18 +256,142 @@ export default function Move() {
 
   const [unitPx, measureSvg] = useMapScale();
 
-  const group = load.state === "ok" ? (load.groups[0] ?? null) : null;
+  /**
+   * Every mob and where it stands, longest-standing first.
+   *
+   * This used to be `load.groups[0]`, which on a farm with four mobs left
+   * three of them with no route to this page at all.
+   */
+  const roster = useMemo(
+    () =>
+      load.state === "ok"
+        ? mobRoster({ groups: load.groups, paddocks: load.paddocks, events: load.events, nowIso: nowIso() })
+        : [],
+    [load],
+  );
+
+  // The picked mob, or the one the roster puts first. Falling back by
+  // position rather than holding a default in state keeps the two in step
+  // when a mob is moved and the order changes underneath.
+  const group: GrazingGroup | null =
+    (groupId === null ? undefined : roster.find((r) => r.group.id === groupId)?.group) ??
+    roster[0]?.group ??
+    null;
 
   const standing = useMemo(() => {
     if (load.state !== "ok" || group === null) return null;
     return standingOf({ groupId: group.id, paddocks: load.paddocks, events: load.events });
   }, [load, group]);
 
-  const units = load.state === "ok" ? inRotation(load.paddocks) : [];
+  /** Every paddock on the farm, in rotation order. Destinations resolve
+   *  against this, so a paddock in another pasture is still reachable. */
+  const allUnits = load.state === "ok" ? inRotation(load.paddocks) : [];
 
-  // Where they are, unless they are being moved on.
-  const dest: Paddock | null =
-    destId !== null ? (units.find((p) => p.id === destId) ?? null) : (standing?.paddock ?? null);
+  /**
+   * Where they are, unless they are being moved on.
+   *
+   * The one case that is neither: a pasture has been picked deliberately and
+   * the mob is standing somewhere else. Falling back to where they stand then
+   * would put a paddock from North Pasture at the end of a bar that says
+   * Creek — and would leave the wire, the strip figures and the Log button
+   * all working on ground the map is not drawing. Nothing is chosen yet, and
+   * the page says so.
+   */
+  const dest: Paddock | null = (() => {
+    if (destId !== null) return allUnits.find((p) => p.id === destId) ?? null;
+    const at = standing?.paddock ?? null;
+    if (at === null) return null;
+    return pastureOverride !== null && at.pastureId !== pastureOverride ? null : at;
+  })();
+
+  /**
+   * The pasture being worked in.
+   *
+   * The paddock decides it — a mob standing in North Pasture is working in
+   * North Pasture — and the override only matters between picking another
+   * pasture and picking a paddock inside it.
+   */
+  const pastureId: string | null = pastureOverride ?? dest?.pastureId ?? null;
+
+  /** Which place a pasture is on, for the segment above it. */
+  const placeOf = (id: string | null): string | null =>
+    id === null || load.state !== "ok"
+      ? null
+      : (load.pastures.find((p) => p.id === id)?.propertyId ?? null);
+
+  /**
+   * The place being worked on.
+   *
+   * The pasture decides it, the same way the paddock decides the pasture.
+   * `goToProperty` sets both at once — landing on a place with no pasture
+   * resolved would leave the map drawing the whole farm.
+   */
+  const propertyId: string | null = propertyOverride ?? placeOf(pastureId);
+
+  /** The places with ground on them. Empty on a farm that uses none, which
+   *  is what tells the bar not to render that segment. */
+  const places = useMemo(
+    () =>
+      load.state === "ok"
+        ? propertiesInUse(load.paddocks.filter((p) => p.active), load.pastures, load.properties)
+        : [],
+    [load],
+  );
+
+  /** The pastures with ground in them, narrowed to the place being worked
+   *  on, in the order the farm is walked. */
+  const pastures = useMemo(
+    () =>
+      load.state === "ok"
+        ? pasturesInUse(
+            load.paddocks.filter((p) => p.active),
+            pasturesInProperty(load.pastures, propertyId),
+          )
+        : [],
+    [load, propertyId],
+  );
+
+  /**
+   * What the map draws and the picker offers.
+   *
+   * On a farm that uses pastures this is one pasture's worth; on a farm that
+   * does not, `paddocksInPasture` hands back everything and the page reads
+   * exactly as it did before.
+   */
+  const units = paddocksInPasture(allUnits, pastureId);
+
+  /** The pasture and the place the bar is standing in, when they are ones
+   *  the farm uses. */
+  const here = pastures.find((p) => p.pasture.id === pastureId) ?? null;
+  const herePlace = places.find((p) => p.property.id === propertyId) ?? null;
+
+  /**
+   * Where else they could go, best-rested first.
+   *
+   * Straight from `boardRows`, which is what the grazing board draws — so the
+   * two cannot rank the same ground differently. It already sorts
+   * longest-rested first, puts occupied units last, and compares rest against
+   * the plan's recovery figure for the season the farm is actually in.
+   *
+   * Which paddock to move to is a recovery decision, and a row of codes in
+   * rotation order makes you hold the rest days in your head. At eight
+   * paddocks that is a nuisance; the point of ranking is that it is the same
+   * gesture at eight as at forty-six.
+   */
+  const candidates = useMemo(() => {
+    if (load.state !== "ok") return [];
+    return boardRows({
+      paddocks: units,
+      events: load.events,
+      groups: load.groups,
+      targets: load.targets,
+      removals: load.removals,
+      nowIso: nowIso(),
+    }).filter((r) => r.paddock.id !== dest?.id);
+    // `units` is derived fresh each render; `load` and `pastureId` are what
+    // actually move it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load, pastureId, dest]);
 
   const movingOn = dest !== null && dest.id !== standing?.paddock?.id;
 
@@ -374,6 +556,51 @@ export default function Move() {
     setWidthDraft(null);
   };
 
+  /**
+   * Work in another pasture.
+   *
+   * The destination goes with it: a paddock chosen in North Pasture is not a
+   * destination in Creek Pasture, and leaving it set would draw a map of one
+   * pasture with the wire on ground outside it.
+   */
+  /**
+   * Work on another place.
+   *
+   * Its first pasture comes with it. A place picked with no pasture resolved
+   * would leave `pastureId` null, and the map would fit the whole farm —
+   * which is the crowding this level exists to undo.
+   */
+  const goToProperty = (id: string) => {
+    setPropertyOverride(id);
+    const first =
+      load.state === "ok"
+        ? (pasturesInUse(
+            load.paddocks.filter((p) => p.active),
+            pasturesInProperty(load.pastures, id),
+          )[0]?.pasture.id ?? null)
+        : null;
+    setPastureOverride(first);
+    setElsewhere(false);
+    setLocatorOn(null);
+    setDestId(null);
+    setBackOverride(null);
+    clearWire();
+    setMovingBack(false);
+    setError(null);
+  };
+
+  const goToPasture = (id: string) => {
+    setPropertyOverride(null);
+    setPastureOverride(id);
+    setElsewhere(false);
+    setLocatorOn(null);
+    setDestId(null);
+    setBackOverride(null);
+    clearWire();
+    setMovingBack(false);
+    setError(null);
+  };
+
   /** Back to the opening wire the page works out for itself. */
   const clearWire = () => {
     setWireTo(null);
@@ -414,13 +641,29 @@ export default function Move() {
 
   // ── the drawing ─────────────────────────────────────────────────────
 
+  /**
+   * The drawing.
+   *
+   * Fitted to the pasture being worked in, not to the farm. Green Pastures
+   * is 1,579 acres; fitting to all of it drew 46 shapes the size of postage
+   * stamps and made the wire unusable.
+   *
+   * The design called for the rest of the farm drawn faint around the edge,
+   * for orientation. It is not here, because it could not be seen: the
+   * viewBox is fitted to the pasture with 14px of padding, and on the seeded
+   * farm the next pasture's block starts 2,600ft beyond that — so every one
+   * of those outlines rendered outside the frame and was clipped. Widening
+   * the fit to catch them would undo the zoom that is the whole point. The
+   * pasture row above the map says which ground is next door, in words.
+   */
   const drawn = useMemo(() => {
     if (load.state !== "ok") return null;
-    const withRings = units
+    const here = units
       .map((p) => ({ paddock: p, ring: asPolygonRing(p.boundary) }))
       .filter((u): u is { paddock: Paddock; ring: LonLat[] } => u.ring !== null);
-    const projection = fitPasture(withRings.map((u) => u.ring), { width: WIDTH, padding: 14 });
-    return projection === null ? null : { units: withRings, projection };
+
+    const projection = fitPasture(here.map((u) => u.ring), { width: WIDTH, padding: 14 });
+    return projection === null ? null : { units: here, projection };
   }, [load, units]);
 
   const destRing: Local[] | null =
@@ -456,7 +699,37 @@ export default function Move() {
     }
   };
 
+  /**
+   * Switch to another mob.
+   *
+   * Everything the form is holding belongs to the mob that was selected — the
+   * destination, the back line, the wire, the heights. Carrying any of it
+   * across would place this mob's wire using the last one's figures.
+   */
+  const goToMob = (id: string) => {
+    setGroupId(id);
+    setPropertyOverride(null);
+    setPastureOverride(null);
+    setElsewhere(false);
+    setLocatorOn(null);
+    setDestId(null);
+    setBackOverride(null);
+    clearWire();
+    setMovingBack(false);
+    setHeight("");
+    setGrazeTo("");
+    setAteTo("");
+    setError(null);
+  };
+
   const goTo = (paddock: Paddock | null) => {
+    // The paddock says which pasture it is in, and the pasture says which
+    // place — so both deliberate choices have done their job the moment a
+    // paddock is picked.
+    setPropertyOverride(null);
+    setPastureOverride(null);
+    setElsewhere(false);
+    setLocatorOn(null);
     setDestId(paddock?.id ?? null);
     setBackOverride(null);
     clearWire();
@@ -579,6 +852,135 @@ export default function Move() {
 
       {load.state === "ok" && group !== null && (
         <>
+          {/* Which mob, when there is more than one.
+              Longest-standing first, because the question at the gate is not
+              which mobs exist but which one has been in the same paddock
+              longest. A single-mob farm sees nothing here at all. */}
+          {roster.length > 1 && (
+            <div className="mv-mobs" role="group" aria-label="Which mob">
+              {roster.map((r) => {
+                const on = r.group.id === group.id;
+                return (
+                  <button
+                    key={r.group.id}
+                    type="button"
+                    className={`mv-mob${on ? " mv-mob--on" : ""}`}
+                    aria-pressed={on}
+                    onClick={() => goToMob(r.group.id)}
+                  >
+                    {r.group.name}
+                    <span className="mv-mob__where">
+                      {r.paddock === null ? (
+                        "not on pasture"
+                      ) : (
+                        <>
+                          {r.paddock.code ?? r.paddock.name} · {daysInWords(r.daysIn)}
+                        </>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/*
+            Where on the farm — one line, however deep the ground goes.
+
+            Green Pastures runs pastures inside farms and paddocks inside
+            those. A chip row per level would stack three rows above the map
+            and push the map, which is the thing you came here to touch, off
+            the bottom of a phone. A breadcrumb is one line at any depth, and
+            a segment opens its siblings underneath rather than beside.
+
+            Levels holding one thing get no segment, so a farm with a single
+            pasture sees no bar at all and the page reads exactly as it did,
+            and a farm that has never named a property never grows the place
+            segment.
+
+            The paddock is the end of the crumb and is not a picker. Which
+            paddock to graze is a recovery decision, and it is made against
+            rest days and acres — which is the "Elsewhere" list further down,
+            and the map. A third way in would be a third way to get it wrong.
+          */}
+          {(places.length > 1 || pastures.length > 1) && (
+            <nav className="mv-locator" aria-label="Where on the farm">
+              {places.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    className={`mv-loc__seg${locatorOn === "property" ? " mv-loc__seg--open" : ""}`}
+                    aria-expanded={locatorOn === "property"}
+                    onClick={() => setLocatorOn(locatorOn === "property" ? null : "property")}
+                  >
+                    {herePlace?.property.name ?? "All ground"}
+                    <span className="mv-loc__caret" aria-hidden="true">▾</span>
+                  </button>
+                  <span className="mv-loc__sep" aria-hidden="true">▸</span>
+                </>
+              )}
+              {pastures.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    className={`mv-loc__seg${locatorOn === "pasture" ? " mv-loc__seg--open" : ""}`}
+                    aria-expanded={locatorOn === "pasture"}
+                    onClick={() => setLocatorOn(locatorOn === "pasture" ? null : "pasture")}
+                  >
+                    {here?.pasture.name ?? "All ground"}
+                    <span className="mv-loc__caret" aria-hidden="true">▾</span>
+                  </button>
+                  <span className="mv-loc__sep" aria-hidden="true">▸</span>
+                </>
+              )}
+              <span className="mv-loc__here">{dest?.name ?? "no paddock yet"}</span>
+            </nav>
+          )}
+
+          {locatorOn === "property" && (
+            <div className="mv-loc__panel" role="group" aria-label="Which property">
+              {places.map(({ property, pastures: n, acres }) => {
+                const on = property.id === propertyId;
+                return (
+                  <button
+                    key={property.id}
+                    type="button"
+                    className={`mv-loc__opt${on ? " mv-loc__opt--on" : ""}`}
+                    aria-pressed={on}
+                    onClick={() => goToProperty(property.id)}
+                  >
+                    <span className="mv-loc__optname">{property.name}</span>
+                    <span className="mv-loc__optnote">
+                      {n} pasture{n === 1 ? "" : "s"} · {Math.round(acres)} ac
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {locatorOn === "pasture" && (
+            <div className="mv-loc__panel" role="group" aria-label="Which pasture">
+              {pastures.map(({ pasture, paddocks: n, acres }) => {
+                const on = pasture.id === pastureId;
+                return (
+                  <button
+                    key={pasture.id}
+                    type="button"
+                    className={`mv-loc__opt${on ? " mv-loc__opt--on" : ""}`}
+                    aria-pressed={on}
+                    onClick={() => goToPasture(pasture.id)}
+                  >
+                    <span className="mv-loc__optname">{pasture.name}</span>
+                    <span className="mv-loc__optnote">
+                      {n} paddock{n === 1 ? "" : "s"} · {Math.round(acres)} ac
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <p className="mv-where">
             {standing?.paddock ? (
               <>
@@ -1030,17 +1432,68 @@ export default function Move() {
                 On to {standing.next.name}
               </button>
             )}
-            {units
-              .filter((p) => p.id !== dest?.id && p.id !== standing?.next?.id)
-              .map((p) => (
-                <button key={p.id} type="button" className="grz-preset" onClick={() => goTo(p)}>
-                  {p.code ?? p.name}
-                </button>
-              ))}
+            {candidates.length > 0 && (
+              <button
+                type="button"
+                className={`grz-preset ${elsewhere ? "grz-preset--on" : ""}`}
+                aria-expanded={elsewhere}
+                onClick={() => setElsewhere(!elsewhere)}
+              >
+                {elsewhere ? "Close the list" : "Elsewhere…"}
+              </button>
+            )}
             {dest !== null && standing?.paddock && dest.id !== standing.paddock.id && (
               <button type="button" className="grz-preset" onClick={() => goTo(null)}>
                 Stay in {standing.paddock.name}
               </button>
+            )}
+
+            {/* Longest-rested first, which is the order the grazing board
+                draws — same function, so the two cannot disagree about which
+                ground is ready. */}
+            {elsewhere && (
+              <div className="mv-elsewhere">
+                <p className="mv-elsewhere__lead">Longest rested first.</p>
+                <div className="mv-elsewhere__head" aria-hidden="true">
+                  <span>Paddock</span>
+                  <span>Rested</span>
+                  <span className="text-right">Acres</span>
+                  <span className="text-right hide-sm">Last grazed</span>
+                </div>
+                {candidates.map((r) => (
+                  <button
+                    key={r.paddock.id}
+                    type="button"
+                    className="mv-cand"
+                    onClick={() => goTo(r.paddock)}
+                  >
+                    <span className="mv-cand__name">
+                      {r.paddock.name}
+                      {r.occupant && (
+                        <span className="mv-cand__note">
+                          {" "}
+                          — {r.occupant.group?.name ?? "a mob"} in it
+                        </span>
+                      )}
+                    </span>
+                    <span className="mv-cand__rest mono">
+                      {restWords(r)}
+                      {r.eligible && !r.eligible.met && (
+                        <span className="grz-eligible grz-eligible--early">
+                          {" "}
+                          {r.eligible.shortBy}d short
+                        </span>
+                      )}
+                    </span>
+                    <span className="mv-cand__acres mono text-right">
+                      {r.paddock.acresGrazable ?? r.paddock.acresMeasured ?? "—"}
+                    </span>
+                    <span className="mv-cand__seen mono text-right hide-sm">
+                      {r.lastGrazed ? shortDate(r.lastGrazed) : "—"}
+                    </span>
+                  </button>
+                ))}
+              </div>
             )}
           </div>
 
@@ -1126,10 +1579,17 @@ function grazeWord(source: string): string {
   }
 }
 
+/**
+ * A date, however it arrived.
+ *
+ * A cutting is a plain date and a grazing is an instant, and both land here.
+ * Appending midnight to something that already carries a time gives
+ * "2026-08-05T12:00:00.000ZT00:00:00", which is an Invalid Date — and the
+ * page renders those words rather than failing.
+ */
 function shortDate(iso: string): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
-    year: "numeric", month: "short", day: "numeric",
-  });
+  const d = iso.length <= 10 ? new Date(`${iso}T00:00:00`) : new Date(iso);
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
 /**

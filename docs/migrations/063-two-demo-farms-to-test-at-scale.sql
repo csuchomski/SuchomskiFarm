@@ -86,7 +86,23 @@ declare
   v_dlat numeric;
   v_dlon numeric;
   v_heading numeric;
+  -- pastures
+  v_pasture uuid;
+  v_pastures uuid[];
+  v_pi int;
+  v_pj int;
+  v_pcols int;
+  v_prow int;
+  v_pcol int;
+  v_here int;
+  v_base int;
+  v_extra int;
+  v_plat0 numeric;
+  v_plon0 numeric;
   c_pitch_ft constant numeric := 2800;
+  -- The gap between one pasture's block and the next. Wide enough that the
+  -- blocks read as separate ground rather than as one grid with a seam.
+  c_pasture_gap_ft constant numeric := 2600;
   c_ft_per_deg_lat constant numeric := 364000;
 begin
   -- Same data every run, so a demo shown twice looks the same twice.
@@ -97,9 +113,9 @@ begin
       -- name, paddocks, acres each, animals, mobs, customers, orders,
       -- schedules, ledger rows, opening cash, purpose, and the point the
       -- paddock grid is laid out around.
-      ('Grassway Organics',   14, 27.0,  96, 2, 34, 210, 11, 280, 18400.00, 'dairy', 42.7869, -88.4006),
-      ('Green Pastures Farm', 46, 34.0, 340, 4, 58, 380, 17, 520, 41200.00, 'beef',  39.2800, -92.3500)
-    ) as t(name, n_paddocks, acres, n_animals, n_mobs, n_customers,
+      ('Grassway Organics',   14, 3, 27.0,  96, 2, 34, 210, 11, 280, 18400.00, 'dairy', 42.7869, -88.4006),
+      ('Green Pastures Farm', 46, 6, 34.0, 340, 4, 58, 380, 17, 520, 41200.00, 'beef',  39.2800, -92.3500)
+    ) as t(name, n_paddocks, n_pastures, acres, n_animals, n_mobs, n_customers,
            n_orders, n_schedules, n_ledger, opening_cash, purpose, lat, lon)
   loop
     if exists (select 1 from public.businesses where name = v_cfg.name) then
@@ -171,59 +187,109 @@ begin
     -- heading, and whatever depth makes the area come to `acres_measured`.
     -- Drawn acres and recorded acres are then the same number by
     -- construction rather than by luck.
-    v_cols := ceil(sqrt(v_cfg.n_paddocks::numeric));
+    -- Paddocks are laid out a pasture at a time, each pasture its own block
+    -- of ground with a gap around it. That is what makes a pasture legible
+    -- on the map: 46 paddocks in one even grid is a chessboard, and no part
+    -- of it tells you where one pasture stops.
+    v_base := v_cfg.n_paddocks / v_cfg.n_pastures;
+    v_extra := v_cfg.n_paddocks % v_cfg.n_pastures;
+    v_cols := ceil(sqrt((v_base + 1)::numeric));
+    v_pcols := ceil(sqrt(v_cfg.n_pastures::numeric));
+
     v_paddocks := array[]::uuid[];
-    for i in 1..v_cfg.n_paddocks loop
-      -- One draw, held in a variable. Calling random() twice made grazable
-      -- acres a different paddock's size from measured, and the constraint
-      -- that grazable never exceeds measured caught it.
-      v_acres := round((v_cfg.acres + (random() - 0.5) * 8)::numeric, 2);
-      v_heading := (array[0, 90, 180, 270])[1 + (i % 4)];
-      v_along := round((700 + random() * 400)::numeric, 0);
-      v_across := round((v_acres * 43560 / v_along)::numeric, 1);
+    v_pastures := array[]::uuid[];
+    i := 0;
 
-      -- A sweep east-west runs along longitude; north-south runs along
-      -- latitude. Getting this backwards would draw every strip across the
-      -- paddock instead of along it.
-      if v_heading in (90, 270) then
-        v_dlon := v_along / (c_ft_per_deg_lat * cosd(v_cfg.lat));
-        v_dlat := v_across / c_ft_per_deg_lat;
-      else
-        v_dlat := v_along / c_ft_per_deg_lat;
-        v_dlon := v_across / (c_ft_per_deg_lat * cosd(v_cfg.lat));
-      end if;
-
-      v_row := (i - 1) / v_cols;
-      v_col := (i - 1) % v_cols;
-      v_lat0 := v_cfg.lat + v_row * (c_pitch_ft / c_ft_per_deg_lat);
-      v_lon0 := v_cfg.lon + v_col * (c_pitch_ft / (c_ft_per_deg_lat * cosd(v_cfg.lat)));
-
-      insert into herd.paddocks (
-        farm_id, name, code, acres_measured, acres_grazable, unit_type,
-        sweep_heading_deg, sweep_length_ft, rotation_order, active, created_by,
-        boundary
-      ) values (
+    for v_pi in 1..v_cfg.n_pastures loop
+      insert into herd.pastures (farm_id, name, code, active, created_by)
+      values (
         v_farm,
-        'Paddock ' || i,
-        'P' || i,
-        v_acres,
-        round((v_acres - 1.2)::numeric, 2),
-        'permanent',
-        v_heading,
-        v_along,
-        i, true, v_owner,
-        jsonb_build_object(
-          'type', 'Polygon',
-          'coordinates', jsonb_build_array(jsonb_build_array(
-            jsonb_build_array(v_lon0,          v_lat0),
-            jsonb_build_array(v_lon0 + v_dlon, v_lat0),
-            jsonb_build_array(v_lon0 + v_dlon, v_lat0 + v_dlat),
-            jsonb_build_array(v_lon0,          v_lat0 + v_dlat),
-            jsonb_build_array(v_lon0,          v_lat0)
-          ))
-        )
-      ) returning id into v_pad;
-      v_paddocks := v_paddocks || v_pad;
+        case when v_cfg.purpose = 'dairy'
+          then (array['Home Pasture','Road Pasture','Back Pasture',
+                      'Lane Pasture','East Pasture','West Pasture'])[v_pi]
+          else (array['North Pasture','Creek Pasture','Ridge Pasture',
+                      'South Pasture','Timber Pasture','River Pasture'])[v_pi]
+        end,
+        'PA' || v_pi,
+        true, v_owner
+      ) returning id into v_pasture;
+      v_pastures := v_pastures || v_pasture;
+
+      -- The first `v_extra` pastures carry one paddock more, so the counts
+      -- add up exactly rather than leaving a remainder unplaced.
+      v_here := v_base + case when v_pi <= v_extra then 1 else 0 end;
+
+      -- Where this pasture's block starts.
+      v_prow := (v_pi - 1) / v_pcols;
+      v_pcol := (v_pi - 1) % v_pcols;
+      v_plat0 := v_cfg.lat
+        + v_prow * ((v_cols * c_pitch_ft + c_pasture_gap_ft) / c_ft_per_deg_lat);
+      v_plon0 := v_cfg.lon
+        + v_pcol * ((v_cols * c_pitch_ft + c_pasture_gap_ft) / (c_ft_per_deg_lat * cosd(v_cfg.lat)));
+
+      for v_pj in 1..v_here loop
+        i := i + 1;
+
+        -- One draw, held in a variable. Calling random() twice made grazable
+        -- acres a different paddock's size from measured, and the constraint
+        -- that grazable never exceeds measured caught it.
+        v_acres := round((v_cfg.acres + (random() - 0.5) * 8)::numeric, 2);
+        v_heading := (array[0, 90, 180, 270])[1 + (i % 4)];
+        v_along := round((700 + random() * 400)::numeric, 0);
+        v_across := round((v_acres * 43560 / v_along)::numeric, 1);
+
+        -- A sweep east-west runs along longitude; north-south runs along
+        -- latitude. Getting this backwards would draw every strip across the
+        -- paddock instead of along it.
+        if v_heading in (90, 270) then
+          v_dlon := v_along / (c_ft_per_deg_lat * cosd(v_cfg.lat));
+          v_dlat := v_across / c_ft_per_deg_lat;
+        else
+          v_dlat := v_along / c_ft_per_deg_lat;
+          v_dlon := v_across / (c_ft_per_deg_lat * cosd(v_cfg.lat));
+        end if;
+
+        v_row := (v_pj - 1) / v_cols;
+        v_col := (v_pj - 1) % v_cols;
+        v_lat0 := v_plat0 + v_row * (c_pitch_ft / c_ft_per_deg_lat);
+        v_lon0 := v_plon0 + v_col * (c_pitch_ft / (c_ft_per_deg_lat * cosd(v_cfg.lat)));
+
+        insert into herd.paddocks (
+          farm_id, pasture_id, name, code, acres_measured, acres_grazable, unit_type,
+          sweep_heading_deg, sweep_length_ft, rotation_order, active, created_by,
+          boundary
+        ) values (
+          v_farm, v_pasture,
+          'Paddock ' || i,
+          'P' || i,
+          v_acres,
+          round((v_acres - 1.2)::numeric, 2),
+          'permanent',
+          v_heading,
+          v_along,
+          i, true, v_owner,
+          jsonb_build_object(
+            'type', 'Polygon',
+            'coordinates', jsonb_build_array(jsonb_build_array(
+              jsonb_build_array(v_lon0,          v_lat0),
+              jsonb_build_array(v_lon0 + v_dlon, v_lat0),
+              jsonb_build_array(v_lon0 + v_dlon, v_lat0 + v_dlat),
+              jsonb_build_array(v_lon0,          v_lat0 + v_dlat),
+              jsonb_build_array(v_lon0,          v_lat0)
+            ))
+          )
+        ) returning id into v_pad;
+        v_paddocks := v_paddocks || v_pad;
+      end loop;
+
+      -- A pasture is worth what its paddocks are worth. Summed rather than
+      -- typed so the two can never disagree.
+      update herd.pastures
+         set acres = (
+           select round(sum(p.acres_measured), 2)
+             from herd.paddocks p where p.pasture_id = v_pasture and p.deleted_at is null
+         )
+       where id = v_pasture;
     end loop;
 
     -- ── the plan every other screen compares against ──────────────────

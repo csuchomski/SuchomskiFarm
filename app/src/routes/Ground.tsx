@@ -5,15 +5,20 @@ import { useWorkspace } from "../lib/workspace";
 import {
   deletePaddock,
   deletePasture,
+  deleteProperty,
   drawnSweepLengthFt,
   fetchPaddocks,
   fetchPastures,
+  fetchProperties,
   savePaddock,
   savePasture,
+  saveProperty,
   SWEEP_HEADINGS,
   type Paddock,
   type PaddockUnitType,
   type Pasture,
+  type Property,
+  type Tenure,
 } from "../lib/grazing";
 import "./grazing.css";
 import "./ground.css";
@@ -46,7 +51,7 @@ import "./ground.css";
 type Load =
   | { state: "loading" }
   | { state: "error"; message: string }
-  | { state: "ok"; pastures: Pasture[]; paddocks: Paddock[] };
+  | { state: "ok"; properties: Property[]; pastures: Pasture[]; paddocks: Paddock[] };
 
 const PADDOCK_COLS = "minmax(0, 1fr) 96px 140px 118px";
 const PADDOCK_COLS_SM = "minmax(0, 1fr) 96px";
@@ -89,8 +94,20 @@ const strip = (p: Paddock): string =>
     .filter(Boolean)
     .join(" · ");
 
+interface PropertyForm {
+  id: string | null;
+  name: string;
+  code: string;
+  acres: string;
+  tenure: Tenure;
+  leaseEnds: string;
+  notes: string;
+  active: boolean;
+}
+
 interface PastureForm {
   id: string | null;
+  propertyId: string;
   name: string;
   code: string;
   acres: string;
@@ -117,8 +134,12 @@ interface PaddockForm {
   active: boolean;
 }
 
-const blankPasture = (): PastureForm => ({
-  id: null, name: "", code: "", acres: "", notes: "", active: true,
+const blankProperty = (): PropertyForm => ({
+  id: null, name: "", code: "", acres: "", tenure: "owned", leaseEnds: "", notes: "", active: true,
+});
+
+const blankPasture = (propertyId: string): PastureForm => ({
+  id: null, propertyId, name: "", code: "", acres: "", notes: "", active: true,
 });
 
 const blankPaddock = (pastureId: string): PaddockForm => ({
@@ -130,6 +151,7 @@ const blankPaddock = (pastureId: string): PaddockForm => ({
 export default function Ground() {
   const { farmId, role } = useWorkspace();
   const [load, setLoad] = useState<Load>({ state: "loading" });
+  const [propertyForm, setPropertyForm] = useState<PropertyForm | null>(null);
   const [pastureForm, setPastureForm] = useState<PastureForm | null>(null);
   const [paddockForm, setPaddockForm] = useState<PaddockForm | null>(null);
   const [importing, setImporting] = useState(false);
@@ -147,8 +169,12 @@ export default function Ground() {
       setLoad({ state: "error", message: "No farm on this business." });
       return;
     }
-    const [pastures, paddocks] = await Promise.all([fetchPastures(farmId), fetchPaddocks(farmId)]);
-    setLoad({ state: "ok", pastures, paddocks });
+    const [properties, pastures, paddocks] = await Promise.all([
+      fetchProperties(farmId),
+      fetchPastures(farmId),
+      fetchPaddocks(farmId),
+    ]);
+    setLoad({ state: "ok", properties, pastures, paddocks });
   }, [farmId]);
 
   useEffect(() => {
@@ -158,8 +184,29 @@ export default function Ground() {
     );
   }, [refresh]);
 
+  const properties = load.state === "ok" ? load.properties : EMPTY_PROPERTIES;
   const pastures = load.state === "ok" ? load.pastures : EMPTY_PASTURES;
   const paddocks = load.state === "ok" ? load.paddocks : EMPTY_PADDOCKS;
+
+  /**
+   * The pastures on each place, and the ones nobody has placed.
+   *
+   * A farm that has never added a property has every pasture under the empty
+   * key, which is what lets the page render exactly as it did before 064: no
+   * property band, no picker, no extra level to read past.
+   */
+  const onPlace = useMemo(() => {
+    const by = new Map<string, Pasture[]>();
+    for (const p of pastures) {
+      const key = p.propertyId ?? "";
+      const list = by.get(key);
+      if (list) list.push(p);
+      else by.set(key, [p]);
+    }
+    return by;
+  }, [pastures]);
+
+  const unplaced = onPlace.get("") ?? EMPTY_PASTURES;
 
   const held = useMemo(() => {
     const by = new Map<string, Paddock[]>();
@@ -186,6 +233,7 @@ export default function Ground() {
       await what();
       await refresh();
       setNote(said);
+      setPropertyForm(null);
       setPastureForm(null);
       setPaddockForm(null);
       setConfirming(null);
@@ -194,6 +242,23 @@ export default function Ground() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const savePropertyForm = (form: PropertyForm) => {
+    if (!farmId) return;
+    void run(
+      () =>
+        saveProperty(farmId, form.id, {
+          name: form.name,
+          code: text(form.code),
+          acres: num(form.acres),
+          tenure: form.tenure,
+          leaseEnds: text(form.leaseEnds),
+          notes: text(form.notes),
+          active: form.active,
+        }),
+      form.id === null ? `${form.name.trim()} added.` : `${form.name.trim()} saved.`,
+    );
   };
 
   const savePastureForm = (form: PastureForm) => {
@@ -206,6 +271,7 @@ export default function Ground() {
           acres: num(form.acres),
           notes: text(form.notes),
           active: form.active,
+          propertyId: form.propertyId === "" ? null : form.propertyId,
         }),
       form.id === null ? `${form.name.trim()} added.` : `${form.name.trim()} saved.`,
     );
@@ -292,6 +358,25 @@ export default function Ground() {
       active: p.active,
     });
     setPastureForm(null);
+    setPropertyForm(null);
+    setError(null);
+    setNote(null);
+    setStuck(null);
+  };
+
+  const startEditProperty = (p: Property) => {
+    setPropertyForm({
+      id: p.id,
+      name: p.name,
+      code: p.code ?? "",
+      acres: p.acres === null ? "" : String(p.acres),
+      tenure: p.tenure,
+      leaseEnds: p.leaseEnds ?? "",
+      notes: p.notes ?? "",
+      active: p.active,
+    });
+    setPastureForm(null);
+    setPaddockForm(null);
     setError(null);
     setNote(null);
     setStuck(null);
@@ -300,16 +385,137 @@ export default function Ground() {
   const startEditPasture = (p: Pasture) => {
     setPastureForm({
       id: p.id,
+      propertyId: p.propertyId ?? "",
       name: p.name,
       code: p.code ?? "",
       acres: p.acres === null ? "" : String(p.acres),
       notes: p.notes ?? "",
       active: p.active,
     });
+    setPropertyForm(null);
     setPaddockForm(null);
     setError(null);
     setNote(null);
     setStuck(null);
+  };
+
+  /**
+   * One pasture and the paddocks on it.
+   *
+   * Pulled out of the list so it can be drawn under a property band as
+   * well as on its own. A farm with no properties renders every pasture
+   * through the same path it always did.
+   */
+  const renderPasture = (pasture: Pasture) => {
+          const mine = held.get(pasture.id) ?? EMPTY_PADDOCKS;
+          // Counted and totalled on the same basis. The acres have always
+          // been of the paddocks in use, so a count of every paddock ever
+          // put a "4 paddocks · 5.91 grazable" on the page where the 5.91
+          // was three of them.
+          const inUse = mine.filter((p) => p.active);
+          const retired = mine.length - inUse.length;
+          const fenced = inUse.reduce((sum, p) => sum + (p.acresGrazable ?? p.acresMeasured ?? 0), 0);
+          return (
+            <section key={pasture.id} className="gnd-pasture">
+              <div className="gnd-pasture__head">
+                <div style={{ minWidth: 0 }}>
+                  <h3 className="serif gnd-pasture__name">
+                    {pasture.name}
+                    {pasture.code && <span className="mono gnd-code"> {pasture.code}</span>}
+                    {!pasture.active && (
+                      <>
+                        {" "}
+                        <Pill>not in use</Pill>
+                      </>
+                    )}
+                  </h3>
+                  <p className="gnd-pasture__sub">
+                    {[
+                      pasture.acres === null ? null : `${pasture.acres} acres deeded`,
+                      `${inUse.length} paddock${inUse.length === 1 ? "" : "s"}`,
+                      fenced > 0 ? `${fenced.toFixed(2)} grazable` : null,
+                      retired > 0 ? `${retired} retired` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                  {pasture.notes && <p className="gnd-pasture__notes">{pasture.notes}</p>}
+                </div>
+                {!readOnly && (
+                  <div className="gnd-pasture__acts">
+                    {/* The visible word is short because the row is
+                        narrow; the accessible name says which thing it
+                        acts on, since a pasture and every paddock under it
+                        would otherwise all offer an unqualified "edit". */}
+                    <button
+                      type="button"
+                      className="link-button mono"
+                      aria-label={`edit ${pasture.name}`}
+                      onClick={() => startEditPasture(pasture)}
+                    >
+                      edit
+                    </button>
+                    <button
+                      type="button"
+                      className="link-button mono"
+                      aria-label={`add a paddock to ${pasture.name}`}
+                      onClick={() => {
+                        setPaddockForm(blankPaddock(pasture.id));
+                        setPastureForm(null);
+                      }}
+                    >
+                      add a paddock
+                    </button>
+                    {confirming === pasture.id ? (
+                      <>
+                        <button
+                          type="button"
+                          className="link-button mono gnd-danger"
+                          disabled={busy}
+                          aria-label={`really remove ${pasture.name}`}
+                          onClick={() =>
+                            void run(() => deletePasture(farmId!, pasture.id), `${pasture.name} removed.`)
+                          }
+                        >
+                          really remove
+                        </button>
+                        <button
+                          type="button"
+                          className="link-button mono"
+                          aria-label={`keep ${pasture.name}`}
+                          onClick={() => setConfirming(null)}
+                        >
+                          keep it
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className="link-button mono gnd-danger"
+                        aria-label={`remove ${pasture.name}`}
+                        onClick={() => setConfirming(pasture.id)}
+                      >
+                        remove
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <PaddockList
+                paddocks={mine}
+                readOnly={readOnly}
+                busy={busy}
+                stuck={stuck}
+                confirming={confirming}
+                onEdit={startEditPaddock}
+                onConfirm={setConfirming}
+                onRemove={removePaddock}
+                onRetire={retirePaddock}
+                empty="Nothing fenced on this pasture yet."
+              />
+            </section>
+          );
   };
 
   return (
@@ -324,6 +530,9 @@ export default function Ground() {
       {load.state === "ok" && (
         <>
           <div className="stat-row">
+            {/* Only where there is more than one place; on a one-block farm
+                the tile would read "1 property" forever. */}
+            {properties.length > 0 && <StatTile value={properties.length} label="Properties" />}
             <StatTile value={pastures.length || "—"} label="Pastures" />
             <StatTile value={paddocks.filter((p) => p.active).length || "—"} label="Paddocks in use" />
             <StatTile value={grazable > 0 ? grazable.toFixed(2) : "—"} label="Grazable acres" />
@@ -334,24 +543,33 @@ export default function Ground() {
 
           <div style={{ margin: "12px 0" }}>
             <Callout>
-              A <strong>pasture</strong> is a piece of land — the home place, the rented forty. A{" "}
-              <strong>paddock</strong> is a subdivision of one, and it is what a move is recorded against. Give a
-              paddock a strip heading and the Move page will offer a wire position across it; leave it off and the
-              paddock is grazed whole.
+              {properties.length > 0 && (
+                <>
+                  A <strong>property</strong> is a deeded or leased place.{" "}
+                </>
+              )}
+              A <strong>pasture</strong> is a piece of land{properties.length > 0 ? " on one" : " — the home place, the rented forty"},
+              walked as its own round. A <strong>paddock</strong> is a subdivision of a pasture, and it is what a
+              move is recorded against. Give a paddock a strip heading and the Move page will offer a wire position
+              across it; leave it off and the paddock is grazed whole.
             </Callout>
           </div>
 
-          {!readOnly && pastureForm === null && paddockForm === null && !importing && (
+          {!readOnly && propertyForm === null && pastureForm === null && paddockForm === null && !importing && (
             <div className="gnd-actions">
-              <Button variant="filled" onClick={() => setPastureForm(blankPasture())}>
+              <Button variant="filled" onClick={() => setPastureForm(blankPasture(properties[0]?.id ?? ""))}>
                 Add a pasture
               </Button>
               {pastures.length > 0 && (
                 <Button onClick={() => setPaddockForm(blankPaddock(pastures[0].id))}>Add a paddock</Button>
               )}
-              {/* Second, not first: typing one field beats reading a review
-                  screen when there is one field's worth of ground to add. It
-                  earns its place on a farm that already has the place drawn. */}
+              {/* Last of the three "add" buttons, because most farms never
+                  need it: a property is only worth naming once the ground is
+                  spread over more than one place. */}
+              <Button onClick={() => setPropertyForm(blankProperty())}>Add a property</Button>
+              {/* Typing one field beats reading a review screen when there is
+                  one field's worth of ground to add. It earns its place on a
+                  farm that already has the place drawn. */}
               <Button onClick={() => { setImporting(true); setError(null); setNote(null); }}>
                 Import from a KML
               </Button>
@@ -371,9 +589,20 @@ export default function Ground() {
             />
           )}
 
+          {propertyForm !== null && (
+            <PropertyEditor
+              form={propertyForm}
+              busy={busy}
+              onChange={setPropertyForm}
+              onSave={() => savePropertyForm(propertyForm)}
+              onCancel={() => setPropertyForm(null)}
+            />
+          )}
+
           {pastureForm !== null && (
             <PastureEditor
               form={pastureForm}
+              properties={properties}
               busy={busy}
               onChange={setPastureForm}
               onSave={() => savePastureForm(pastureForm)}
@@ -392,129 +621,43 @@ export default function Ground() {
             />
           )}
 
-          {pastures.length === 0 && unassigned.length === 0 && (
+          {properties.length === 0 && pastures.length === 0 && unassigned.length === 0 && (
             <p className="gnd-quiet">
               No ground on file yet. Add a pasture first — the piece of land — then the paddocks on it.
             </p>
           )}
 
-          {pastures.map((pasture) => {
-            const mine = held.get(pasture.id) ?? EMPTY_PADDOCKS;
-            // Counted and totalled on the same basis. The acres have always
-            // been of the paddocks in use, so a count of every paddock ever
-            // put a "4 paddocks · 5.91 grazable" on the page where the 5.91
-            // was three of them.
-            const inUse = mine.filter((p) => p.active);
-            const retired = mine.length - inUse.length;
-            const fenced = inUse.reduce((sum, p) => sum + (p.acresGrazable ?? p.acresMeasured ?? 0), 0);
-            return (
-              <section key={pasture.id} className="gnd-pasture">
-                <div className="gnd-pasture__head">
-                  <div style={{ minWidth: 0 }}>
-                    <h2 className="serif gnd-pasture__name">
-                      {pasture.name}
-                      {pasture.code && <span className="mono gnd-code"> {pasture.code}</span>}
-                      {!pasture.active && (
-                        <>
-                          {" "}
-                          <Pill>not in use</Pill>
-                        </>
-                      )}
-                    </h2>
-                    <p className="gnd-pasture__sub">
-                      {[
-                        pasture.acres === null ? null : `${pasture.acres} acres deeded`,
-                        `${inUse.length} paddock${inUse.length === 1 ? "" : "s"}`,
-                        fenced > 0 ? `${fenced.toFixed(2)} grazable` : null,
-                        retired > 0 ? `${retired} retired` : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                    {pasture.notes && <p className="gnd-pasture__notes">{pasture.notes}</p>}
-                  </div>
-                  {!readOnly && (
-                    <div className="gnd-pasture__acts">
-                      {/* The visible word is short because the row is
-                          narrow; the accessible name says which thing it
-                          acts on, since a pasture and every paddock under it
-                          would otherwise all offer an unqualified "edit". */}
-                      <button
-                        type="button"
-                        className="link-button mono"
-                        aria-label={`edit ${pasture.name}`}
-                        onClick={() => startEditPasture(pasture)}
-                      >
-                        edit
-                      </button>
-                      <button
-                        type="button"
-                        className="link-button mono"
-                        aria-label={`add a paddock to ${pasture.name}`}
-                        onClick={() => {
-                          setPaddockForm(blankPaddock(pasture.id));
-                          setPastureForm(null);
-                        }}
-                      >
-                        add a paddock
-                      </button>
-                      {confirming === pasture.id ? (
-                        <>
-                          <button
-                            type="button"
-                            className="link-button mono gnd-danger"
-                            disabled={busy}
-                            aria-label={`really remove ${pasture.name}`}
-                            onClick={() =>
-                              void run(() => deletePasture(farmId!, pasture.id), `${pasture.name} removed.`)
-                            }
-                          >
-                            really remove
-                          </button>
-                          <button
-                            type="button"
-                            className="link-button mono"
-                            aria-label={`keep ${pasture.name}`}
-                            onClick={() => setConfirming(null)}
-                          >
-                            keep it
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          className="link-button mono gnd-danger"
-                          aria-label={`remove ${pasture.name}`}
-                          onClick={() => setConfirming(pasture.id)}
-                        >
-                          remove
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
+          {properties.map((property) => (
+            <PropertyBand
+              key={property.id}
+              property={property}
+              pastures={onPlace.get(property.id) ?? EMPTY_PASTURES}
+              paddocks={paddocks}
+              readOnly={readOnly}
+              busy={busy}
+              confirming={confirming}
+              onEdit={() => startEditProperty(property)}
+              onConfirm={setConfirming}
+              onRemove={() => void run(() => deleteProperty(farmId!, property.id), `${property.name} removed.`)}
+              onAddPasture={() => { setPastureForm(blankPasture(property.id)); setPaddockForm(null); setPropertyForm(null); }}
+            >
+              {(onPlace.get(property.id) ?? EMPTY_PASTURES).map(renderPasture)}
+            </PropertyBand>
+          ))}
 
-                <PaddockList
-                  paddocks={mine}
-                  readOnly={readOnly}
-                  busy={busy}
-                  stuck={stuck}
-                  confirming={confirming}
-                  onEdit={startEditPaddock}
-                  onConfirm={setConfirming}
-                  onRemove={removePaddock}
-                  onRetire={retirePaddock}
-                  empty="Nothing fenced on this pasture yet."
-                />
-              </section>
-            );
-          })}
+          {/* Ground nobody has said which place it is on. On a farm that
+              uses no properties that is every pasture, and this is the
+              whole list, unbanded — which is the page as it was. */}
+          {properties.length > 0 && unplaced.length > 0 && (
+            <h2 className="serif gnd-unplaced">Not on a property yet</h2>
+          )}
+          {unplaced.map(renderPasture)}
 
           {unassigned.length > 0 && (
             <section className="gnd-pasture">
               <div className="gnd-pasture__head">
                 <div>
-                  <h2 className="serif gnd-pasture__name">Not on a pasture yet</h2>
+                  <h3 className="serif gnd-pasture__name">Not on a pasture yet</h3>
                   <p className="gnd-pasture__sub">
                     {unassigned.length} paddock{unassigned.length === 1 ? "" : "s"} recorded before pastures
                     existed. Edit one to say which piece of land it is on.
@@ -680,14 +823,237 @@ function PaddockList({
   );
 }
 
-function PastureEditor({
+/**
+ * A place, and the pastures on it.
+ *
+ * Drawn only when the farm has properties at all — a farm with one block of
+ * land should never read past a band that tells it nothing. The tenure and
+ * the lease end are on the band rather than buried in the editor, because
+ * "this comes back to the landlord in eighteen months" changes what you plant
+ * on it and there is nowhere else on the page that says so.
+ */
+function PropertyBand({
+  property,
+  pastures,
+  paddocks,
+  readOnly,
+  busy,
+  confirming,
+  onEdit,
+  onConfirm,
+  onRemove,
+  onAddPasture,
+  children,
+}: {
+  property: Property;
+  pastures: Pasture[];
+  paddocks: Paddock[];
+  readOnly: boolean;
+  busy: boolean;
+  confirming: string | null;
+  onEdit: () => void;
+  onConfirm: (id: string | null) => void;
+  onRemove: () => void;
+  onAddPasture: () => void;
+  children: React.ReactNode;
+}) {
+  const ids = new Set(pastures.map((p) => p.id));
+  const mine = paddocks.filter((p) => p.pastureId !== null && ids.has(p.pastureId) && p.active);
+  const fenced = mine.reduce((sum, p) => sum + (p.acresGrazable ?? p.acresMeasured ?? 0), 0);
+
+  return (
+    <section className="gnd-property">
+      <div className="gnd-property__head">
+        <div style={{ minWidth: 0 }}>
+          <h2 className="serif gnd-property__name">
+            {property.name}
+            {property.code && <span className="mono gnd-code"> {property.code}</span>}
+            {!property.active && (
+              <>
+                {" "}
+                <Pill>not in use</Pill>
+              </>
+            )}
+          </h2>
+          <p className="gnd-property__sub">
+            {[
+              TENURE_WORDS[property.tenure],
+              property.leaseEnds ? `until ${shortDate(property.leaseEnds)}` : null,
+              property.acres === null ? null : `${property.acres} acres`,
+              `${pastures.length} pasture${pastures.length === 1 ? "" : "s"}`,
+              fenced > 0 ? `${fenced.toFixed(2)} grazable` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          {property.notes && <p className="gnd-pasture__notes">{property.notes}</p>}
+        </div>
+        {!readOnly && (
+          <div className="gnd-pasture__acts">
+            <button type="button" className="link-button mono" aria-label={`edit ${property.name}`} onClick={onEdit}>
+              edit
+            </button>
+            <button
+              type="button"
+              className="link-button mono"
+              aria-label={`add a pasture to ${property.name}`}
+              onClick={onAddPasture}
+            >
+              add a pasture
+            </button>
+            {confirming === property.id ? (
+              <>
+                <button
+                  type="button"
+                  className="link-button mono gnd-danger"
+                  disabled={busy}
+                  aria-label={`really remove ${property.name}`}
+                  onClick={onRemove}
+                >
+                  really remove
+                </button>
+                <button
+                  type="button"
+                  className="link-button mono"
+                  aria-label={`keep ${property.name}`}
+                  onClick={() => onConfirm(null)}
+                >
+                  keep it
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="link-button mono gnd-danger"
+                aria-label={`remove ${property.name}`}
+                onClick={() => onConfirm(property.id)}
+              >
+                remove
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {pastures.length === 0 ? (
+        <p className="gnd-quiet">No pastures on this place yet.</p>
+      ) : (
+        children
+      )}
+    </section>
+  );
+}
+
+function PropertyEditor({
   form,
   busy,
   onChange,
   onSave,
   onCancel,
 }: {
+  form: PropertyForm;
+  busy: boolean;
+  onChange: (f: PropertyForm) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  const set = <K extends keyof PropertyForm>(k: K, v: PropertyForm[K]) => onChange({ ...form, [k]: v });
+  const leased = form.tenure === "leased" || form.tenure === "shared";
+
+  return (
+    <div className="grz-form">
+      <div className="eyebrow" style={{ marginBottom: 10 }}>
+        {form.id === null ? "A new property" : `Editing ${form.name}`}
+      </div>
+      <div className="grz-form__row">
+        <label className="grz-field grz-field--wide">
+          <span className="eyebrow">Name</span>
+          <input
+            value={form.name}
+            onChange={(e) => set("name", e.target.value)}
+            aria-label="Property name"
+            placeholder="The Vollmer place"
+          />
+        </label>
+        <label className="grz-field">
+          <span className="eyebrow">Short code</span>
+          <input value={form.code} onChange={(e) => set("code", e.target.value)} aria-label="Property code" />
+        </label>
+        <label className="grz-field">
+          <span className="eyebrow">Acres (deeded)</span>
+          <input
+            value={form.acres}
+            onChange={(e) => set("acres", e.target.value)}
+            inputMode="decimal"
+            aria-label="Property acres"
+          />
+        </label>
+      </div>
+      <div className="grz-form__row">
+        <label className="grz-field">
+          <span className="eyebrow">Tenure</span>
+          <select
+            value={form.tenure}
+            onChange={(e) => set("tenure", e.target.value as Tenure)}
+            aria-label="Tenure"
+          >
+            {(Object.keys(TENURE_WORDS) as Tenure[]).map((t) => (
+              <option key={t} value={t}>
+                {TENURE_WORDS[t]}
+              </option>
+            ))}
+          </select>
+        </label>
+        {/* Only on ground somebody else owns. The server nulls it out anyway
+            when a place moves back to owned, and a date box on owned land is
+            a figure that would go stale with nothing to correct it against. */}
+        {leased && (
+          <label className="grz-field">
+            <span className="eyebrow">Lease ends</span>
+            <input
+              type="date"
+              value={form.leaseEnds}
+              onChange={(e) => set("leaseEnds", e.target.value)}
+              aria-label="Lease ends"
+            />
+          </label>
+        )}
+      </div>
+      <div className="grz-form__row">
+        <label className="grz-field grz-field--wide">
+          <span className="eyebrow">Notes</span>
+          <input value={form.notes} onChange={(e) => set("notes", e.target.value)} aria-label="Property notes" />
+        </label>
+        <label className="grz-field gnd-check">
+          <input
+            type="checkbox"
+            checked={form.active}
+            onChange={(e) => set("active", e.target.checked)}
+            aria-label="Property in use"
+          />
+          <span>In use</span>
+        </label>
+      </div>
+      <div className="grz-form__actions">
+        <Button onClick={onCancel}>Cancel</Button>
+        <Button variant="filled" disabled={busy || form.name.trim() === ""} onClick={onSave}>
+          {busy ? "Saving…" : form.id === null ? "Add it" : "Save"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function PastureEditor({
+  form,
+  properties,
+  busy,
+  onChange,
+  onSave,
+  onCancel,
+}: {
   form: PastureForm;
+  properties: Property[];
   busy: boolean;
   onChange: (f: PastureForm) => void;
   onSave: () => void;
@@ -724,6 +1090,27 @@ function PastureEditor({
           />
         </label>
       </div>
+      {/* Only once there is a place to put it. On a farm with one block of
+          ground this picker would be a select with one option in it. */}
+      {properties.length > 0 && (
+        <div className="grz-form__row">
+          <label className="grz-field grz-field--wide">
+            <span className="eyebrow">On which property</span>
+            <select
+              value={form.propertyId}
+              onChange={(e) => set("propertyId", e.target.value)}
+              aria-label="On which property"
+            >
+              <option value="">Not said yet</option>
+              {properties.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
       <p className="grz-optional">
         Deeded acres are what the map says, lanes and woods included. What is actually grazable adds up from the
         paddocks on it, so the two are kept apart rather than one being made to stand for the other.
@@ -952,5 +1339,22 @@ function PaddockEditor({
   );
 }
 
+/** A lease end reads as a date, not as an ISO string. Day-only input, so
+ *  midnight is appended rather than parsed as UTC and shown a day early. */
+function shortDate(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+    year: "numeric", month: "short", day: "numeric",
+  });
+}
+
+/** How a tenure reads on the page. The keys are the four the server allows. */
+const TENURE_WORDS: Record<Tenure, string> = {
+  owned: "owned",
+  leased: "leased",
+  shared: "shared",
+  other: "other arrangement",
+};
+
+const EMPTY_PROPERTIES: Property[] = [];
 const EMPTY_PASTURES: Pasture[] = [];
 const EMPTY_PADDOCKS: Paddock[] = [];

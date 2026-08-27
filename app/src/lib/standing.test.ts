@@ -192,3 +192,45 @@ describe("what the mob weighs", () => {
     expect(got.missing).toBe(3);
   });
 });
+
+describe("the round is walked inside a pasture", () => {
+  /**
+   * Green Pastures runs six pieces of ground. Nobody finishes the last
+   * paddock of the home place and steps onto the first of a lease eight
+   * miles away — and once each pasture numbers its own paddocks 1..n, a
+   * farm-wide ring cannot even say which "1" it means.
+   */
+  const north = [1, 2, 3].map((n) => unit(n, { pastureId: "north" }));
+  const creek = [4, 5].map((n) => unit(n, { pastureId: "creek", rotationOrder: n - 3 }));
+  const both = [...north, ...creek];
+
+  it("wraps within the pasture rather than crossing to the next one", () => {
+    expect(nextInRotation(north[2], both)!.name).toBe("Paddock 1");
+    expect(nextInRotation(creek[1], both)!.name).toBe("Paddock 4");
+  });
+
+  it("does not step across when the numbers repeat in each pasture", () => {
+    // Both pastures hold a paddock numbered 1. A farm-wide ring would pick
+    // one of them arbitrarily and send the mob to the wrong property.
+    expect(nextInRotation(creek[0], both)!.name).toBe("Paddock 5");
+  });
+
+  it("has no next when a pasture holds one paddock", () => {
+    const alone = unit(9, { id: "p9", name: "The lease", pastureId: "lease", rotationOrder: 1 });
+    expect(nextInRotation(alone, [...both, alone])).toBeNull();
+  });
+
+  it("is one ring on a farm whose paddocks carry no pasture", () => {
+    // Which is every farm on file before any of this, and has to read the
+    // same way afterwards.
+    expect(nextInRotation(farm[4], farm)!.name).toBe("Paddock 1");
+  });
+
+  it("rings the unassigned ground together on a farm that does use pastures", () => {
+    // Not "no next": they are a ring of their own until somebody says where
+    // they are.
+    const loose = [6, 7].map((n) => unit(n, { rotationOrder: n - 5 }));
+    const all = [...north, ...loose];
+    expect(nextInRotation(loose[1], all)!.name).toBe("Paddock 6");
+  });
+});

@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import type { Paddock, Pasture } from "../lib/grazing";
+import type { Paddock, Pasture, Property } from "../lib/grazing";
 
 /**
  * Settings → Ground: adding, changing and removing land.
@@ -39,8 +39,12 @@ vi.mock("../lib/auth", () => ({
   signOut: vi.fn(),
 }));
 
+const property = (over: Partial<Property> & { id: string; name: string }): Property => ({
+  code: null, acres: null, tenure: "owned", leaseEnds: null, notes: null, active: true, ...over,
+});
+
 const pasture = (over: Partial<Pasture> & { id: string; name: string }): Pasture => ({
-  code: null, acres: null, notes: null, active: true, boundary: null, ...over,
+  code: null, acres: null, notes: null, active: true, propertyId: null, boundary: null, ...over,
 });
 
 const paddock = (over: Partial<Paddock> & { id: string; name: string }): Paddock => ({
@@ -53,6 +57,7 @@ const paddock = (over: Partial<Paddock> & { id: string; name: string }): Paddock
   ...over,
 });
 
+let properties: Property[] = [];
 let pastures: Pasture[] = [];
 let paddocks: Paddock[] = [];
 
@@ -60,6 +65,7 @@ let paddocks: Paddock[] = [];
 // untyped `vi.fn(async () => …)` has `calls: []`, and every `as [\u2026]` on it
 // passes the test runner while failing the build.
 type Edit = Record<string, unknown>;
+const fetchProperties = vi.fn<(farmId: string) => Promise<Property[]>>(async () => properties);
 const fetchPastures = vi.fn<(farmId: string) => Promise<Pasture[]>>(async () => pastures);
 const fetchPaddocks = vi.fn<(farmId: string) => Promise<Paddock[]>>(async () => paddocks);
 const savePasture = vi.fn<(farmId: string, id: string | null, edit: Edit) => Promise<string>>(
@@ -68,21 +74,31 @@ const savePasture = vi.fn<(farmId: string, id: string | null, edit: Edit) => Pro
 const savePaddock = vi.fn<(farmId: string, id: string | null, edit: Edit) => Promise<string>>(
   async () => "new-paddock",
 );
+const saveProperty = vi.fn<(farmId: string, id: string | null, edit: Edit) => Promise<string>>(
+  async () => "new-property",
+);
 const deletePasture = vi.fn<(farmId: string, id: string) => Promise<void>>(async () => {});
 const deletePaddock = vi.fn<(farmId: string, id: string) => Promise<void>>(async () => {});
+const deleteProperty = vi.fn<(farmId: string, id: string) => Promise<void>>(async () => {});
 
 vi.mock("../lib/grazing", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/grazing")>();
   return {
     ...actual,
-    fetchPastures, fetchPaddocks, savePasture, savePaddock, deletePasture, deletePaddock,
+    fetchProperties, fetchPastures, fetchPaddocks,
+    saveProperty, savePasture, savePaddock,
+    deleteProperty, deletePasture, deletePaddock,
   };
 });
 
 beforeEach(() => {
-  [fetchPastures, fetchPaddocks, savePasture, savePaddock, deletePasture, deletePaddock].forEach((f) =>
-    f.mockClear(),
-  );
+  [
+    fetchProperties, fetchPastures, fetchPaddocks,
+    saveProperty, savePasture, savePaddock,
+    deleteProperty, deletePasture, deletePaddock,
+  ].forEach((f) => f.mockClear());
+  properties = [];
+  saveProperty.mockResolvedValue("new-property");
   savePasture.mockResolvedValue("new-pasture");
   savePaddock.mockResolvedValue("new-paddock");
   deletePaddock.mockResolvedValue(undefined);
@@ -109,7 +125,8 @@ const mount = async () => {
 /** The section a name heads, so a paddock can be located under its pasture
  *  rather than merely somewhere on the page. */
 const section = (heading: string) => {
-  const h = screen.getByText((_, el) => el?.textContent?.startsWith(heading) === true && el.tagName === "H2");
+  // H3 since properties arrived: a pasture is one level down from a place.
+  const h = screen.getByText((_, el) => el?.textContent?.startsWith(heading) === true && el.tagName === "H3");
   return h.closest("section")!;
 };
 
@@ -168,7 +185,7 @@ describe("adding", () => {
     await waitFor(() => expect(savePasture).toHaveBeenCalled());
     expect(savePasture.mock.calls[0]).toEqual([
       "farm-1", null,
-      { name: "River bottom", code: "RIV", acres: 38.25, notes: null, active: true },
+      { name: "River bottom", code: "RIV", acres: 38.25, notes: null, active: true, propertyId: null },
     ]);
   });
 
@@ -384,5 +401,166 @@ describe("the strip direction, on a paddock that is drawn", () => {
     await mount();
     fireEvent.click(screen.getByRole("button", { name: "edit Drawn one" }));
     expect(screen.getByText(/measured from it as soon as you pick a direction/)).toBeTruthy();
+  });
+});
+
+describe("the level above the pasture", () => {
+  /**
+   * Green Pastures leases ground across a county: named places, each with
+   * pastures on them. The place and the pasture are two different things
+   * there, and a farm with one block of land must never be made to read
+   * past a level that tells it nothing.
+   */
+
+  const band = (name: string) => {
+    const h = screen.getByText(
+      (_, el) => el?.textContent?.startsWith(name) === true && el.tagName === "H2",
+    );
+    return h.closest("section")!;
+  };
+
+  it("shows no property band at all on a farm that has none", async () => {
+    // Which is every farm on file the day 064 runs.
+    await mount();
+    expect(document.querySelector(".gnd-property")).toBeNull();
+    expect(screen.queryByText("Not on a property yet")).toBeNull();
+    // And every pasture is still on the page, unbanded.
+    expect(section("Home place")).toBeTruthy();
+    expect(section("Rented forty")).toBeTruthy();
+  });
+
+  it("puts each pasture under the place it is on", async () => {
+    properties = [property({ id: "vollmer", name: "The Vollmer place" })];
+    pastures = [
+      pasture({ id: "home", name: "Home place", propertyId: "vollmer" }),
+      pasture({ id: "rented", name: "Rented forty" }),
+    ];
+    await mount();
+    expect(within(band("The Vollmer place")).getByText("Home place")).toBeTruthy();
+    expect(within(band("The Vollmer place")).queryByText("Rented forty")).toBeNull();
+  });
+
+  it("gathers pastures nobody has placed rather than guessing at one", async () => {
+    properties = [property({ id: "vollmer", name: "The Vollmer place" })];
+    pastures = [
+      pasture({ id: "home", name: "Home place", propertyId: "vollmer" }),
+      pasture({ id: "rented", name: "Rented forty" }),
+    ];
+    await mount();
+    expect(screen.getByText("Not on a property yet")).toBeTruthy();
+    expect(section("Rented forty")).toBeTruthy();
+  });
+
+  it("says what a place is held on, and until when", async () => {
+    // The one thing nowhere else on the page says. Ground that goes back to
+    // the landlord in eighteen months is not ground you reseed.
+    properties = [
+      property({ id: "v", name: "The Vollmer place", tenure: "leased", leaseEnds: "2028-03-01", acres: 214 }),
+    ];
+    pastures = [pasture({ id: "home", name: "Home place", propertyId: "v" })];
+    await mount();
+    const sub = band("The Vollmer place").querySelector(".gnd-property__sub")!;
+    // Read as a date, not as the ISO string the server keeps.
+    expect(sub.textContent).toMatch(/leased · until Mar 1, 2028 · 214 acres · 1 pasture/);
+  });
+
+  it("adds up the grazable acres of every paddock on the place", async () => {
+    properties = [property({ id: "v", name: "The Vollmer place" })];
+    pastures = [
+      pasture({ id: "home", name: "Home place", propertyId: "v" }),
+      pasture({ id: "rented", name: "Rented forty" }),
+    ];
+    paddocks = [
+      paddock({ id: "a", name: "A", pastureId: "home", acresGrazable: 12.5 }),
+      paddock({ id: "b", name: "B", pastureId: "home", acresGrazable: 7.25 }),
+      // On another place, so it must not be counted here.
+      paddock({ id: "c", name: "C", pastureId: "rented", acresGrazable: 40 }),
+    ];
+    await mount();
+    expect(band("The Vollmer place").querySelector(".gnd-property__sub")!.textContent)
+      .toMatch(/19\.75 grazable/);
+  });
+
+  it("says a place is empty rather than leaving a band over nothing", async () => {
+    properties = [property({ id: "v", name: "The Vollmer place" })];
+    pastures = [];
+    paddocks = [];
+    await mount();
+    expect(within(band("The Vollmer place")).getByText("No pastures on this place yet.")).toBeTruthy();
+  });
+
+  it("adds a property with what was typed", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Add a property" }));
+    fireEvent.change(screen.getByLabelText("Property name"), { target: { value: "  The Vollmer place " } });
+    fireEvent.change(screen.getByLabelText("Tenure"), { target: { value: "leased" } });
+    fireEvent.change(screen.getByLabelText("Lease ends"), { target: { value: "2028-03-01" } });
+    fireEvent.change(screen.getByLabelText("Property acres"), { target: { value: "214" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add it" }));
+
+    await waitFor(() => expect(saveProperty).toHaveBeenCalled());
+    expect(saveProperty.mock.calls[0]).toEqual([
+      "farm-1", null,
+      {
+        name: "  The Vollmer place ", code: null, acres: 214,
+        tenure: "leased", leaseEnds: "2028-03-01", notes: null, active: true,
+      },
+    ]);
+  });
+
+  it("offers no lease date on ground the farm owns", async () => {
+    // The server nulls it out anyway, and a date box on owned land is a
+    // figure that would go stale with nothing to correct it against.
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Add a property" }));
+    expect(screen.queryByLabelText("Lease ends")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Tenure"), { target: { value: "shared" } });
+    expect(screen.getByLabelText("Lease ends")).toBeTruthy();
+  });
+
+  it("offers no property picker on a pasture until there is a property", async () => {
+    // A select with one option in it — "Not said yet" — is not a choice.
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Add a pasture" }));
+    expect(screen.queryByLabelText("On which property")).toBeNull();
+  });
+
+  it("files a pasture under the place chosen for it", async () => {
+    properties = [property({ id: "v", name: "The Vollmer place" })];
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Add a pasture" }));
+    fireEvent.change(screen.getByLabelText("Pasture name"), { target: { value: "River bottom" } });
+    fireEvent.change(screen.getByLabelText("On which property"), { target: { value: "v" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add it" }));
+
+    await waitFor(() => expect(savePasture).toHaveBeenCalled());
+    expect(savePasture.mock.calls[0][2].propertyId).toBe("v");
+  });
+
+  it("opens the pasture form already on the place its button was pressed from", async () => {
+    properties = [property({ id: "v", name: "The Vollmer place" })];
+    pastures = [pasture({ id: "home", name: "Home place", propertyId: "v" })];
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "add a pasture to The Vollmer place" }));
+    expect((screen.getByLabelText("On which property") as HTMLSelectElement).value).toBe("v");
+  });
+
+  it("keeps the property a pasture is already on when it is edited", async () => {
+    properties = [property({ id: "v", name: "The Vollmer place" })];
+    pastures = [pasture({ id: "home", name: "Home place", propertyId: "v" })];
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "edit Home place" }));
+    expect((screen.getByLabelText("On which property") as HTMLSelectElement).value).toBe("v");
+  });
+
+  it("asks before removing a place", async () => {
+    properties = [property({ id: "v", name: "The Vollmer place" })];
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "remove The Vollmer place" }));
+    expect(screen.getByRole("button", { name: "really remove The Vollmer place" })).toBeTruthy();
+    expect(deleteProperty).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "really remove The Vollmer place" }));
+    await waitFor(() => expect(deleteProperty).toHaveBeenCalledWith("farm-1", "v"));
   });
 });

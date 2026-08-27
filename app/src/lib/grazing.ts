@@ -45,6 +45,31 @@ export type PaddockUnitType = "permanent" | "temporary" | "virtual";
  * paddocks' acres — that sum is what is fenced and grazable, and the
  * difference between the two is the lane, the woods and the pond.
  */
+/** Owned, leased, or grazed on somebody else's say-so. */
+export type Tenure = "owned" | "leased" | "shared" | "other";
+
+/**
+ * A deeded or leased place. The home farm, the Vollmer, the Miller lease.
+ *
+ * The level above the pasture, added in 064 for farms whose ground is spread
+ * across a county. A farm that never adds one never sees the level — every
+ * pasture on file predates properties and carries a null `propertyId`.
+ */
+export interface Property {
+  id: string;
+  name: string;
+  code: string | null;
+  /** What the deed or the lease says, which is not the sum of its pastures'
+   *  fenced acres. Both are worth keeping. */
+  acres: number | null;
+  tenure: Tenure;
+  /** Only ever set on leased or shared ground; the server nulls it out when
+   *  a place moves back to owned. */
+  leaseEnds: string | null;
+  notes: string | null;
+  active: boolean;
+}
+
 export interface Pasture {
   id: string;
   name: string;
@@ -52,6 +77,9 @@ export interface Pasture {
   acres: number | null;
   notes: string | null;
   active: boolean;
+  /** Which place this ground is on. Null on every pasture that predates
+   *  properties, and on farms that never use them. */
+  propertyId: string | null;
   /** GeoJSON as stored, unparsed. Written by the KML import (053), never by
    *  the edit form — see the migration for why they are kept apart. */
   boundary: unknown | null;
@@ -612,7 +640,7 @@ export async function fetchPaddocks(farmId: string): Promise<Paddock[]> {
 export async function fetchPastures(farmId: string): Promise<Pasture[]> {
   const { data, error } = await herdSchema()
     .from("pastures")
-    .select("id, name, code, acres, notes, active, boundary")
+    .select("id, name, code, acres, notes, active, property_id, boundary")
     .eq("farm_id", farmId)
     .is("deleted_at", null)
     .order("name");
@@ -625,7 +653,29 @@ export async function fetchPastures(farmId: string): Promise<Pasture[]> {
     acres: num(r.acres),
     notes: (r.notes as string) ?? null,
     active: Boolean(r.active),
+    propertyId: (r.property_id as string) ?? null,
     boundary: r.boundary ?? null,
+  }));
+}
+
+export async function fetchProperties(farmId: string): Promise<Property[]> {
+  const { data, error } = await herdSchema()
+    .from("properties")
+    .select("id, name, code, acres, tenure, lease_ends, notes, active")
+    .eq("farm_id", farmId)
+    .is("deleted_at", null)
+    .order("name");
+  if (error) throw new Error(`herd.properties: ${error.message}`);
+
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    name: r.name as string,
+    code: (r.code as string) ?? null,
+    acres: num(r.acres),
+    tenure: (r.tenure as Tenure) ?? "owned",
+    leaseEnds: (r.lease_ends as string) ?? null,
+    notes: (r.notes as string) ?? null,
+    active: Boolean(r.active),
   }));
 }
 
@@ -1312,12 +1362,50 @@ export async function deleteMove(farmId: string, eventId: string): Promise<void>
 // belongs to, that a name is not already taken, and above all that ground the
 // herd has been on is retired rather than removed.
 
+export interface PropertyEdit {
+  name: string;
+  code: string | null;
+  acres: number | null;
+  tenure: Tenure;
+  leaseEnds: string | null;
+  notes: string | null;
+  active: boolean;
+}
+
+/** Add one when `id` is null, change it when it isn't. Returns its id. */
+export async function saveProperty(
+  farmId: string,
+  id: string | null,
+  edit: PropertyEdit,
+): Promise<string> {
+  const { data, error } = await herdSchema().rpc("save_property", {
+    p_farm_id: farmId,
+    p_id: id,
+    p_name: edit.name,
+    p_code: edit.code,
+    p_acres: edit.acres,
+    p_tenure: edit.tenure,
+    p_lease_ends: edit.leaseEnds,
+    p_notes: edit.notes,
+    p_active: edit.active,
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+/** Refuses while it still holds pastures, and says how many. */
+export async function deleteProperty(farmId: string, id: string): Promise<void> {
+  const { error } = await herdSchema().rpc("delete_property", { p_farm_id: farmId, p_id: id });
+  if (error) throw new Error(error.message);
+}
+
 export interface PastureEdit {
   name: string;
   code: string | null;
   acres: number | null;
   notes: string | null;
   active: boolean;
+  propertyId: string | null;
 }
 
 /** Add one when `id` is null, change it when it isn't. Returns its id. */
@@ -1334,6 +1422,7 @@ export async function savePasture(
     p_acres: edit.acres,
     p_notes: edit.notes,
     p_active: edit.active,
+    p_property_id: edit.propertyId,
   });
   if (error) throw new Error(error.message);
   return data as string;
@@ -2906,6 +2995,170 @@ export async function recordRemoval(farmId: string, draft: RemovalDraft): Promis
 // back line is where yesterday's wire ended, and the next unit is the one
 // after this in the round. Everything the one-page move opens with.
 
+/**
+ * The paddocks the Move page should be working in.
+ *
+ * A farm of 46 paddocks drawn on one map is 46 postage stamps, and a picker
+ * with 46 buttons is not a picker. Scoping to a pasture is what makes both
+ * usable — but only on a farm that has pastures.
+ *
+ * `pastureId` null means "no pasture chosen", and returns everything. So does
+ * a farm that never filled `pasture_id` in: scoping to a pasture nobody
+ * assigned would show an empty map and no way to get off it, which is worse
+ * than the crowded map it was meant to fix.
+ */
+export function paddocksInPasture(paddocks: Paddock[], pastureId: string | null): Paddock[] {
+  if (pastureId === null) return paddocks;
+  const inside = paddocks.filter((p) => p.pastureId === pastureId);
+  return inside.length === 0 ? paddocks : inside;
+}
+
+/**
+ * The pastures that actually hold ground, in rotation order.
+ *
+ * Derived from the paddocks rather than read straight off the pastures table,
+ * because a pasture with nothing in it is a row somebody made and never used
+ * — offering it as somewhere to move a mob would be offering an empty field.
+ *
+ * Ordered by where each pasture's ground sits in the round, so the picker
+ * reads in the order the farm is actually walked rather than alphabetically.
+ */
+export function pasturesInUse(
+  paddocks: Paddock[],
+  pastures: Pasture[],
+): { pasture: Pasture; paddocks: number; acres: number }[] {
+  const counted = new Map<string, { paddocks: number; acres: number; order: number }>();
+
+  for (const p of paddocks) {
+    if (p.pastureId === null) continue;
+    const row = counted.get(p.pastureId) ?? { paddocks: 0, acres: 0, order: Number.MAX_SAFE_INTEGER };
+    row.paddocks += 1;
+    row.acres += p.acresGrazable ?? p.acresMeasured ?? 0;
+    if (p.rotationOrder !== null) row.order = Math.min(row.order, p.rotationOrder);
+    counted.set(p.pastureId, row);
+  }
+
+  return pastures
+    .filter((pa) => counted.has(pa.id))
+    .map((pa) => {
+      const row = counted.get(pa.id)!;
+      return { pasture: pa, paddocks: row.paddocks, acres: Math.round(row.acres * 100) / 100, order: row.order };
+    })
+    .sort((a, b) => a.order - b.order || a.pasture.name.localeCompare(b.pasture.name))
+    .map(({ pasture, paddocks: n, acres }) => ({ pasture, paddocks: n, acres }));
+}
+
+/**
+ * The pastures on one place.
+ *
+ * Same rule as `paddocksInPasture`, and for the same reason: everything when
+ * no place is asked for, and everything rather than nothing when the place
+ * asked for holds none. A screen scoped to an empty place is a screen with no
+ * way off it.
+ */
+export function pasturesInProperty(pastures: Pasture[], propertyId: string | null): Pasture[] {
+  if (propertyId === null) return pastures;
+  const on = pastures.filter((p) => p.propertyId === propertyId);
+  return on.length > 0 ? on : pastures;
+}
+
+/**
+ * The places with ground on them, by name.
+ *
+ * Derived from the paddocks rather than read off the properties table, so a
+ * place somebody made and never filled is not offered as somewhere to send a
+ * mob. By name and not by round: since 064 a rotation number belongs to a
+ * pasture, so every place has a paddock numbered 1 and there is no farm-wide
+ * order left to sort on. Alphabetical is at least the same every morning.
+ */
+export function propertiesInUse(
+  paddocks: Paddock[],
+  pastures: Pasture[],
+  properties: Property[],
+): { property: Property; pastures: number; paddocks: number; acres: number }[] {
+  const placeOf = new Map(pastures.map((p) => [p.id, p.propertyId]));
+  const counted = new Map<string, { pastures: Set<string>; paddocks: number; acres: number }>();
+
+  for (const p of paddocks) {
+    if (p.pastureId === null) continue;
+    const place = placeOf.get(p.pastureId) ?? null;
+    if (place === null) continue;
+    const row = counted.get(place) ?? { pastures: new Set<string>(), paddocks: 0, acres: 0 };
+    row.pastures.add(p.pastureId);
+    row.paddocks += 1;
+    row.acres += p.acresGrazable ?? p.acresMeasured ?? 0;
+    counted.set(place, row);
+  }
+
+  return properties
+    .filter((pr) => counted.has(pr.id))
+    .map((pr) => {
+      const row = counted.get(pr.id)!;
+      return {
+        property: pr,
+        pastures: row.pastures.size,
+        paddocks: row.paddocks,
+        acres: Math.round(row.acres * 100) / 100,
+      };
+    })
+    .sort((a, b) => a.property.name.localeCompare(b.property.name));
+}
+
+/** A mob, where it is standing, and how long it has been there. */
+export interface MobStanding {
+  group: GrazingGroup;
+  /** The unit it is in now. Null when it is off pasture. */
+  paddock: Paddock | null;
+  /**
+   * Whole days since it walked in. Null when it is off pasture — which is
+   * not the same as zero, and a switcher that showed "0 days" for a mob
+   * with nowhere to be would read as "just moved".
+   */
+  daysIn: number | null;
+}
+
+/**
+ * Every active mob and where it stands, longest-standing first.
+ *
+ * The Move page took `groups[0]` and left the rest unreachable, which was
+ * survivable on a farm with one mob and is a page with three quarters of its
+ * work missing on a farm with four.
+ *
+ * Sorted by days in rather than by name because the switcher is read at the
+ * gate in the morning: the question is not which mobs exist but which one has
+ * been standing longest. A mob off pasture sorts last — it needs putting
+ * somewhere, but it is not overdue a move.
+ */
+export function mobRoster(input: {
+  groups: GrazingGroup[];
+  paddocks: Paddock[];
+  events: GrazingEvent[];
+  nowIso: string;
+}): MobStanding[] {
+  const { groups, paddocks, events, nowIso } = input;
+  const now = Date.parse(nowIso);
+
+  return groups
+    .filter((g) => g.active)
+    .map((group) => {
+      const open = whereIs(group.id, events);
+      const paddock = open === null ? null : (paddocks.find((p) => p.id === open.paddockId) ?? null);
+      const entered = open === null ? NaN : Date.parse(open.enteredAt);
+      const daysIn =
+        open === null || Number.isNaN(entered) || Number.isNaN(now)
+          ? null
+          : Math.max(0, Math.floor((now - entered) / 86_400_000));
+      return { group, paddock, daysIn };
+    })
+    .sort((a, b) => {
+      // Off pasture last, then longest standing, then by name so the order
+      // is stable when two mobs moved on the same day.
+      if ((a.daysIn === null) !== (b.daysIn === null)) return a.daysIn === null ? 1 : -1;
+      if (a.daysIn !== null && b.daysIn !== null && a.daysIn !== b.daysIn) return b.daysIn - a.daysIn;
+      return a.group.name.localeCompare(b.group.name);
+    });
+}
+
 export interface Standing {
   /** The unit they are in now. Null when they are off pasture. */
   paddock: Paddock | null;
@@ -2933,9 +3186,19 @@ export function inRotation(paddocks: Paddock[]): Paddock[] {
 /**
  * The unit after this one in the round, wrapping past the last back to the
  * first. Null when this unit is not in the rotation, or is the only one.
+ *
+ * **The round is walked inside a pasture.** Nobody finishes the last paddock
+ * of the home place and steps straight onto the first of a lease eight miles
+ * away — that is a decision, not a next. So the ring is this paddock's own
+ * pasture, and a farm whose paddocks carry no pasture is one ring, exactly as
+ * before. Paddocks left unassigned on a farm that does use pastures form
+ * their own ring together, because that is what they are: the ground nobody
+ * has said where it is yet.
  */
 export function nextInRotation(paddock: Paddock, paddocks: Paddock[]): Paddock | null {
-  const ring = inRotation(paddocks).filter((p) => p.rotationOrder !== null);
+  const ring = inRotation(paddocks).filter(
+    (p) => p.rotationOrder !== null && p.pastureId === paddock.pastureId,
+  );
   if (ring.length < 2) return null;
   const i = ring.findIndex((p) => p.id === paddock.id);
   return i === -1 ? null : ring[(i + 1) % ring.length];

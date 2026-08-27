@@ -104,14 +104,30 @@ export function reportRows(input: {
   groups: GrazingGroup[];
   from: string;
   to: string;
+  /**
+   * One pasture's ground, or the whole farm when null.
+   *
+   * Narrowed here rather than on the page so the map, the acreage total and
+   * the list of gaps all follow from one filter — three things derived from
+   * these rows, which could otherwise disagree about what the report covers.
+   *
+   * Numbering is unaffected either way: a paddock sits on one pasture, so
+   * this filter takes all of a paddock's strips or none of them. It is the
+   * *range* filter that numbering has to be computed ahead of, and it already
+   * is — see `stripNumbers`.
+   */
+  pastureId?: string | null;
 }): ReportRow[] {
-  const { events, paddocks, groups, from, to } = input;
+  const { events, paddocks, groups, from, to, pastureId = null } = input;
   const numbers = stripNumbers(events, paddocks);
   const paddockById = new Map(paddocks.map((p) => [p.id, p]));
   const groupById = new Map(groups.map((g) => [g.id, g]));
 
   return events
     .filter((e) => overlaps(e, from, to))
+    .filter(
+      (e) => pastureId === null || (paddockById.get(e.paddockId)?.pastureId ?? null) === pastureId,
+    )
     .sort((a, b) => a.enteredAt.localeCompare(b.enteredAt) || a.id.localeCompare(b.id))
     .map((e): ReportRow => {
       const paddock = paddockById.get(e.paddockId) ?? null;

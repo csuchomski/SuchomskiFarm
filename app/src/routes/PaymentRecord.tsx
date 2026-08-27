@@ -7,10 +7,16 @@ import {
   fetchGrazingEvents,
   fetchGrazingGroups,
   fetchPaddocks,
+  fetchPastures,
+  fetchProperties,
   isSwept,
+  paddocksInPasture,
+  pasturesInUse,
   type GrazingEvent,
   type GrazingGroup,
   type Paddock,
+  type Pasture,
+  type Property,
 } from "../lib/grazing";
 import { gaps, reportRows, totalAcres, type ReportRow } from "../lib/grazing-report";
 import {
@@ -53,7 +59,14 @@ import "./grazing.css";
 type Load =
   | { state: "loading" }
   | { state: "error"; message: string }
-  | { state: "ok"; paddocks: Paddock[]; events: GrazingEvent[]; groups: GrazingGroup[] };
+  | {
+      state: "ok";
+      paddocks: Paddock[];
+      pastures: Pasture[];
+      properties: Property[];
+      events: GrazingEvent[];
+      groups: GrazingGroup[];
+    };
 
 const WIDTH = 720;
 
@@ -75,18 +88,23 @@ export default function PaymentRecord() {
   const [unitPx, measureSvg] = useMapScale();
   const [from, setFrom] = useState(monthStart);
   const [to, setTo] = useState(today);
+  /** Which ground the report covers. Null is the whole farm, which is what a
+   *  farm with one piece of ground always gets. */
+  const [pastureId, setPastureId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!farmId) {
       setLoad({ state: "error", message: "No farm on this business." });
       return;
     }
-    const [paddocks, events, groups] = await Promise.all([
+    const [paddocks, pastures, properties, events, groups] = await Promise.all([
       fetchPaddocks(farmId),
+      fetchPastures(farmId),
+      fetchProperties(farmId),
       fetchGrazingEvents(farmId),
       fetchGrazingGroups(farmId),
     ]);
-    setLoad({ state: "ok", paddocks, events, groups });
+    setLoad({ state: "ok", paddocks, pastures, properties, events, groups });
   }, [farmId]);
 
   useEffect(() => {
@@ -100,12 +118,40 @@ export default function PaymentRecord() {
     if (load.state !== "ok") return [];
     if (from > to) return [];
     return reportRows({
-      events: load.events, paddocks: load.paddocks, groups: load.groups, from, to,
+      events: load.events, paddocks: load.paddocks, groups: load.groups, from, to, pastureId,
     });
-  }, [load, from, to]);
+  }, [load, from, to, pastureId]);
 
   const total = totalAcres(rows);
   const missing = gaps(rows);
+
+  /**
+   * The pastures with ground in them.
+   *
+   * Derived from the paddocks, so a pasture nobody has fenced is not offered
+   * as something to narrow a report to. Empty on a farm whose paddocks carry
+   * no pasture, which is what tells the picker not to render at all — the
+   * same collapse rule the Move page follows.
+   */
+  const pastures = useMemo(
+    () => (load.state === "ok" ? pasturesInUse(load.paddocks.filter((p) => p.active), load.pastures) : []),
+    [load],
+  );
+
+  /** Which place each pasture is on, so the picker can group by it. Empty on
+   *  a farm that has never named a property. */
+  const places = useMemo(() => {
+    if (load.state !== "ok") return [];
+    const used = new Set(pastures.map((r) => r.pasture.propertyId).filter((id) => id !== null));
+    return load.properties.filter((pr) => used.has(pr.id));
+  }, [load, pastures]);
+
+  const here = pastures.find((r) => r.pasture.id === pastureId)?.pasture ?? null;
+
+  /** What the report is of, in the words the preamble and the empty state
+   *  both need. The picker is hidden on paper, so a printout that did not say
+   *  this would be a form silently missing half a farm. */
+  const covering = here === null ? "the whole farm" : here.name;
 
   /**
    * The farm, with this window's strips on it.
@@ -116,8 +162,7 @@ export default function PaymentRecord() {
    */
   const drawn = useMemo(() => {
     if (load.state !== "ok") return null;
-    const units = load.paddocks
-      .filter((p) => p.active)
+    const units = paddocksInPasture(load.paddocks.filter((p) => p.active), pastureId)
       .map((p) => ({ paddock: p, ring: asPolygonRing(p.boundary) }))
       .filter((u): u is { paddock: Paddock; ring: LonLat[] } => u.ring !== null);
     const projection = fitPasture(units.map((u) => u.ring), { width: WIDTH, padding: 14 });
@@ -146,7 +191,7 @@ export default function PaymentRecord() {
     // a duplicate that lands squarely on top of the labels that matter.
     const grazed = new Set(strips.map((s) => s.row.paddockId));
     return { units, projection, strips, grazed };
-  }, [load, rows]);
+  }, [load, rows, pastureId]);
 
   return (
     <OpsShell>
@@ -175,6 +220,42 @@ export default function PaymentRecord() {
                 <span className="eyebrow">To</span>
                 <input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To" />
               </label>
+              {/* Only on a farm with ground to tell apart. One pasture, or
+                  none assigned, and a picker would be a control with one
+                  answer — the same rule the Move page's locator follows. */}
+              {pastures.length > 1 && (
+                <label className="grz-field grz-field--wide">
+                  <span className="eyebrow">Ground</span>
+                  <select
+                    value={pastureId ?? ""}
+                    onChange={(e) => setPastureId(e.target.value === "" ? null : e.target.value)}
+                    aria-label="Ground"
+                  >
+                    <option value="">The whole farm</option>
+                    {/* Grouped by place where the farm has named them, so six
+                        pastures across three leases read as three lists
+                        rather than one of six. */}
+                    {places.map((place) => (
+                      <optgroup key={place.id} label={place.name}>
+                        {pastures
+                          .filter((r) => r.pasture.propertyId === place.id)
+                          .map(({ pasture, paddocks: n }) => (
+                            <option key={pasture.id} value={pasture.id}>
+                              {pasture.name} · {n} paddock{n === 1 ? "" : "s"}
+                            </option>
+                          ))}
+                      </optgroup>
+                    ))}
+                    {pastures
+                      .filter((r) => places.every((pl) => pl.id !== r.pasture.propertyId))
+                      .map(({ pasture, paddocks: n }) => (
+                        <option key={pasture.id} value={pasture.id}>
+                          {pasture.name} · {n} paddock{n === 1 ? "" : "s"}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              )}
             </div>
             {from > to && (
               <p className="grz-warn" style={{ margin: "12px 0 0" }}>
@@ -183,15 +264,24 @@ export default function PaymentRecord() {
             )}
           </div>
 
+          {/* The range and the ground both named, because the picker above is
+              hidden on paper: a printout headed only by its dates, silently
+              covering one pasture out of six, is a worse document than one
+              with no filter at all. */}
           <p className="rec-preamble">
-            Grazing records for {shortDate(from)} → {shortDate(to)}, from the moves logged on this
-            farm. A strip counts as in the range if the mob was on it at any point during it.
-            Whether the record meets the standard is the conservationist's determination.
+            Grazing records for {shortDate(from)} → {shortDate(to)}, covering{" "}
+            <strong>{covering}</strong>, from the moves logged on this farm. A strip counts as in
+            the range if the mob was on it at any point during it. Whether the record meets the
+            standard is the conservationist's determination.
           </p>
 
           {rows.length === 0 ? (
             <div style={{ marginTop: 16 }}>
-              <Callout>No grazing recorded in this range.</Callout>
+              <Callout>
+                {here === null
+                  ? "No grazing recorded in this range."
+                  : `No grazing recorded on ${here.name} in this range.`}
+              </Callout>
             </div>
           ) : (
             <>

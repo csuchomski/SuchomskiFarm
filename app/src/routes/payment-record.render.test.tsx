@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import type { GrazingEvent, GrazingGroup, Paddock } from "../lib/grazing";
+import type { GrazingEvent, GrazingGroup, Paddock, Pasture, Property } from "../lib/grazing";
 import { REAL_ACRES, REAL_BOUNDARIES, REAL_SWEEP } from "../lib/__fixtures__/farm-geometry";
 
 /**
@@ -59,7 +59,17 @@ const ev = (over: Partial<GrazingEvent> & { id: string; paddockId: string; enter
   ...over,
 });
 
+const pasture = (id: string, name: string, propertyId: string | null = null): Pasture => ({
+  id, name, code: id.toUpperCase(), acres: null, notes: null, active: true, propertyId, boundary: null,
+});
+
+const property = (id: string, name: string): Property => ({
+  id, name, code: null, acres: null, tenure: "owned", leaseEnds: null, notes: null, active: true,
+});
+
 let paddocks = [1, 2, 3, 4, 5].map(unit);
+let pastures: Pasture[] = [];
+let properties: Property[] = [];
 const events: GrazingEvent[] = [];
 
 vi.mock("../lib/grazing", async (importOriginal) => {
@@ -67,6 +77,8 @@ vi.mock("../lib/grazing", async (importOriginal) => {
   return {
     ...actual,
     fetchPaddocks: vi.fn(async () => paddocks),
+    fetchPastures: vi.fn(async () => pastures),
+    fetchProperties: vi.fn(async () => properties),
     fetchGrazingEvents: vi.fn(async () => events),
     fetchGrazingGroups: vi.fn(async () => [mob]),
   };
@@ -81,6 +93,8 @@ afterEach(() => {
   vi.useRealTimers();
   cleanup();
   paddocks = [1, 2, 3, 4, 5].map(unit);
+  pastures = [];
+  properties = [];
   events.length = 0;
 });
 
@@ -306,5 +320,143 @@ describe("the map beside the table", () => {
     expect(svg()).toBeNull();
     // The table is the record; the map is the illustration.
     expect(bodyRows()).toHaveLength(2);
+  });
+});
+
+describe("narrowing the record to one pasture", () => {
+  /**
+   * Green Pastures runs 46 paddocks over six pastures. A record of the whole
+   * farm is the right default and often not the document you want — the
+   * conservationist asks about the ground under one plan, or one lease.
+   *
+   * The picker is hidden on paper, so what matters most here is that the
+   * printout says which ground it covers.
+   */
+  const onPastures = () => {
+    pastures = [pasture("north", "North Pasture"), pasture("creek", "Creek Pasture")];
+    // P1–P3 north, P4–P5 creek.
+    paddocks = paddocks.map((p, i) => ({ ...p, pastureId: i < 3 ? "north" : "creek" }));
+  };
+
+  const pick = (value: string) =>
+    fireEvent.change(screen.getByLabelText("Ground"), { target: { value } });
+
+  it("offers no picker on a farm whose paddocks carry no pasture", async () => {
+    // Which is every farm before 052, and the shape of most farms since.
+    someGrazing();
+    await mount();
+    expect(screen.queryByLabelText("Ground")).toBeNull();
+  });
+
+  it("offers no picker when all the ground is on one pasture", async () => {
+    // A control with one answer is not a control.
+    someGrazing();
+    pastures = [pasture("north", "North Pasture")];
+    paddocks = paddocks.map((p) => ({ ...p, pastureId: "north" }));
+    await mount();
+    expect(screen.queryByLabelText("Ground")).toBeNull();
+  });
+
+  it("opens on the whole farm", async () => {
+    onPastures();
+    someGrazing();
+    await mount();
+    expect((screen.getByLabelText("Ground") as HTMLSelectElement).value).toBe("");
+    expect(bodyRows()).toHaveLength(2);
+  });
+
+  it("drops the strips taken off other ground", async () => {
+    onPastures();
+    someGrazing();
+    await mount();
+    // The two strips in the window are on P4 (creek) and P3 (north).
+    pick("north");
+    expect(bodyRows().map((r) => cellsOf(r)[0])).toEqual(["P3-1"]);
+    pick("creek");
+    expect(bodyRows().map((r) => cellsOf(r)[0])).toEqual(["P4-2"]);
+    // Nothing here about what the box itself displays: `fireEvent.change`
+    // sets the DOM value, so it reads back the same whether the select is
+    // controlled or not. The rows moving is the evidence that it is.
+  });
+
+  // No test here that filtering leaves strip numbers alone: a paddock sits on
+  // one pasture, so this filter takes all of a paddock's strips or none, and
+  // such a test could not fail. The numbering that does need pinning is
+  // against the *range* filter, which "puts a row in for each strip grazed in
+  // the range" already does.
+
+  it("says on the page which ground the record covers", async () => {
+    // The picker is hidden on paper. A printout headed only by its dates,
+    // silently covering one pasture out of six, is a worse document than one
+    // with no filter at all.
+    onPastures();
+    someGrazing();
+    await mount();
+    expect(screen.getByText(/Grazing records for/).textContent).toContain("the whole farm");
+    pick("creek");
+    expect(screen.getByText(/Grazing records for/).textContent).toContain("Creek Pasture");
+  });
+
+  it("retotals the acres over the ground that is left", async () => {
+    onPastures();
+    someGrazing();
+    await mount();
+    const whole = document.querySelector(".pr-table tfoot")!.textContent!;
+    pick("creek");
+    const part = document.querySelector(".pr-table tfoot")!.textContent!;
+    expect([whole.includes("2 strips"), part.includes("1 strip")]).toEqual([true, true]);
+    expect(part).not.toBe(whole);
+  });
+
+  it("draws that pasture's ground and no more", async () => {
+    // Fitting the map to all 46 paddocks while the table shows eight is the
+    // same postage-stamp problem the Move page had.
+    onPastures();
+    someGrazing();
+    await mount();
+    const outlines = () =>
+      [...svg()!.querySelectorAll("path")].filter((p) => p.getAttribute("fill") === "var(--paper-tint)");
+    expect(outlines()).toHaveLength(5);
+    pick("creek");
+    expect(outlines()).toHaveLength(2);
+  });
+
+  it("says which ground was quiet, rather than that nothing happened", async () => {
+    onPastures();
+    events.push(
+      ev({ id: "a", paddockId: "p4", enteredAt: "2026-08-13T12:00:00.000Z",
+           exitedAt: "2026-08-14T12:00:00.000Z" }),
+    );
+    await mount();
+    pick("north");
+    expect(screen.getByText("No grazing recorded on North Pasture in this range.")).toBeTruthy();
+  });
+
+  it("groups the pastures under the places they are on", async () => {
+    // Six pastures across three leases read as three short lists rather than
+    // one long one.
+    properties = [property("home", "Home Farm"), property("voll", "The Vollmer Lease")];
+    pastures = [
+      pasture("north", "North Pasture", "home"),
+      pasture("creek", "Creek Pasture", "voll"),
+    ];
+    paddocks = paddocks.map((p, i) => ({ ...p, pastureId: i < 3 ? "north" : "creek" }));
+    someGrazing();
+    await mount();
+    const groups = [...screen.getByLabelText("Ground").querySelectorAll("optgroup")];
+    expect(groups.map((g) => g.getAttribute("label"))).toEqual(["Home Farm", "The Vollmer Lease"]);
+  });
+
+  it("leaves ungrouped the pastures nobody has placed", async () => {
+    // A farm part way through naming its places must not lose the rest of
+    // its ground out of the picker.
+    properties = [property("home", "Home Farm")];
+    pastures = [pasture("north", "North Pasture", "home"), pasture("creek", "Creek Pasture")];
+    paddocks = paddocks.map((p, i) => ({ ...p, pastureId: i < 3 ? "north" : "creek" }));
+    someGrazing();
+    await mount();
+    const picker = screen.getByLabelText("Ground");
+    expect([...picker.querySelectorAll("option")].map((o) => o.textContent!.split(" ·")[0]))
+      .toEqual(["The whole farm", "North Pasture", "Creek Pasture"]);
   });
 });

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { paddocksInPasture, pasturesInUse, type Paddock, type Pasture } from "./grazing";
+import {
+  paddocksInPasture,
+  pasturesInProperty,
+  pasturesInUse,
+  propertiesInUse,
+  type Paddock,
+  type Pasture,
+  type Property,
+} from "./grazing";
 
 /**
  * Which ground the Move page is working in.
@@ -128,5 +136,84 @@ describe("pasturesInUse", () => {
       "North Pasture",
       "Creek Pasture",
     ]);
+  });
+});
+
+const place = (id: string, name: string): Property => ({
+  id, name, code: null, acres: null, tenure: "owned", leaseEnds: null, notes: null, active: true,
+});
+
+describe("pasturesInProperty", () => {
+  const pastures = [
+    { ...pasture("north", "North Pasture"), propertyId: "home" },
+    { ...pasture("creek", "Creek Bottom"), propertyId: "home" },
+    { ...pasture("lease", "The Forty"), propertyId: "vollmer" },
+  ];
+
+  it("narrows to the place asked for", () => {
+    expect(pasturesInProperty(pastures, "home").map((p) => p.id)).toEqual(["north", "creek"]);
+  });
+
+  it("returns everything when no place is chosen", () => {
+    expect(pasturesInProperty(pastures, null)).toHaveLength(3);
+  });
+
+  it("returns everything for a farm that never assigned a property", () => {
+    // Which is every farm on file the day 064 runs. Scoping to a place
+    // nobody filled in would show nothing, with no way off the screen.
+    const loose = [pasture("north", "North Pasture"), pasture("creek", "Creek Bottom")];
+    expect(pasturesInProperty(loose, "home")).toHaveLength(2);
+  });
+
+  it("returns everything rather than nothing for a place that holds no ground", () => {
+    expect(pasturesInProperty(pastures, "empty-one")).toHaveLength(3);
+  });
+});
+
+describe("propertiesInUse", () => {
+  const properties = [place("vollmer", "The Vollmer place"), place("home", "Home Farm")];
+  const pastures = [
+    { ...pasture("north", "North Pasture"), propertyId: "home" },
+    { ...pasture("creek", "Creek Bottom"), propertyId: "home" },
+    { ...pasture("forty", "The Forty"), propertyId: "vollmer" },
+  ];
+  const paddocks = [
+    paddock("a", { pastureId: "north", acresGrazable: 28.5 }),
+    paddock("b", { pastureId: "north", acresGrazable: 31.25 }),
+    paddock("c", { pastureId: "creek", acresGrazable: 20 }),
+    paddock("d", { pastureId: "forty", acresGrazable: 44 }),
+  ];
+
+  it("orders by name, because a rotation number no longer spans the farm", () => {
+    expect(propertiesInUse(paddocks, pastures, properties).map((r) => r.property.name)).toEqual([
+      "Home Farm",
+      "The Vollmer place",
+    ]);
+  });
+
+  it("counts the pastures and the paddocks, and adds up the grazable acres", () => {
+    const [home] = propertiesInUse(paddocks, pastures, properties);
+    expect([home.pastures, home.paddocks, home.acres]).toEqual([2, 3, 79.75]);
+  });
+
+  it("leaves out a place with nothing on it", () => {
+    // A row somebody made and never filled. Offering it as somewhere to send
+    // a mob would be offering an empty county.
+    const withSpare = [...properties, place("spare", "Bought last week")];
+    expect(propertiesInUse(paddocks, pastures, withSpare).map((r) => r.property.id))
+      .toEqual(["home", "vollmer"]);
+  });
+
+  it("leaves out a place whose pastures hold no paddocks", () => {
+    const empty = pastures.concat({ ...pasture("bare", "Bare ground"), propertyId: "spare" });
+    const withSpare = [...properties, place("spare", "Bought last week")];
+    expect(propertiesInUse(paddocks, empty, withSpare).map((r) => r.property.id))
+      .toEqual(["home", "vollmer"]);
+  });
+
+  it("is empty for a farm whose pastures carry no property", () => {
+    // Which is what tells the page not to render the level at all.
+    const loose = [pasture("north", "North Pasture")];
+    expect(propertiesInUse([paddock("a", { pastureId: "north" })], loose, properties)).toEqual([]);
   });
 });

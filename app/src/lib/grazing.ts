@@ -3048,6 +3048,62 @@ export function pasturesInUse(
     .map(({ pasture, paddocks: n, acres }) => ({ pasture, paddocks: n, acres }));
 }
 
+/**
+ * The pastures on one place.
+ *
+ * Same rule as `paddocksInPasture`, and for the same reason: everything when
+ * no place is asked for, and everything rather than nothing when the place
+ * asked for holds none. A screen scoped to an empty place is a screen with no
+ * way off it.
+ */
+export function pasturesInProperty(pastures: Pasture[], propertyId: string | null): Pasture[] {
+  if (propertyId === null) return pastures;
+  const on = pastures.filter((p) => p.propertyId === propertyId);
+  return on.length > 0 ? on : pastures;
+}
+
+/**
+ * The places with ground on them, by name.
+ *
+ * Derived from the paddocks rather than read off the properties table, so a
+ * place somebody made and never filled is not offered as somewhere to send a
+ * mob. By name and not by round: since 064 a rotation number belongs to a
+ * pasture, so every place has a paddock numbered 1 and there is no farm-wide
+ * order left to sort on. Alphabetical is at least the same every morning.
+ */
+export function propertiesInUse(
+  paddocks: Paddock[],
+  pastures: Pasture[],
+  properties: Property[],
+): { property: Property; pastures: number; paddocks: number; acres: number }[] {
+  const placeOf = new Map(pastures.map((p) => [p.id, p.propertyId]));
+  const counted = new Map<string, { pastures: Set<string>; paddocks: number; acres: number }>();
+
+  for (const p of paddocks) {
+    if (p.pastureId === null) continue;
+    const place = placeOf.get(p.pastureId) ?? null;
+    if (place === null) continue;
+    const row = counted.get(place) ?? { pastures: new Set<string>(), paddocks: 0, acres: 0 };
+    row.pastures.add(p.pastureId);
+    row.paddocks += 1;
+    row.acres += p.acresGrazable ?? p.acresMeasured ?? 0;
+    counted.set(place, row);
+  }
+
+  return properties
+    .filter((pr) => counted.has(pr.id))
+    .map((pr) => {
+      const row = counted.get(pr.id)!;
+      return {
+        property: pr,
+        pastures: row.pastures.size,
+        paddocks: row.paddocks,
+        acres: Math.round(row.acres * 100) / 100,
+      };
+    })
+    .sort((a, b) => a.property.name.localeCompare(b.property.name));
+}
+
 /** A mob, where it is standing, and how long it has been there. */
 export interface MobStanding {
   group: GrazingGroup;

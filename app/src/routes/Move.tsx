@@ -19,6 +19,7 @@ import {
   fetchPaddocks,
   fetchPastures,
   fetchPlanPaddockTargets,
+  fetchProperties,
   grazeDownTo,
   groupHeadCount,
   inRotation,
@@ -27,7 +28,9 @@ import {
   mobRoster,
   mobWeight,
   paddocksInPasture,
+  pasturesInProperty,
   pasturesInUse,
+  propertiesInUse,
   openingWire,
   planStrip,
   readinessDays,
@@ -49,6 +52,7 @@ import {
   type Paddock,
   type Pasture,
   type PlanPaddockTarget,
+  type Property,
 } from "../lib/grazing";
 import {
   asPolygonRing,
@@ -110,6 +114,7 @@ type Load =
       removals: ForageRemoval[];
       availability: ForageAvailability[];
       groups: GrazingGroup[];
+      properties: Property[];
       pastures: Pasture[];
       members: GrazingGroupMember[];
       weights: Map<string, number>;
@@ -181,10 +186,14 @@ export default function Move() {
    *  in. Cleared the moment a paddock is chosen, because the paddock says
    *  which pasture it is in. */
   const [pastureOverride, setPastureOverride] = useState<string | null>(null);
+  /** A place picked deliberately, on the same terms as the pasture: cleared
+   *  the moment a pasture or a paddock is chosen, because those say which
+   *  place they are on. */
+  const [propertyOverride, setPropertyOverride] = useState<string | null>(null);
   /** Whether the ranked list of somewhere-else is open. */
   const [elsewhere, setElsewhere] = useState(false);
   /** Which segment of the locator bar has its siblings showing, if any. */
-  const [locatorOn, setLocatorOn] = useState<"pasture" | null>(null);
+  const [locatorOn, setLocatorOn] = useState<"property" | "pasture" | null>(null);
   /** Which mob is being moved. Null until one is picked, which resolves to
    *  whichever the roster puts first — the one standing longest. */
   const [groupId, setGroupId] = useState<string | null>(null);
@@ -221,9 +230,10 @@ export default function Move() {
       setLoad({ state: "error", message: "No farm on this business." });
       return;
     }
-    const [paddocks, pastures, events, removals, availability, groups, members, weights, plan] =
+    const [paddocks, properties, pastures, events, removals, availability, groups, members, weights, plan] =
       await Promise.all([
         fetchPaddocks(farmId),
+        fetchProperties(farmId),
         fetchPastures(farmId),
         fetchGrazingEvents(farmId),
         fetchForageRemovals(farmId),
@@ -234,7 +244,7 @@ export default function Move() {
         fetchActivePlan(farmId),
       ]);
     const targets = plan ? await fetchPlanPaddockTargets(plan.id) : [];
-    setLoad({ state: "ok", paddocks, pastures, events, removals, availability, groups, members, weights, targets, plan });
+    setLoad({ state: "ok", paddocks, properties, pastures, events, removals, availability, groups, members, weights, targets, plan });
   }, [farmId]);
 
   useEffect(() => {
@@ -303,10 +313,42 @@ export default function Move() {
    */
   const pastureId: string | null = pastureOverride ?? dest?.pastureId ?? null;
 
-  /** The pastures with ground in them, in the order the farm is walked. */
-  const pastures = useMemo(
-    () => (load.state === "ok" ? pasturesInUse(load.paddocks.filter((p) => p.active), load.pastures) : []),
+  /** Which place a pasture is on, for the segment above it. */
+  const placeOf = (id: string | null): string | null =>
+    id === null || load.state !== "ok"
+      ? null
+      : (load.pastures.find((p) => p.id === id)?.propertyId ?? null);
+
+  /**
+   * The place being worked on.
+   *
+   * The pasture decides it, the same way the paddock decides the pasture.
+   * `goToProperty` sets both at once — landing on a place with no pasture
+   * resolved would leave the map drawing the whole farm.
+   */
+  const propertyId: string | null = propertyOverride ?? placeOf(pastureId);
+
+  /** The places with ground on them. Empty on a farm that uses none, which
+   *  is what tells the bar not to render that segment. */
+  const places = useMemo(
+    () =>
+      load.state === "ok"
+        ? propertiesInUse(load.paddocks.filter((p) => p.active), load.pastures, load.properties)
+        : [],
     [load],
+  );
+
+  /** The pastures with ground in them, narrowed to the place being worked
+   *  on, in the order the farm is walked. */
+  const pastures = useMemo(
+    () =>
+      load.state === "ok"
+        ? pasturesInUse(
+            load.paddocks.filter((p) => p.active),
+            pasturesInProperty(load.pastures, propertyId),
+          )
+        : [],
+    [load, propertyId],
   );
 
   /**
@@ -318,8 +360,10 @@ export default function Move() {
    */
   const units = paddocksInPasture(allUnits, pastureId);
 
-  /** The pasture the bar is standing in, when it is one the farm uses. */
+  /** The pasture and the place the bar is standing in, when they are ones
+   *  the farm uses. */
   const here = pastures.find((p) => p.pasture.id === pastureId) ?? null;
+  const herePlace = places.find((p) => p.property.id === propertyId) ?? null;
 
   /**
    * Where else they could go, best-rested first.
@@ -519,7 +563,34 @@ export default function Move() {
    * destination in Creek Pasture, and leaving it set would draw a map of one
    * pasture with the wire on ground outside it.
    */
+  /**
+   * Work on another place.
+   *
+   * Its first pasture comes with it. A place picked with no pasture resolved
+   * would leave `pastureId` null, and the map would fit the whole farm —
+   * which is the crowding this level exists to undo.
+   */
+  const goToProperty = (id: string) => {
+    setPropertyOverride(id);
+    const first =
+      load.state === "ok"
+        ? (pasturesInUse(
+            load.paddocks.filter((p) => p.active),
+            pasturesInProperty(load.pastures, id),
+          )[0]?.pasture.id ?? null)
+        : null;
+    setPastureOverride(first);
+    setElsewhere(false);
+    setLocatorOn(null);
+    setDestId(null);
+    setBackOverride(null);
+    clearWire();
+    setMovingBack(false);
+    setError(null);
+  };
+
   const goToPasture = (id: string) => {
+    setPropertyOverride(null);
     setPastureOverride(id);
     setElsewhere(false);
     setLocatorOn(null);
@@ -637,6 +708,7 @@ export default function Move() {
    */
   const goToMob = (id: string) => {
     setGroupId(id);
+    setPropertyOverride(null);
     setPastureOverride(null);
     setElsewhere(false);
     setLocatorOn(null);
@@ -651,8 +723,10 @@ export default function Move() {
   };
 
   const goTo = (paddock: Paddock | null) => {
-    // The paddock says which pasture it is in, so a deliberate pasture choice
-    // has done its job the moment one is picked.
+    // The paddock says which pasture it is in, and the pasture says which
+    // place — so both deliberate choices have done their job the moment a
+    // paddock is picked.
+    setPropertyOverride(null);
     setPastureOverride(null);
     setElsewhere(false);
     setLocatorOn(null);
@@ -820,29 +894,69 @@ export default function Move() {
             a segment opens its siblings underneath rather than beside.
 
             Levels holding one thing get no segment, so a farm with a single
-            pasture sees no bar at all and the page reads exactly as it did.
-            That rule is why the farm level is absent today: one farm per
-            business until properties land.
+            pasture sees no bar at all and the page reads exactly as it did,
+            and a farm that has never named a property never grows the place
+            segment.
 
             The paddock is the end of the crumb and is not a picker. Which
             paddock to graze is a recovery decision, and it is made against
             rest days and acres — which is the "Elsewhere" list further down,
             and the map. A third way in would be a third way to get it wrong.
           */}
-          {pastures.length > 1 && (
+          {(places.length > 1 || pastures.length > 1) && (
             <nav className="mv-locator" aria-label="Where on the farm">
-              <button
-                type="button"
-                className={`mv-loc__seg${locatorOn === "pasture" ? " mv-loc__seg--open" : ""}`}
-                aria-expanded={locatorOn === "pasture"}
-                onClick={() => setLocatorOn(locatorOn === "pasture" ? null : "pasture")}
-              >
-                {here?.pasture.name ?? "All ground"}
-                <span className="mv-loc__caret" aria-hidden="true">▾</span>
-              </button>
-              <span className="mv-loc__sep" aria-hidden="true">▸</span>
+              {places.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    className={`mv-loc__seg${locatorOn === "property" ? " mv-loc__seg--open" : ""}`}
+                    aria-expanded={locatorOn === "property"}
+                    onClick={() => setLocatorOn(locatorOn === "property" ? null : "property")}
+                  >
+                    {herePlace?.property.name ?? "All ground"}
+                    <span className="mv-loc__caret" aria-hidden="true">▾</span>
+                  </button>
+                  <span className="mv-loc__sep" aria-hidden="true">▸</span>
+                </>
+              )}
+              {pastures.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    className={`mv-loc__seg${locatorOn === "pasture" ? " mv-loc__seg--open" : ""}`}
+                    aria-expanded={locatorOn === "pasture"}
+                    onClick={() => setLocatorOn(locatorOn === "pasture" ? null : "pasture")}
+                  >
+                    {here?.pasture.name ?? "All ground"}
+                    <span className="mv-loc__caret" aria-hidden="true">▾</span>
+                  </button>
+                  <span className="mv-loc__sep" aria-hidden="true">▸</span>
+                </>
+              )}
               <span className="mv-loc__here">{dest?.name ?? "no paddock yet"}</span>
             </nav>
+          )}
+
+          {locatorOn === "property" && (
+            <div className="mv-loc__panel" role="group" aria-label="Which property">
+              {places.map(({ property, pastures: n, acres }) => {
+                const on = property.id === propertyId;
+                return (
+                  <button
+                    key={property.id}
+                    type="button"
+                    className={`mv-loc__opt${on ? " mv-loc__opt--on" : ""}`}
+                    aria-pressed={on}
+                    onClick={() => goToProperty(property.id)}
+                  >
+                    <span className="mv-loc__optname">{property.name}</span>
+                    <span className="mv-loc__optnote">
+                      {n} pasture{n === 1 ? "" : "s"} · {Math.round(acres)} ac
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           )}
 
           {locatorOn === "pasture" && (

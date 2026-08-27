@@ -9,7 +9,9 @@ import type {
   GrazingPlan,
   MoveDraft,
   Paddock,
+  Pasture,
   PlanPaddockTarget,
+  Property,
   RemovalDraft,
 } from "../lib/grazing";
 import { REAL_ACRES, REAL_BOUNDARIES, REAL_SWEEP } from "../lib/__fixtures__/farm-geometry";
@@ -71,12 +73,17 @@ const mob = (id: string, name: string, active = true) => ({
   headCountManual: null, avgWeightLbManual: null, active, notes: null,
 });
 
-const pasture = (id: string, name: string) => ({
+const property = (id: string, name: string): Property => ({
+  id, name, code: null, acres: null, tenure: "owned", leaseEnds: null, notes: null, active: true,
+});
+
+const pasture = (id: string, name: string): Pasture => ({
   id, name, code: id.toUpperCase(), acres: null, notes: null, active: true, propertyId: null, boundary: null,
 });
 
 let groups = [mob("mob", "Main mob")];
-let pastures: ReturnType<typeof pasture>[] = [];
+let properties: Property[] = [];
+let pastures: Pasture[] = [];
 let paddocks = [1, 2, 3, 4, 5].map(unit);
 const events: GrazingEvent[] = [];
 const removals: ForageRemoval[] = [];
@@ -93,6 +100,7 @@ vi.mock("../lib/grazing", async (importOriginal) => {
   return {
     ...actual,
     fetchPaddocks: vi.fn(async () => paddocks),
+    fetchProperties: vi.fn(async () => properties),
     fetchPastures: vi.fn(async () => pastures),
     fetchGrazingEvents: vi.fn(async () => events),
     fetchForageRemovals: vi.fn(async () => removals),
@@ -128,6 +136,7 @@ afterEach(() => {
   vi.useRealTimers();
   cleanup();
   groups = [mob("mob", "Main mob")];
+  properties = [];
   pastures = [];
   paddocks = [1, 2, 3, 4, 5].map(unit);
   events.length = 0;
@@ -1494,5 +1503,152 @@ describe("the locator bar", () => {
     events.push(strip("s1", "p1", 0, 0.2, null));
     await mount();
     expect(document.querySelector(".mv-locator")).toBeNull();
+  });
+});
+
+describe("the place above the pasture", () => {
+  /**
+   * Green Pastures leases ground across a county. The locator gains a
+   * segment for it and nothing else changes — including for every farm that
+   * has never named a property, which must see no place segment at all.
+   */
+  const onPlaces = () => {
+    properties = [property("home", "The Home Farm"), property("voll", "The Vollmer Lease")];
+    pastures = [
+      { ...pasture("north", "North Pasture"), propertyId: "home" },
+      { ...pasture("creek", "Creek Pasture"), propertyId: "home" },
+      { ...pasture("forty", "The Forty"), propertyId: "voll" },
+    ];
+    pastures.push({ ...pasture("ridge", "Ridge"), propertyId: "voll" });
+    // P1–P2 north and P3 creek on the home farm; P4 the forty and P5 the
+    // ridge on the Vollmer. Two pastures each, so neither level collapses.
+    paddocks = paddocks.map((p, i) => ({
+      ...p,
+      pastureId: i < 2 ? "north" : i < 3 ? "creek" : i < 4 ? "forty" : "ridge",
+    }));
+  };
+
+  const seg = (n: number) => document.querySelectorAll(".mv-loc__seg")[n];
+  const opt = (name: string) =>
+    [...document.querySelectorAll(".mv-loc__opt")].find((b) => b.textContent!.startsWith(name))!;
+
+  const locator = () =>
+    document.querySelector(".mv-locator")?.textContent?.replace(/[▾▸]/g, " ").replace(/\s+/g, " ").trim() ?? null;
+
+  it("reads place then pasture then paddock", async () => {
+    onPlaces();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    expect(locator()).toBe("The Home Farm North Pasture Paddock 1");
+  });
+
+  it("shows no place segment on a farm that has never named one", async () => {
+    // Which is every farm on file the day 064 runs. Two pastures, no
+    // properties: one segment, exactly as before.
+    pastures = [pasture("north", "North Pasture"), pasture("creek", "Creek Pasture")];
+    paddocks = paddocks.map((p, i) => ({ ...p, pastureId: i < 3 ? "north" : "creek" }));
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    expect(document.querySelectorAll(".mv-loc__seg")).toHaveLength(1);
+    expect(locator()).toBe("North Pasture Paddock 1");
+  });
+
+  it("offers only the pastures of the place being worked on", async () => {
+    onPlaces();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    fireEvent.click(seg(1));
+    expect([...document.querySelectorAll(".mv-loc__optname")].map((e) => e.textContent))
+      .toEqual(["North Pasture", "Creek Pasture"]);
+  });
+
+  it("moves to another place and lands in its first pasture", async () => {
+    // A place picked with no pasture resolved would leave the map fitting
+    // the whole farm, which is the crowding this level exists to undo.
+    onPlaces();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    fireEvent.click(seg(0));
+    fireEvent.click(opt("The Vollmer Lease"));
+    expect(locator()).toBe("The Vollmer Lease The Forty no paddock yet");
+  });
+
+  it("offers only the pastures of the place just picked", async () => {
+    onPlaces();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    fireEvent.click(seg(0));
+    fireEvent.click(opt("The Vollmer Lease"));
+    fireEvent.click(seg(1));
+    expect([...document.querySelectorAll(".mv-loc__optname")].map((e) => e.textContent))
+      .toEqual(["The Forty", "Ridge"]);
+  });
+
+  it("scopes the ground to that one pasture, not to the whole place", async () => {
+    // Landing on a place and drawing every paddock on it would be the
+    // crowding this level exists to undo, one level up.
+    onPlaces();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    fireEvent.click(seg(0));
+    fireEvent.click(opt("The Vollmer Lease"));
+    expect(candidates()).toEqual(["Paddock 4"]);
+  });
+
+  it("drops the pasture segment when a place holds one pasture", async () => {
+    // The collapse rule at the level below.
+    properties = [property("home", "The Home Farm"), property("voll", "The Vollmer Lease")];
+    pastures = [
+      { ...pasture("north", "North Pasture"), propertyId: "home" },
+      { ...pasture("creek", "Creek Pasture"), propertyId: "home" },
+      { ...pasture("forty", "The Forty"), propertyId: "voll" },
+    ];
+    paddocks = paddocks.map((p, i) => ({
+      ...p,
+      pastureId: i < 2 ? "north" : i < 3 ? "creek" : "forty",
+    }));
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    fireEvent.click(seg(0));
+    fireEvent.click(opt("The Vollmer Lease"));
+    expect(document.querySelectorAll(".mv-loc__seg")).toHaveLength(1);
+    expect(locator()).toBe("The Vollmer Lease no paddock yet");
+  });
+
+  it("says how much ground each place holds", async () => {
+    onPlaces();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    fireEvent.click(seg(0));
+    expect(opt("The Home Farm").textContent).toMatch(/2 pastures · \d+ ac/);
+    expect(opt("The Vollmer Lease").textContent).toMatch(/2 pastures · \d+ ac/);
+  });
+
+  it("follows the paddock back to its own place", async () => {
+    // Picking a paddock settles the pasture, and the pasture settles the
+    // place — so the three can never disagree.
+    onPlaces();
+    events.push(strip("s1", "p1", 0, 0.2, null));
+    await mount();
+    fireEvent.click(seg(0));
+    fireEvent.click(opt("The Vollmer Lease"));
+    goElsewhere("Paddock 4");
+    expect(locator()).toBe("The Vollmer Lease The Forty Paddock 4");
+  });
+
+  it("goes back to the mob's own place when the mob changes", async () => {
+    onPlaces();
+    groups = [mob("a", "Main mob"), mob("b", "Yearlings")];
+    events.push(
+      { ...strip("s1", "p1", 0, 0.2, null), groupId: "a", enteredAt: "2026-08-09T06:00:00.000Z" },
+      { ...strip("s2", "p5", 0, 0.2, null), groupId: "b", enteredAt: "2026-08-12T06:00:00.000Z" },
+    );
+    await mount();
+    fireEvent.click(seg(0));
+    fireEvent.click(opt("The Vollmer Lease"));
+    fireEvent.click([...document.querySelectorAll("button.mv-mob")].find((b) => b.textContent!.startsWith("Yearlings"))!);
+    // The Yearlings are in P5, on the Vollmer's ridge — and the page is
+    // there because the mob decided it, not a leftover override.
+    expect(locator()).toBe("The Vollmer Lease Ridge Paddock 5");
   });
 });

@@ -168,6 +168,35 @@ const unitPath = (n: number) =>
 const onward = (label: string) =>
   [...document.querySelectorAll("button.grz-preset")].find((b) => b.textContent === label)!;
 
+/**
+ * "Elsewhere" — the ranked list of where else they could go.
+ *
+ * Opening it is idempotent: the toggle only matches while it is shut, so a
+ * test that picks twice does not close the list on the second pick.
+ */
+const openElsewhere = () => {
+  const toggle = [...document.querySelectorAll("button.grz-preset")].find(
+    (b) => b.textContent === "Elsewhere…",
+  );
+  if (toggle) fireEvent.click(toggle);
+};
+
+const nameOf = (row: Element) => row.querySelector(".mv-cand__name")!.textContent!.trim();
+
+/** Every paddock the list offers, in the order it offers them. */
+const candidates = () => {
+  openElsewhere();
+  return [...document.querySelectorAll("button.mv-cand")].map(nameOf);
+};
+
+/** The row for a paddock, whatever it says after the name. */
+const candidate = (name: string) => {
+  openElsewhere();
+  return [...document.querySelectorAll("button.mv-cand")].find((b) => nameOf(b).startsWith(name))!;
+};
+
+const goElsewhere = (name: string) => fireEvent.click(candidate(name));
+
 const wirePct = () => {
   const m = screen.getByText(/% → \d+%/).textContent!.match(/(\d+)% → (\d+)%/)!;
   return { back: Number(m[1]), wire: Number(m[2]) };
@@ -340,7 +369,7 @@ describe("moving on, and skipping", () => {
     // Paddock 4 is shut up for hay, so they go from 3 to 5.
     events.push(strip("s1", "p3", 0, 0.9, null));
     await mount();
-    fireEvent.click(onward("P5"));
+    goElsewhere("Paddock 5");
     fireEvent.click(screen.getByText("Log the move"));
 
     await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
@@ -1045,7 +1074,7 @@ describe("more than one mob", () => {
     await mount();
 
     // Send Main mob somewhere other than where it stands.
-    fireEvent.click(onward("P4"));
+    goElsewhere("Paddock 4");
     expect(screen.getByText(/is in/).textContent).toMatch(/moving on to Paddock 4/);
 
     fireEvent.click(chip("Finishers"));
@@ -1103,9 +1132,9 @@ describe("more than one pasture", () => {
     events.push(strip("s1", "p3", 0, 0.2, null));
     await mount();
     expect(document.querySelectorAll(".mv-pastures button")).toHaveLength(0);
-    // P5 rather than P4: the next unit in the round renders as "On to
-    // Paddock 4", so asking for its code finds nothing and proves nothing.
-    expect(onward("P5")).toBeTruthy();
+    // Every other paddock on the farm is still reachable — the whole farm is
+    // one scope when nothing carries a pasture.
+    expect(candidates().sort()).toEqual(["Paddock 1", "Paddock 2", "Paddock 4", "Paddock 5"]);
   });
 
   it("offers only the paddocks of the pasture the mob is standing in", async () => {
@@ -1113,12 +1142,9 @@ describe("more than one pasture", () => {
     events.push(strip("s1", "p1", 0, 0.2, null));
     await mount();
 
-    // North holds P1–P3. P2 is the next in the round so it reads "On to
-    // Paddock 2"; P3 is on offer by code, and Creek's P4 and P5 are not.
-    expect(onward("P3")).toBeTruthy();
-    const offered = [...document.querySelectorAll("button.grz-preset")].map((b) => b.textContent);
-    expect(offered).not.toContain("P4");
-    expect(offered).not.toContain("P5");
+    // North holds P1–P3, and the mob is in P1. Creek's P4 and P5 are not on
+    // offer at all.
+    expect(candidates().sort()).toEqual(["Paddock 2", "Paddock 3"]);
   });
 
   it("draws only that pasture's paddocks, and fits the map to them", async () => {
@@ -1139,8 +1165,7 @@ describe("more than one pasture", () => {
     fireEvent.click(pastureChip("Creek Pasture"));
 
     expect(pastureChip("Creek Pasture").getAttribute("aria-pressed")).toBe("true");
-    expect(onward("P4")).toBeTruthy();
-    expect([...document.querySelectorAll("button.grz-preset")].map((b) => b.textContent)).not.toContain("P2");
+    expect(candidates().sort()).toEqual(["Paddock 4", "Paddock 5"]);
   });
 
   it("drops the destination when the pasture changes", async () => {
@@ -1151,7 +1176,7 @@ describe("more than one pasture", () => {
     events.push(strip("s1", "p1", 0, 0.2, null));
     await mount();
 
-    fireEvent.click(onward("P3"));
+    goElsewhere("Paddock 3");
     expect(screen.getByText(/is in/).textContent).toMatch(/moving on to Paddock 3/);
 
     fireEvent.click(pastureChip("Creek Pasture"));
@@ -1165,7 +1190,7 @@ describe("more than one pasture", () => {
     await mount();
 
     fireEvent.click(pastureChip("Creek Pasture"));
-    fireEvent.click(onward("P5"));
+    goElsewhere("Paddock 5");
     expect(pastureChip("Creek Pasture").getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText(/is in/).textContent).toMatch(/moving on to Paddock 5/);
   });
@@ -1198,5 +1223,147 @@ describe("more than one pasture", () => {
     // because the mob decided it rather than the leftover override.
     expect(screen.getByText(/is in/).textContent).toMatch(/Yearlings is in Paddock 4/);
     expect(pastureChip("Creek Pasture").getAttribute("aria-pressed")).toBe("true");
+  });
+});
+
+describe("where else they could go", () => {
+  /**
+   * The picker used to be a row of paddock codes in rotation order. At
+   * forty-six that is not a picker, and at eight it still made you hold the
+   * rest days in your head — which is the one figure the decision turns on.
+   *
+   * The ranking is `boardRows`, the same function the grazing board draws
+   * with, so the two cannot disagree about which ground is ready.
+   */
+
+  /** A closed graze: in on `entered`, out on `exited`. */
+  const grazed = (id: string, paddockId: string, entered: string, exited: string): GrazingEvent => ({
+    ...strip(id, paddockId, 0, 1, exited),
+    enteredAt: entered,
+  });
+
+  const target = (paddockId: string, growing: number): PlanPaddockTarget => ({
+    id: `t-${paddockId}`, planId: "plan", paddockId,
+    targetEntryHeightIn: null, targetResidualHeightIn: null,
+    minRecoveryDaysGrowing: growing, minRecoveryDaysDormant: null,
+    targetUtilizationPct: null, plannedGrazingNotes: null, plannedDefermentNotes: null,
+    sensitiveAreaStrategy: null, notes: null,
+  });
+
+  it("puts the longest-rested paddock at the top, not the next one in the round", async () => {
+    // Rotation order runs 1..5, so a list in rotation order would read
+    // 2, 4, 5. Rest says otherwise: P5 has been shut up since June.
+    events.push(
+      strip("open", "p1", 0, 0.2, null),
+      grazed("g2", "p2", "2026-08-01T12:00:00.000Z", "2026-08-06T12:00:00.000Z"),
+      grazed("g4", "p4", "2026-07-10T12:00:00.000Z", "2026-07-14T12:00:00.000Z"),
+      grazed("g5", "p5", "2026-06-01T12:00:00.000Z", "2026-06-05T12:00:00.000Z"),
+    );
+    await mount();
+    // P3 has never been grazed, which is a candidate without a number — it
+    // sorts below anything with a real rest figure.
+    expect(candidates()).toEqual(["Paddock 5", "Paddock 4", "Paddock 2", "Paddock 3"]);
+  });
+
+  it("says how long each one has rested", async () => {
+    events.push(
+      strip("open", "p1", 0, 0.2, null),
+      grazed("g2", "p2", "2026-08-01T12:00:00.000Z", "2026-08-06T12:00:00.000Z"),
+    );
+    await mount();
+    expect(candidate("Paddock 2").querySelector(".mv-cand__rest")!.textContent).toMatch(/^7d/);
+    expect(candidate("Paddock 3").querySelector(".mv-cand__rest")!.textContent).toMatch(/never grazed/);
+  });
+
+  it("dates the last grazing, which is an instant rather than a day", async () => {
+    // The page's other date is a cutting, which is a plain day. Formatting a
+    // timestamp the same way produced "…000ZT00:00:00" — an Invalid Date,
+    // rendered as those words in the column.
+    events.push(
+      strip("open", "p1", 0, 0.2, null),
+      grazed("g2", "p2", "2026-08-01T12:00:00.000Z", "2026-08-06T12:00:00.000Z"),
+    );
+    await mount();
+    expect(candidate("Paddock 2").querySelector(".mv-cand__seen")!.textContent).toBe("Aug 6, 2026");
+  });
+
+  it("marks ground short of the plan's recovery figure, and still lets you take it", async () => {
+    // Seven days rested against a fourteen-day recovery. A warning, not a
+    // lock: sometimes you graze it anyway, and the app has no business
+    // deciding that for the farm.
+    plan = withPlan();
+    targets.push(target("p2", 14));
+    events.push(
+      strip("open", "p1", 0, 0.2, null),
+      grazed("g2", "p2", "2026-08-01T12:00:00.000Z", "2026-08-06T12:00:00.000Z"),
+    );
+    await mount();
+    expect(candidate("Paddock 2").querySelector(".grz-eligible--early")!.textContent).toMatch(/7d short/);
+
+    goElsewhere("Paddock 2");
+    expect(screen.getByText(/is in/).textContent).toMatch(/moving on to Paddock 2/);
+  });
+
+  it("says nothing about ground that has met its target", async () => {
+    plan = withPlan();
+    targets.push(target("p2", 5));
+    events.push(
+      strip("open", "p1", 0, 0.2, null),
+      grazed("g2", "p2", "2026-08-01T12:00:00.000Z", "2026-08-06T12:00:00.000Z"),
+    );
+    await mount();
+    expect(candidate("Paddock 2").querySelector(".grz-eligible--early")).toBeNull();
+  });
+
+  it("sinks a paddock another mob is standing in, and says whose", async () => {
+    // It is on the list because the ground exists, not because it is a
+    // candidate — putting two mobs on the same paddock is the mistake this
+    // row is there to prevent, not to invite.
+    // Yearlings are in P2 — near the front of the round, and rested since
+    // June before they went in. Both of those would float it to the top of a
+    // list that ranked any other way.
+    groups = [mob("a", "Main mob"), mob("b", "Yearlings")];
+    events.push(
+      { ...strip("s1", "p1", 0, 0.2, null), groupId: "a" },
+      { ...strip("s2", "p2", 0, 0.2, null), groupId: "b" },
+      grazed("g2", "p2", "2026-06-01T12:00:00.000Z", "2026-06-05T12:00:00.000Z"),
+      grazed("g5", "p5", "2026-08-01T12:00:00.000Z", "2026-08-06T12:00:00.000Z"),
+    );
+    await mount();
+    const list = candidates();
+    expect(list[list.length - 1]).toMatch(/^Paddock 2/);
+    expect(nameOf(candidate("Paddock 2"))).toMatch(/Yearlings in it/);
+  });
+
+  it("does not offer the paddock they are already in", async () => {
+    events.push(strip("open", "p3", 0, 0.2, null));
+    await mount();
+    expect(candidates()).not.toContain("Paddock 3");
+  });
+
+  it("does not offer the paddock already chosen to move to", async () => {
+    // Once you have picked P4, "elsewhere" means somewhere other than P4.
+    events.push(strip("open", "p3", 0, 0.2, null));
+    await mount();
+    fireEvent.click(screen.getByText("On to Paddock 4"));
+    expect(candidates()).not.toContain("Paddock 4");
+    // And the ground they are standing on comes back on offer, named with
+    // the mob that is on it — "stay put" is a destination like any other.
+    expect(nameOf(candidate("Paddock 3"))).toMatch(/Main mob in it/);
+  });
+
+  it("shuts the list once a paddock is taken", async () => {
+    events.push(strip("open", "p3", 0, 0.2, null));
+    await mount();
+    goElsewhere("Paddock 5");
+    expect(document.querySelectorAll("button.mv-cand")).toHaveLength(0);
+  });
+
+  it("offers nowhere else on a one-paddock farm", async () => {
+    // No toggle rather than a toggle that opens an empty list.
+    paddocks = [unit(1)];
+    events.push(strip("open", "p1", 0, 0.2, null));
+    await mount();
+    expect(onward("Elsewhere…")).toBeUndefined();
   });
 });

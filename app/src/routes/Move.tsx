@@ -6,6 +6,7 @@ import { DaysOfFeedWorking } from "../components/herd/DaysOfFeedWorking";
 import { useWorkspace } from "../lib/workspace";
 import {
   assumptionsFor,
+  boardRows,
   DEFAULT_UTILIZATION_PCT,
   drawnSliceAcres,
   fetchActivePlan,
@@ -37,6 +38,7 @@ import {
   sweepToForWidthFt,
   widthForHours,
   FT_PER_YD,
+  type BoardRow,
   type ForageAssumptions,
   type ForageAvailability,
   type ForageRemoval,
@@ -140,6 +142,19 @@ function daysInWords(days: number | null): string {
   return days === 1 ? "1 day in" : `${days} days in`;
 }
 
+/**
+ * How long a candidate has been sitting.
+ *
+ * "Never grazed" rather than a dash, because on a farm that has just added
+ * ground the difference between "no record" and "no rest" is the whole
+ * decision.
+ */
+function restWords(r: BoardRow): string {
+  if (r.rest.state === "occupied") return "occupied";
+  if (r.rest.state === "never") return "never grazed";
+  return `${r.rest.days}d`;
+}
+
 const nowIso = () => new Date().toISOString();
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -166,6 +181,8 @@ export default function Move() {
    *  in. Cleared the moment a paddock is chosen, because the paddock says
    *  which pasture it is in. */
   const [pastureOverride, setPastureOverride] = useState<string | null>(null);
+  /** Whether the ranked list of somewhere-else is open. */
+  const [elsewhere, setElsewhere] = useState(false);
   /** Which mob is being moved. Null until one is picked, which resolves to
    *  whichever the roster puts first — the one standing longest. */
   const [groupId, setGroupId] = useState<string | null>(null);
@@ -285,6 +302,34 @@ export default function Move() {
    * exactly as it did before.
    */
   const units = paddocksInPasture(allUnits, pastureId);
+
+  /**
+   * Where else they could go, best-rested first.
+   *
+   * Straight from `boardRows`, which is what the grazing board draws — so the
+   * two cannot rank the same ground differently. It already sorts
+   * longest-rested first, puts occupied units last, and compares rest against
+   * the plan's recovery figure for the season the farm is actually in.
+   *
+   * Which paddock to move to is a recovery decision, and a row of codes in
+   * rotation order makes you hold the rest days in your head. At eight
+   * paddocks that is a nuisance; the point of ranking is that it is the same
+   * gesture at eight as at forty-six.
+   */
+  const candidates = useMemo(() => {
+    if (load.state !== "ok") return [];
+    return boardRows({
+      paddocks: units,
+      events: load.events,
+      groups: load.groups,
+      targets: load.targets,
+      removals: load.removals,
+      nowIso: nowIso(),
+    }).filter((r) => r.paddock.id !== dest?.id);
+    // `units` is derived fresh each render; `load` and `pastureId` are what
+    // actually move it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load, pastureId, dest]);
 
   const movingOn = dest !== null && dest.id !== standing?.paddock?.id;
 
@@ -458,6 +503,7 @@ export default function Move() {
    */
   const goToPasture = (id: string) => {
     setPastureOverride(id);
+    setElsewhere(false);
     setDestId(null);
     setBackOverride(null);
     clearWire();
@@ -573,6 +619,7 @@ export default function Move() {
   const goToMob = (id: string) => {
     setGroupId(id);
     setPastureOverride(null);
+    setElsewhere(false);
     setDestId(null);
     setBackOverride(null);
     clearWire();
@@ -587,6 +634,7 @@ export default function Move() {
     // The paddock says which pasture it is in, so a deliberate pasture choice
     // has done its job the moment one is picked.
     setPastureOverride(null);
+    setElsewhere(false);
     setDestId(paddock?.id ?? null);
     setBackOverride(null);
     clearWire();
@@ -1217,17 +1265,68 @@ export default function Move() {
                 On to {standing.next.name}
               </button>
             )}
-            {units
-              .filter((p) => p.id !== dest?.id && p.id !== standing?.next?.id)
-              .map((p) => (
-                <button key={p.id} type="button" className="grz-preset" onClick={() => goTo(p)}>
-                  {p.code ?? p.name}
-                </button>
-              ))}
+            {candidates.length > 0 && (
+              <button
+                type="button"
+                className={`grz-preset ${elsewhere ? "grz-preset--on" : ""}`}
+                aria-expanded={elsewhere}
+                onClick={() => setElsewhere(!elsewhere)}
+              >
+                {elsewhere ? "Close the list" : "Elsewhere…"}
+              </button>
+            )}
             {dest !== null && standing?.paddock && dest.id !== standing.paddock.id && (
               <button type="button" className="grz-preset" onClick={() => goTo(null)}>
                 Stay in {standing.paddock.name}
               </button>
+            )}
+
+            {/* Longest-rested first, which is the order the grazing board
+                draws — same function, so the two cannot disagree about which
+                ground is ready. */}
+            {elsewhere && (
+              <div className="mv-elsewhere">
+                <p className="mv-elsewhere__lead">Longest rested first.</p>
+                <div className="mv-elsewhere__head" aria-hidden="true">
+                  <span>Paddock</span>
+                  <span>Rested</span>
+                  <span className="text-right">Acres</span>
+                  <span className="text-right hide-sm">Last grazed</span>
+                </div>
+                {candidates.map((r) => (
+                  <button
+                    key={r.paddock.id}
+                    type="button"
+                    className="mv-cand"
+                    onClick={() => goTo(r.paddock)}
+                  >
+                    <span className="mv-cand__name">
+                      {r.paddock.name}
+                      {r.occupant && (
+                        <span className="mv-cand__note">
+                          {" "}
+                          — {r.occupant.group?.name ?? "a mob"} in it
+                        </span>
+                      )}
+                    </span>
+                    <span className="mv-cand__rest mono">
+                      {restWords(r)}
+                      {r.eligible && !r.eligible.met && (
+                        <span className="grz-eligible grz-eligible--early">
+                          {" "}
+                          {r.eligible.shortBy}d short
+                        </span>
+                      )}
+                    </span>
+                    <span className="mv-cand__acres mono text-right">
+                      {r.paddock.acresGrazable ?? r.paddock.acresMeasured ?? "—"}
+                    </span>
+                    <span className="mv-cand__seen mono text-right hide-sm">
+                      {r.lastGrazed ? shortDate(r.lastGrazed) : "—"}
+                    </span>
+                  </button>
+                ))}
+              </div>
             )}
           </div>
 
@@ -1313,10 +1412,17 @@ function grazeWord(source: string): string {
   }
 }
 
+/**
+ * A date, however it arrived.
+ *
+ * A cutting is a plain date and a grazing is an instant, and both land here.
+ * Appending midnight to something that already carries a time gives
+ * "2026-08-05T12:00:00.000ZT00:00:00", which is an Invalid Date — and the
+ * page renders those words rather than failing.
+ */
 function shortDate(iso: string): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
-    year: "numeric", month: "short", day: "numeric",
-  });
+  const d = iso.length <= 10 ? new Date(`${iso}T00:00:00`) : new Date(iso);
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
 /**

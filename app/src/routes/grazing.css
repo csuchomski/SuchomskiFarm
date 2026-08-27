@@ -761,6 +761,69 @@
 
 .mv-onward { display: flex; flex-wrap: wrap; gap: 6px; padding: 16px 0 0; }
 
+/* ── where else they could go ─────────────────────────────────────────
+   A row of paddock codes made you hold the rest days in your head, and at
+   forty-six it was not a picker at all. This is the grazing board's own
+   ordering — longest rested first — narrowed to the pasture being worked
+   and made tappable. Full width inside the flex row above it. */
+
+.mv-elsewhere {
+  flex: 1 1 100%;
+  margin-top: 10px;
+  border-top: 1px solid var(--hairline);
+}
+
+.mv-elsewhere__lead {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin: 10px 0 2px;
+}
+
+.mv-elsewhere__head,
+.mv-cand {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7.5rem 4.5rem 7rem;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+}
+
+.mv-elsewhere__head {
+  font: 500 10.5px/1 "IBM Plex Sans", sans-serif;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.mv-cand {
+  font: 400 14px/1.35 "IBM Plex Sans", sans-serif;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink);
+  padding: 10px 8px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.mv-cand:hover { background: var(--paper-tint); }
+.mv-cand:focus-visible { outline: 2px solid var(--herd-green); outline-offset: -2px; }
+
+.mv-cand__note { color: var(--ink-muted); font-size: 12.5px; }
+.mv-cand__rest { font-size: 13px; color: var(--ink-soft); }
+.mv-cand__acres,
+.mv-cand__seen { font-size: 13px; color: var(--ink-muted); }
+
+/* Three columns on a phone: the date is the one a thumb can do without,
+   and it is on the grazing board anyway. */
+@media (max-width: 860px) {
+  .mv-elsewhere__head,
+  .mv-cand { grid-template-columns: minmax(0, 1fr) 6.5rem 4rem; }
+}
+
 /* What the mob actually did to the strip they are standing on. Above the
    forecast and set apart from it, because it is the one measured thing in
    the morning and it is about the ground behind the wire, not ahead. */

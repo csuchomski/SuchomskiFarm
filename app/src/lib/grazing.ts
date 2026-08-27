@@ -3041,9 +3041,19 @@ export function inRotation(paddocks: Paddock[]): Paddock[] {
 /**
  * The unit after this one in the round, wrapping past the last back to the
  * first. Null when this unit is not in the rotation, or is the only one.
+ *
+ * **The round is walked inside a pasture.** Nobody finishes the last paddock
+ * of the home place and steps straight onto the first of a lease eight miles
+ * away — that is a decision, not a next. So the ring is this paddock's own
+ * pasture, and a farm whose paddocks carry no pasture is one ring, exactly as
+ * before. Paddocks left unassigned on a farm that does use pastures form
+ * their own ring together, because that is what they are: the ground nobody
+ * has said where it is yet.
  */
 export function nextInRotation(paddock: Paddock, paddocks: Paddock[]): Paddock | null {
-  const ring = inRotation(paddocks).filter((p) => p.rotationOrder !== null);
+  const ring = inRotation(paddocks).filter(
+    (p) => p.rotationOrder !== null && p.pastureId === paddock.pastureId,
+  );
   if (ring.length < 2) return null;
   const i = ring.findIndex((p) => p.id === paddock.id);
   return i === -1 ? null : ring[(i + 1) % ring.length];

@@ -181,6 +181,68 @@ describe("which round a stay falls in", () => {
   });
 });
 
+describe("a fortnight of wire moves is one visit, not a fortnight of them", () => {
+  /**
+   * The defect 067 fixed, kept here so it cannot come back.
+   *
+   * Under strip grazing a stay is many events — one per wire move — and the
+   * round rule ("they have already been here this round") has to be applied
+   * to stays, not to events. Applied to events, the second wire move inside a
+   * paddock looks like walking back into ground already grazed, and every
+   * strip becomes its own trip round the farm. Measured on Golden Acres:
+   * fourteen moves that are really two paddock visits came out as 13 rounds
+   * averaging 1.14 paddocks each.
+   */
+  const strip = (
+    id: string, paddockId: string, entered: string, exited: string | null,
+    from: number, to: number,
+  ): GrazingEvent => ({
+    ...day(id, paddockId, "main", entered, exited),
+    sweptFrom: from,
+    sweptTo: to,
+  });
+
+  it("counts one stay however many times the wire moved across the paddock", () => {
+    // Golden Acres to the day: five strips off one paddock, then nine off the
+    // next, each closing exactly as the following one opens.
+    const events = [
+      strip("a1", "n1", at("08-16"), at("08-17"), 0, 0.2),
+      strip("a2", "n1", at("08-17"), at("08-18"), 0.2, 0.4),
+      strip("a3", "n1", at("08-18"), at("08-20"), 0.4, 0.6),
+      strip("b1", "n2", at("08-21"), at("08-23"), 0, 0.3),
+      strip("b2", "n2", at("08-23"), at("08-25"), 0.3, 0.55),
+    ];
+    const { rounds: out } = view({ rounds: [round("r1", "main", "north", at("08-01"))], events });
+    expect(out).toHaveLength(1);
+    expect(out[0].stays.map((s) => [s.paddockId, s.strips])).toEqual([["n1", 3], ["n2", 2]]);
+  });
+
+  it("does not open a second round part way across a paddock", () => {
+    // What the broken backfill did: a round per wire move.
+    const events = [
+      strip("a1", "n1", at("08-16"), at("08-17"), 0, 0.2),
+      strip("a2", "n1", at("08-17"), at("08-18"), 0.2, 0.4),
+    ];
+    const { rounds: out, unassigned } = view({
+      rounds: [round("r1", "main", "north", at("08-01"))],
+      events,
+    });
+    expect(out.map((v) => v.stays.length)).toEqual([1]);
+    expect(unassigned).toEqual([]);
+  });
+
+  it("does treat a genuine return days later as a second visit", () => {
+    // The other side of the same rule: joining on paddock id alone would
+    // erase the rest between two visits, which is the figure the page is for.
+    const events = [
+      strip("a1", "n1", at("06-01"), at("06-03"), 0, 0.5),
+      strip("a2", "n1", at("07-20"), at("07-22"), 0, 0.5),
+    ];
+    const { rounds: out } = view({ rounds: [round("r1", "main", "north", at("05-01"))], events });
+    expect(out[0].stays.map((s) => s.strips)).toEqual([1, 1]);
+  });
+});
+
 describe("grazing older than any round", () => {
   it("hands it back rather than sweeping it into the first round", () => {
     // A move corrected to a date before the first round is something the farm

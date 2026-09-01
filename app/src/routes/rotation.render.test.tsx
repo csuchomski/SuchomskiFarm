@@ -80,16 +80,42 @@ const event = (
 });
 
 const paddocks = [1, 2, 3, 4, 5].map(paddock);
+const theMob = {
+  id: "mob", name: "Main mob", species: "cattle", class: "mixed",
+  headCountManual: null, avgWeightLbManual: null, active: true, notes: null,
+};
+
+/**
+ * One round, opened well before anything in these fixtures.
+ *
+ * A round is a row the farm starts now rather than something derived from the
+ * moves (066), so these tests need one to hang their grazing on. Dated in
+ * April so every fixture's moves fall under it whatever month they use.
+ */
+let rounds: {
+  id: string; groupId: string; pastureId: string | null;
+  startedAt: string; name: string | null; notes: string | null; derived: boolean;
+}[] = [];
+
 const events: GrazingEvent[] = [];
 const removals: ForageRemoval[] = [];
 
 const recorded = vi.fn(async (_farmId: string, _draft: RemovalDraft) => "new-removal");
+const savedRound = vi.fn(async (_f: string, _id: string | null, _e: Record<string, unknown>) => "new-round");
+const deletedRound = vi.fn(async (_f: string, _id: string) => {});
+let pastures: { id: string; name: string; code: null; acres: null; notes: null;
+                active: boolean; propertyId: null; boundary: null }[] = [];
 
 vi.mock("../lib/grazing", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/grazing")>();
   return {
     ...actual,
     fetchPaddocks: vi.fn(async () => paddocks),
+    fetchPastures: vi.fn(async () => pastures),
+    saveRound: savedRound,
+    deleteRound: deletedRound,
+    fetchGrazingGroups: vi.fn(async () => [theMob]),
+    fetchRounds: vi.fn(async () => rounds),
     fetchGrazingEvents: vi.fn(async () => events),
     fetchForageRemovals: vi.fn(async () => removals),
     recordRemoval: recorded,
@@ -106,6 +132,14 @@ afterEach(() => {
   cleanup();
   events.length = 0;
   removals.length = 0;
+  pastures = [];
+  savedRound.mockClear();
+  deletedRound.mockClear();
+  rounds = [{
+    id: "r1", groupId: "mob", pastureId: null,
+    startedAt: "2026-04-01T00:00:00.000Z", name: null, notes: null, derived: false,
+  }];
+
   recorded.mockClear();
 });
 
@@ -124,7 +158,21 @@ const mount = async () => {
 };
 
 /** One round through three units in May, a second starting in late June. */
+/**
+ * Two trips through the ground, as the farm would have marked them.
+ *
+ * The second starts on 20 June, when they walked back into P1. Under the old
+ * derived rule the app worked that boundary out for itself; it is a row now,
+ * because where a round begins depends on hay and weather and overwintering
+ * and none of that is in the move record.
+ */
 const twoRounds = () => {
+  rounds = [
+    { id: "r1", groupId: "mob", pastureId: null,
+      startedAt: "2026-05-01T00:00:00.000Z", name: null, notes: null, derived: false },
+    { id: "r2", groupId: "mob", pastureId: null,
+      startedAt: "2026-06-20T00:00:00.000Z", name: null, notes: null, derived: false },
+  ];
   events.push(
     event("r1a", "p1", "2026-05-01T12:00:00.000Z", "2026-05-05T12:00:00.000Z"),
     event("r1b", "p2", "2026-05-05T12:00:00.000Z", "2026-05-08T12:00:00.000Z", 0, 0.5),
@@ -136,9 +184,12 @@ const twoRounds = () => {
 
 describe("the rounds", () => {
   it("explains what a round is when there are none yet", async () => {
+    // A round is now a row the farm starts, so "none yet" means no rows —
+    // not "no moves". The wording says who starts one and why.
+    rounds = [];
     await mount();
     expect(screen.getByText(/No rounds yet/)).toBeTruthy();
-    expect(screen.getByText(/one trip through the farm/)).toBeTruthy();
+    expect(screen.getByText(/one mob's trip through one pasture, and you start it/)).toBeTruthy();
   });
 
   it("counts the rounds in the eyebrow", async () => {
@@ -150,8 +201,10 @@ describe("the rounds", () => {
   it("puts the round they are in now at the top", async () => {
     twoRounds();
     await mount();
+    // Named by mob and ground now, because a farm running four mobs over six
+    // pastures has thirty rounds and "Round 2" alone says nothing about which.
     const heads = [...document.querySelectorAll(".rot-round__n")].map((n) => n.textContent);
-    expect(heads).toEqual(["Round 2", "Round 1"]);
+    expect(heads).toEqual(["Main mob · Round 2", "Main mob · Round 1"]);
   });
 
   it("collapses a stay's wire moves into one row and counts them", async () => {
@@ -268,5 +321,107 @@ describe("getting back", () => {
     await mount();
     const back = screen.getByText("← the board");
     expect(back.getAttribute("href")).toBe("/grazing/records?tab=paddocks");
+  });
+});
+
+describe("starting and correcting a round", () => {
+  /**
+   * A round is a row the farm starts. Where the mob overwinters, which
+   * paddock is shut up for hay and which is too wet this week all move where
+   * a round begins, and none of that is in the move record — so the app
+   * cannot work it out, and stopped trying.
+   */
+  const openStart = () => fireEvent.click(screen.getByRole("button", { name: "Start a round" }));
+
+  it("starts one for the mob and ground chosen", async () => {
+    rounds = [];
+    pastures = [
+      { id: "north", name: "North Pasture", code: null, acres: null, notes: null,
+        active: true, propertyId: null, boundary: null },
+    ];
+    paddocks.forEach((p) => { p.pastureId = "north"; });
+    await mount();
+    openStart();
+    fireEvent.change(screen.getByLabelText("Started"), { target: { value: "2026-08-01" } });
+    fireEvent.change(screen.getByLabelText("Round name"), { target: { value: "After the hay" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start it" }));
+
+    await waitFor(() => expect(savedRound).toHaveBeenCalled());
+    expect(savedRound.mock.calls[0][1]).toBeNull();
+    expect(savedRound.mock.calls[0][2]).toMatchObject({
+      groupId: "mob", pastureId: "north", name: "After the hay",
+    });
+    paddocks.forEach((p) => { p.pastureId = null; });
+  });
+
+  it("dates a round from midnight, so it owns the whole day it started", async () => {
+    // Started "today" from a form opened at noon, an instant would leave the
+    // morning's moves in the round before it.
+    rounds = [];
+    await mount();
+    openStart();
+    fireEvent.change(screen.getByLabelText("Started"), { target: { value: "2026-08-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start it" }));
+
+    await waitFor(() => expect(savedRound).toHaveBeenCalled());
+    const started = savedRound.mock.calls[0][2].startedAt as string;
+    expect(new Date(started).getHours()).toBe(0);
+  });
+
+  it("offers no ground picker on a farm whose paddocks carry no pasture", async () => {
+    // The round is of the whole farm there, which is what it has always meant.
+    rounds = [];
+    await mount();
+    openStart();
+    expect(screen.queryByLabelText("Ground")).toBeNull();
+  });
+
+  it("corrects the day a round started, without offering to move its mob", async () => {
+    // Changing the mob or the ground would hand a round's grazing to a round
+    // on other ground and leave this one empty. The day is the thing that is
+    // actually got wrong.
+    twoRounds();
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "edit Main mob · Round 2" }));
+    expect(screen.queryByLabelText("Mob")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Started"), { target: { value: "2026-06-18" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(savedRound).toHaveBeenCalled());
+    expect(savedRound.mock.calls[0][1]).toBe("r2");
+  });
+
+  it("takes a boundary away without touching the moves", async () => {
+    // "That was not a new round after all." Its moves stay exactly where they
+    // are and fall into the round before it.
+    twoRounds();
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "edit Main mob · Round 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "not a new round" }));
+
+    await waitFor(() => expect(deletedRound).toHaveBeenCalledWith("farm-1", "r2"));
+    expect(recorded).not.toHaveBeenCalled();
+  });
+
+  it("says which round's start was guessed rather than recorded", async () => {
+    // 066 backfilled the history. A guess about last season presented as a
+    // record is worse than no record.
+    twoRounds();
+    rounds = rounds.map((r) => (r.id === "r1" ? { ...r, derived: true } : r));
+    await mount();
+    const heads = [...document.querySelectorAll(".rot-round")].map((el) => el.textContent ?? "");
+    expect(heads[0]).not.toContain("start guessed");
+    expect(heads[1]).toContain("start guessed");
+  });
+
+  it("shows grazing older than any round rather than dropping it", async () => {
+    // A move corrected to a date before the first round is something the farm
+    // should see. Sweeping it into the first round would move a boundary
+    // nobody asked to move.
+    twoRounds();
+    rounds = rounds.filter((r) => r.id !== "r1");
+    await mount();
+    expect(screen.getByText("Before any round was started")).toBeTruthy();
+    expect(screen.getByText(/Start a round dated on or before/)).toBeTruthy();
   });
 });

@@ -7,10 +7,12 @@ import type { GrazingEvent, MoveEdit, Paddock } from "../lib/grazing";
 /**
  * Rotation → correcting the record.
  *
- * A round is not a stored thing: it is the moves that make it up. So both
- * jobs here — fixing a move and deleting a round — come down to what is sent
- * for which event, and that is what these check. The chain repair itself is
- * the database's, verified in migration 047 against real RLS.
+ * A round is a row the farm starts (066), but deleting one from here still
+ * means deleting its moves — the other, gentler "not a new round" only takes
+ * the boundary away. So both jobs here — fixing a move and clearing a round's
+ * moves — come down to what is sent for which event, and that is what these
+ * check. The chain repair itself is the database's, verified in migration 047
+ * against real RLS.
  */
 
 const business = { id: 5, name: "Suchomski Family Farm", type: "farm" };
@@ -52,7 +54,32 @@ const paddocks = [paddock("p1", "Paddock 1"), paddock("p2", "Paddock 2")];
 
 /** Two strips out of P1, then P2 — one round, then P1 again starts a second. */
 let events: GrazingEvent[] = [];
+const theMob = {
+  id: "mob", name: "Main mob", species: "cattle", class: "mixed",
+  headCountManual: null, avgWeightLbManual: null, active: true, notes: null,
+};
+
+/**
+ * One round, opened well before anything here.
+ *
+ * A round is a row the farm starts now rather than something derived from the
+ * moves (066), so these fixtures need one for their grazing to hang on.
+ */
+let rounds: {
+  id: string; groupId: string; pastureId: string | null;
+  startedAt: string; name: string | null; notes: string | null; derived: boolean;
+}[] = [];
+
 const reset = () => {
+  rounds = [
+    { id: "r1", groupId: "mob", pastureId: null,
+      startedAt: "2026-04-01T00:00:00.000Z", name: null, notes: null, derived: false },
+    // P1 again on the 10th is the start of the next trip round, which the
+    // farm would have said at the time. Two rounds, as the fixture's own
+    // comment has always described.
+    { id: "r2", groupId: "mob", pastureId: null,
+      startedAt: "2026-08-10T00:00:00.000Z", name: null, notes: null, derived: false },
+  ];
   events = [
     ev({ id: "e1", paddockId: "p1", enteredAt: "2026-08-01T12:00:00.000Z",
          exitedAt: "2026-08-02T12:00:00.000Z", sweptFrom: 0, sweptTo: 0.2 }),
@@ -74,6 +101,9 @@ vi.mock("../lib/grazing", async (importOriginal) => {
   return {
     ...actual,
     fetchPaddocks: vi.fn(async () => paddocks),
+    fetchPastures: vi.fn(async () => []),
+    fetchGrazingGroups: vi.fn(async () => [theMob]),
+    fetchRounds: vi.fn(async () => rounds),
     fetchGrazingEvents: vi.fn(async () => events),
     fetchForageRemovals: vi.fn(async () => []),
     editMove,
@@ -205,8 +235,10 @@ describe("deleting", () => {
     await mount();
     const rounds = document.querySelectorAll(".rot-round");
     const round1 = rounds[1] as HTMLElement;
-    fireEvent.click(round1.querySelector(".rot-round__del")!);
-    fireEvent.click(within(round1).getByText("Delete round 1"));
+    // By its accessible name, not its visible words: every round's link says
+    // "Delete these moves", and the name is what tells them apart.
+    fireEvent.click(within(round1).getByRole("button", { name: /delete the moves in/ }));
+    fireEvent.click(within(round1).getByText("Delete these moves"));
     await waitFor(() => expect(deleteMoves).toHaveBeenCalled());
     // Round 1 is the three moves of the first trip round; the fourth belongs
     // to the round after it and must not be swept up with them.

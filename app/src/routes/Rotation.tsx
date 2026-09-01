@@ -7,17 +7,26 @@ import {
   deleteMove,
   deleteMoves,
   editMove,
+  deleteRound,
   fetchForageRemovals,
   fetchGrazingEvents,
+  fetchGrazingGroups,
   fetchPaddocks,
+  fetchPastures,
+  fetchRounds,
+  pasturesInUse,
   recordRemoval,
-  rotationRounds,
+  roundsFor,
+  saveRound,
   type ForageRemoval,
   type GrazingEvent,
+  type GrazingGroup,
+  type GrazingRound,
   type MoveEdit,
   type Paddock,
+  type Pasture,
   type RemovalKind,
-  type Round,
+  type RoundView,
   type Stay,
 } from "../lib/grazing";
 import { MoveEditor } from "../components/herd/MoveEditor";
@@ -43,7 +52,15 @@ import "./grazing.css";
 type Load =
   | { state: "loading" }
   | { state: "error"; message: string }
-  | { state: "ok"; paddocks: Paddock[]; events: GrazingEvent[]; removals: ForageRemoval[] };
+  | {
+      state: "ok";
+      paddocks: Paddock[];
+      pastures: Pasture[];
+      groups: GrazingGroup[];
+      rounds: GrazingRound[];
+      events: GrazingEvent[];
+      removals: ForageRemoval[];
+    };
 
 const COLS = "minmax(0, 1fr) 104px 116px 58px";
 const COLS_SM = "minmax(0, 1fr) 96px";
@@ -59,8 +76,31 @@ const KINDS: { value: RemovalKind; label: string }[] = [
 const nowIso = () => new Date().toISOString();
 const today = () => new Date().toISOString().slice(0, 10);
 
+interface RoundForm {
+  id: string | null;
+  groupId: string;
+  /** "" for a farm whose ground carries no pasture. */
+  pastureId: string;
+  startedOn: string;
+  name: string;
+  notes: string;
+}
+
+/**
+ * How a round is named on the page.
+ *
+ * The mob and the ground come first because a farm running four mobs over six
+ * pastures has thirty rounds, and "Round 2" on its own says nothing about
+ * which. A named round uses its name; an unnamed one is numbered within its
+ * own mob and pasture, which is how it is spoken about.
+ */
+function roundLabel(v: RoundView): string {
+  const what = v.round.name ?? `Round ${v.index}`;
+  return [v.group?.name, v.pasture?.name, what].filter(Boolean).join(" · ");
+}
+
 export default function Rotation() {
-  const { farmId } = useWorkspace();
+  const { farmId, role } = useWorkspace();
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +112,9 @@ export default function Rotation() {
   // one chain is a way to save a correction against a stale neighbour.
   const [openStay, setOpenStay] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
-  const [confirmRound, setConfirmRound] = useState<number | null>(null);
+  const [confirmRound, setConfirmRound] = useState<string | null>(null);
+  /** The round being renamed or re-dated, or a blank one being started. */
+  const [editingRound, setEditingRound] = useState<RoundForm | null>(null);
 
   const [paddockId, setPaddockId] = useState("");
   const [removedOn, setRemovedOn] = useState(today);
@@ -87,12 +129,15 @@ export default function Rotation() {
       setLoad({ state: "error", message: "No farm on this business." });
       return;
     }
-    const [paddocks, events, removals] = await Promise.all([
+    const [paddocks, pastures, groups, rounds, events, removals] = await Promise.all([
       fetchPaddocks(farmId),
+      fetchPastures(farmId),
+      fetchGrazingGroups(farmId),
+      fetchRounds(farmId),
       fetchGrazingEvents(farmId),
       fetchForageRemovals(farmId),
     ]);
-    setLoad({ state: "ok", paddocks, events, removals });
+    setLoad({ state: "ok", paddocks, pastures, groups, rounds, events, removals });
   }, [farmId]);
 
   useEffect(() => {
@@ -102,15 +147,119 @@ export default function Rotation() {
     );
   }, [refresh]);
 
-  const rounds = useMemo(() => {
-    if (load.state !== "ok") return [] as Round[];
-    return rotationRounds({
+  /**
+   * The rounds the farm started, with their grazing hung on them.
+   *
+   * Was `rotationRounds`, which guessed. It could not see which mob or which
+   * pasture, so on a farm with four mobs over six pastures it reported twenty
+   * rounds of a dozen stays where there are two per mob per pasture — see
+   * migration 066. `roundsFor` reads rows instead, newest first.
+   */
+  const { rounds, unassigned } = useMemo(() => {
+    if (load.state !== "ok") return { rounds: [] as RoundView[], unassigned: [] as Stay[] };
+    return roundsFor({
+      rounds: load.rounds,
       events: load.events,
       paddocks: load.paddocks,
+      groups: load.groups,
+      pastures: load.pastures,
       removals: load.removals,
       nowIso: nowIso(),
-    }).reverse(); // newest first — the round you are in is the one you want
+    });
   }, [load]);
+
+  const readOnly = role !== null && !["owner", "helper", "vet"].includes(role);
+
+  /** The mobs and ground a round can be started on. Derived from the paddocks
+   *  so a pasture nobody has fenced is not offered. */
+  const groups = load.state === "ok" ? load.groups.filter((g) => g.active) : [];
+  const grounds = useMemo(
+    () =>
+      load.state === "ok"
+        ? pasturesInUse(load.paddocks.filter((p) => p.active), load.pastures).map((r) => r.pasture)
+        : [],
+    [load],
+  );
+
+  const startEditRound = (v: RoundView) => {
+    setEditingRound({
+      id: v.round.id,
+      groupId: v.round.groupId,
+      pastureId: v.round.pastureId ?? "",
+      startedOn: v.round.startedAt.slice(0, 10),
+      name: v.round.name ?? "",
+      notes: v.round.notes ?? "",
+    });
+    setConfirmRound(null);
+    setError(null);
+    setNote(null);
+  };
+
+  const startNewRound = () => {
+    setEditingRound({
+      id: null,
+      groupId: groups[0]?.id ?? "",
+      pastureId: grounds[0]?.id ?? "",
+      startedOn: today(),
+      name: "",
+      notes: "",
+    });
+    setConfirmRound(null);
+    setCutting(false);
+    setError(null);
+    setNote(null);
+  };
+
+  const saveRoundForm = async (form: RoundForm) => {
+    if (!farmId) return;
+    setBusy(true);
+    setError(null);
+    setNote(null);
+    try {
+      await saveRound(farmId, form.id, {
+        groupId: form.groupId,
+        pastureId: form.pastureId === "" ? null : form.pastureId,
+        // Midnight local on the day chosen, so a round started "today" owns
+        // every move made today rather than only those after the moment the
+        // form was opened.
+        startedAt: new Date(`${form.startedOn}T00:00:00`).toISOString(),
+        name: form.name.trim() === "" ? null : form.name,
+        notes: form.notes.trim() === "" ? null : form.notes,
+      });
+      setEditingRound(null);
+      setNote(form.id === null ? "Round started." : "Round saved.");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * "That was not a new round after all."
+   *
+   * Takes away the boundary, not the record: the moves stay exactly where
+   * they are and fall into the round before this one. Nothing about the
+   * grazing changes, which is why it needs no warning — unlike deleting the
+   * moves, which is the other, destructive thing on this page.
+   */
+  const unmakeRound = async (v: RoundView) => {
+    if (!farmId) return;
+    setBusy(true);
+    setError(null);
+    setNote(null);
+    try {
+      await deleteRound(farmId, v.round.id);
+      setEditingRound(null);
+      setNote(`${roundLabel(v)} is no longer a round of its own. Its moves join the one before it.`);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const nameOf = (id: string) =>
     load.state === "ok" ? (load.paddocks.find((p) => p.id === id)?.name ?? "a paddock") : "a paddock";
@@ -183,16 +332,16 @@ export default function Rotation() {
     await refresh();
   };
 
-  const removeRound = async (round: Round) => {
+  const removeRound = async (round: RoundView) => {
     setBusy(true);
     setError(null);
     setNote(null);
     try {
-      const ids = round.stays.flatMap((s) => s.events.map((e) => e.id));
+      const ids = round.stays.flatMap((st) => st.events.map((e) => e.id));
       const n = await deleteMoves(farmId!, ids);
       setConfirmRound(null);
       setOpenStay(null);
-      setNote(`Round ${round.index} deleted — ${n} move${n === 1 ? "" : "s"} off the record.`);
+      setNote(`${roundLabel(round)} deleted — ${n} move${n === 1 ? "" : "s"} off the record.`);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -217,6 +366,14 @@ export default function Rotation() {
             <Link to="/grazing/records?tab=paddocks" className="rot-back mono">
               ← the board
             </Link>
+            {!readOnly && (
+              <Button
+                onClick={() => (editingRound !== null ? setEditingRound(null) : startNewRound())}
+                disabled={load.state !== "ok" || groups.length === 0}
+              >
+                {editingRound !== null ? "Cancel" : "Start a round"}
+              </Button>
+            )}
             <Button
               variant="filled"
               onClick={() => (cutting ? setCutting(false) : openCut())}
@@ -344,27 +501,98 @@ export default function Rotation() {
             </div>
           )}
 
-          {rounds.length === 0 && (
+          {editingRound !== null && editingRound.id === null && (
+            <RoundEditor
+              form={editingRound}
+              groups={groups}
+              grounds={grounds}
+              busy={busy}
+              onChange={setEditingRound}
+              onSave={() => void saveRoundForm(editingRound)}
+              onCancel={() => setEditingRound(null)}
+              onUnmake={null}
+            />
+          )}
+
+          {rounds.length === 0 && editingRound === null && (
             <div style={{ paddingTop: 8 }}>
               <Callout>
-                No rounds yet. A round is one trip through the farm — it starts when the mob enters a
-                paddock and ends when they walk back into one they have already had this time through.
-                Log moves on the board and they will gather here, with the rest each paddock had before
-                they came back to it.
+                No rounds yet. A round is one mob's trip through one pasture, and you start it —
+                where the mob overwinters and which paddock is shut up for hay both move where a
+                round begins, and neither shows in the move record. Start one and the moves made
+                after it gather here, with the rest each paddock had before you walked back in.
               </Callout>
             </div>
           )}
 
-          {rounds.map((round) => (
-            <section key={round.index} className="rot-round">
+          {/* Grazing older than any round on this ground. Sweeping it into
+              the first round would move a boundary nobody asked to move, and
+              dropping it would lose moves off the page altogether. */}
+          {unassigned.length > 0 && (
+            <section className="rot-round">
               <div className="rot-round__head">
-                <span className="serif rot-round__n">Round {round.index}</span>
+                <span className="serif rot-round__n">Before any round was started</span>
                 <span className="mono rot-round__when">
-                  {spanLabel(round.startedAt, round.endedAt)} · {round.days} day
-                  {round.days === 1 ? "" : "s"}
+                  {unassigned.length} stay{unassigned.length === 1 ? "" : "s"}
                 </span>
-                {round.endedAt === null && <Pill variant="outline-green">running</Pill>}
               </div>
+              <p className="grz-optional" style={{ margin: "0 0 8px" }}>
+                Moves on ground that has no round covering the day they happened. Start a round
+                dated on or before {shortDate(unassigned[0].enteredAt.slice(0, 10))} to take them in.
+              </p>
+              {unassigned.map((stay) => (
+                <p key={stay.enteredAt + stay.paddockId} className="rot-cut">
+                  <strong>{nameOf(stay.paddockId)}</strong>{" "}
+                  {spanLabel(stay.enteredAt, stay.exitedAt)} · {stay.days} day
+                  {stay.days === 1 ? "" : "s"}
+                </p>
+              ))}
+            </section>
+          )}
+
+          {rounds.map((round) => (
+            <section key={round.round.id} className="rot-round">
+              <div className="rot-round__head">
+                <span className="serif rot-round__n">{roundLabel(round)}</span>
+                <span className="mono rot-round__when">
+                  {round.firstEntryAt === null ? (
+                    <>started {shortDate(round.round.startedAt.slice(0, 10))} · nothing grazed yet</>
+                  ) : (
+                    <>
+                      {spanLabel(round.firstEntryAt, round.lastExitAt)} · {round.days} day
+                      {round.days === 1 ? "" : "s"}
+                    </>
+                  )}
+                </span>
+                {round.running && <Pill variant="outline-green">running</Pill>}
+                {/* A guess about last season presented as a record is worse
+                    than no record. 066 backfilled these; editing one clears
+                    the flag, because somebody has then looked at it. */}
+                {round.round.derived && <Pill>start guessed</Pill>}
+                {!readOnly && (
+                  <button
+                    type="button"
+                    className="link-button mono"
+                    aria-label={`edit ${roundLabel(round)}`}
+                    onClick={() => startEditRound(round)}
+                  >
+                    edit
+                  </button>
+                )}
+              </div>
+
+              {editingRound?.id === round.round.id && (
+                <RoundEditor
+                  form={editingRound}
+                  groups={groups}
+                  grounds={grounds}
+                  busy={busy}
+                  onChange={setEditingRound}
+                  onSave={() => void saveRoundForm(editingRound)}
+                  onCancel={() => setEditingRound(null)}
+                  onUnmake={() => void unmakeRound(round)}
+                />
+              )}
 
               <GridRow cols={COLS} mobileCols={COLS_SM} as="header">
                 <span>Paddock</span>
@@ -454,12 +682,12 @@ export default function Rotation() {
                   round off the record is a rare thing next to correcting one
                   move, and it should not sit where the eye lands first or
                   where a thumb reaching for the first row can catch it. */}
-              {confirmRound === round.index ? (
+              {confirmRound === round.round.id ? (
                 <div className="rot-confirm">
                   <p className="grz-warn" style={{ margin: "0 0 10px" }}>
                     A round is not a thing of its own — it is the moves that make it up. Deleting it
                     takes all {round.stays.reduce((n, s) => n + s.events.length, 0)} of them off the
-                    record{round.endedAt === null ? ", and puts the mob back where they stood before it began" : ""}.
+                    record{round.running ? ", and puts the mob back where they stood before it began" : ""}.
                     Cuttings are not touched.
                   </p>
                   <div className="grz-form__actions">
@@ -467,7 +695,7 @@ export default function Rotation() {
                       Keep it
                     </Button>
                     <Button variant="filled" disabled={busy} onClick={() => removeRound(round)}>
-                      {busy ? "Deleting…" : `Delete round ${round.index}`}
+                      {busy ? "Deleting…" : "Delete these moves"}
                     </Button>
                   </div>
                 </div>
@@ -477,9 +705,10 @@ export default function Rotation() {
                     type="button"
                     className="rot-round__del"
                     disabled={busy}
-                    onClick={() => setConfirmRound(round.index)}
+                    aria-label={`delete the moves in ${roundLabel(round)}`}
+                    onClick={() => setConfirmRound(round.round.id)}
                   >
-                    Delete round {round.index}
+                    Delete these moves
                   </button>
                 </div>
               )}
@@ -516,6 +745,101 @@ export default function Rotation() {
         </>
       )}
     </OpsShell>
+  );
+}
+
+/**
+ * Starting a round, or saying where one really began.
+ *
+ * The mob and the ground are fixed once a round has moves under it — changing
+ * either would hand its grazing to a round on other ground and leave this one
+ * empty — so they are only offered while starting one. What stays editable is
+ * the thing that is actually got wrong: which day it started.
+ */
+function RoundEditor({
+  form, groups, grounds, busy, onChange, onSave, onCancel, onUnmake,
+}: {
+  form: RoundForm;
+  groups: GrazingGroup[];
+  grounds: Pasture[];
+  busy: boolean;
+  onChange: (f: RoundForm) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  /** Null while starting one — there is no boundary yet to take away. */
+  onUnmake: (() => void) | null;
+}) {
+  const set = <K extends keyof RoundForm>(k: K, v: RoundForm[K]) => onChange({ ...form, [k]: v });
+  const fresh = form.id === null;
+
+  return (
+    <div className="grz-form">
+      <div className="eyebrow" style={{ marginBottom: 10 }}>
+        {fresh ? "Start a round" : "This round"}
+      </div>
+      <div className="grz-form__row">
+        {fresh && (
+          <label className="grz-field">
+            <span className="eyebrow">Mob</span>
+            <select value={form.groupId} onChange={(e) => set("groupId", e.target.value)} aria-label="Mob">
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        {/* No picker on a farm whose ground carries no pasture: the round is
+            of the whole farm there, which is what it has always meant. */}
+        {fresh && grounds.length > 0 && (
+          <label className="grz-field">
+            <span className="eyebrow">Ground</span>
+            <select
+              value={form.pastureId}
+              onChange={(e) => set("pastureId", e.target.value)}
+              aria-label="Ground"
+            >
+              {grounds.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label className="grz-field">
+          <span className="eyebrow">Started</span>
+          <input
+            type="date"
+            value={form.startedOn}
+            onChange={(e) => set("startedOn", e.target.value)}
+            aria-label="Started"
+          />
+        </label>
+        <label className="grz-field grz-field--wide">
+          <span className="eyebrow">Name (optional)</span>
+          <input
+            value={form.name}
+            onChange={(e) => set("name", e.target.value)}
+            aria-label="Round name"
+            placeholder="Spring 1"
+          />
+        </label>
+      </div>
+      <p className="grz-optional">
+        {fresh
+          ? "Every move this mob makes on this ground from that day on belongs to this round, until you start the next one."
+          : "Moving the day moves the boundary: the moves either side change which round they fall in. No grazing is touched."}
+      </p>
+      <div className="grz-form__actions">
+        {onUnmake !== null && (
+          <button type="button" className="link-button mono" disabled={busy} onClick={onUnmake}>
+            not a new round
+          </button>
+        )}
+        <Button onClick={onCancel}>Cancel</Button>
+        <Button variant="filled" disabled={busy || form.groupId === ""} onClick={onSave}>
+          {busy ? "Saving…" : fresh ? "Start it" : "Save"}
+        </Button>
+      </div>
+    </div>
   );
 }
 

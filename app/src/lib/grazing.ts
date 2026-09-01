@@ -2932,6 +2932,61 @@ export async function recordDemand(farmId: string, draft: DemandDraft): Promise<
 
 // ─── hay off the units ─────────────────────────────────────────────────
 
+export async function fetchRounds(farmId: string): Promise<GrazingRound[]> {
+  const { data, error } = await herdSchema()
+    .from("grazing_rounds")
+    .select("id, group_id, pasture_id, started_at, name, notes, derived")
+    .eq("farm_id", farmId)
+    .is("deleted_at", null)
+    .order("started_at");
+  if (error) throw new Error(`herd.grazing_rounds: ${error.message}`);
+
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    groupId: r.group_id as string,
+    pastureId: (r.pasture_id as string) ?? null,
+    startedAt: r.started_at as string,
+    name: (r.name as string) ?? null,
+    notes: (r.notes as string) ?? null,
+    derived: Boolean(r.derived),
+  }));
+}
+
+export interface RoundEdit {
+  groupId: string;
+  pastureId: string | null;
+  startedAt: string;
+  name: string | null;
+  notes: string | null;
+}
+
+/** Start one when `id` is null, correct it when it isn't. Returns its id.
+ *  Correcting a round the backfill guessed at makes it the farm's. */
+export async function saveRound(
+  farmId: string,
+  id: string | null,
+  edit: RoundEdit,
+): Promise<string> {
+  const { data, error } = await herdSchema().rpc("save_round", {
+    p_farm_id: farmId,
+    p_id: id,
+    p_group_id: edit.groupId,
+    p_pasture_id: edit.pastureId,
+    p_started_at: edit.startedAt,
+    p_name: edit.name,
+    p_notes: edit.notes,
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+/** Takes away a boundary, not a record: the moves stay and fall into the
+ *  round before this one, which is what "that was not a new round" means. */
+export async function deleteRound(farmId: string, id: string): Promise<void> {
+  const { error } = await herdSchema().rpc("delete_round", { p_farm_id: farmId, p_id: id });
+  if (error) throw new Error(error.message);
+}
+
 export async function fetchForageRemovals(farmId: string): Promise<ForageRemoval[]> {
   const { data, error } = await herdSchema()
     .from("forage_removals")
@@ -3385,12 +3440,15 @@ export function staysFrom(input: {
 }
 
 /**
- * The stays grouped into trips through the farm.
+ * The stays grouped into trips through the farm, by the old heuristic.
  *
- * A round ends when the mob walks into a unit it has already been in this
- * round. That definition needs no notion of the "correct" order, so it holds
- * when a unit is skipped for wet ground or taken out of turn — which is what
- * actually happens, and what a hardcoded serpentine would get wrong.
+ * **Superseded by `roundsFor`, which reads rounds the farm actually started.**
+ * Kept for the screens that have not moved over yet; do not reach for it in
+ * new code. Migration 066 has the measurement, but in short: this sorts every
+ * event on the farm by time and never looks at `groupId`, so four mobs
+ * grazing at once interleave into one sequence and the repeat rule fires on
+ * their paths crossing. On the Green Pastures demo it reports twenty rounds
+ * of a dozen stays where there are two per mob per pasture.
  */
 export function rotationRounds(input: {
   events: GrazingEvent[];
@@ -3438,4 +3496,179 @@ export function rotationRounds(input: {
         .sort((a, b) => a.removedOn.localeCompare(b.removedOn)),
     };
   });
+}
+
+// ─── rounds the farm started ───────────────────────────────────────────
+//
+// A round is one mob's trip through one pasture, and the farm says when one
+// begins. See migration 066 for why it stopped being derived: the old rule
+// could not see which mob or which pasture, and could not be told it was
+// wrong — and where the mob overwinters, which paddock is shut up for hay and
+// which is too wet this week all move the start of a round without leaving a
+// trace in the move record.
+
+/** A round as the farm recorded it. The row, not the reading of it. */
+export interface GrazingRound {
+  id: string;
+  groupId: string;
+  /** Null on a farm whose ground carries no pasture, which then has one
+   *  sequence of rounds — what a round has always meant there. */
+  pastureId: string | null;
+  startedAt: string;
+  /** Optional. "Spring 1", "after the hay". Shown by number when unnamed. */
+  name: string | null;
+  notes: string | null;
+  /** Written by 066's backfill rather than by the farm. The page says so,
+   *  because a guess about last season presented as a record is worse than no
+   *  record. Editing one clears the flag. */
+  derived: boolean;
+}
+
+/** A round with its grazing hung on it. */
+export interface RoundView {
+  round: GrazingRound;
+  /** 1-based within this mob and pasture — "the third time round the North
+   *  this year" is how it is spoken about, and a farm-wide number would not
+   *  mean that. */
+  index: number;
+  group: GrazingGroup | null;
+  pasture: Pasture | null;
+  /**
+   * When the grazing actually started and finished, which is not the marker.
+   *
+   * A mob that leaves in November and walks back in in April has a round with
+   * a hole in it; dating it from its own start marker to the next one would
+   * report a 150-day trip through eight paddocks. Null on a round nothing has
+   * been grazed under yet.
+   */
+  firstEntryAt: string | null;
+  lastExitAt: string | null;
+  /** Days from the first entry to the last exit, or to now while it runs. */
+  days: number;
+  /** True while the last stay in it has no exit. */
+  running: boolean;
+  stays: Stay[];
+  cuttings: ForageRemoval[];
+}
+
+/** Which mob and which ground a round covers, as one key. */
+const roundScope = (groupId: string, pastureId: string | null) => `${groupId}\u0000${pastureId ?? ""}`;
+
+/**
+ * The rounds, with every stay filed under the one it happened in.
+ *
+ * A stay belongs to the latest round in its own scope — same mob, same
+ * pasture — that began at or before the mob walked in. Grazing older than any
+ * round on file belongs to none, and comes back in `unassigned` rather than
+ * being quietly swept into the first: a move corrected to a date before the
+ * first round is a thing the farm should see, not something to guess about.
+ */
+export function roundsFor(input: {
+  rounds: GrazingRound[];
+  events: GrazingEvent[];
+  paddocks: Paddock[];
+  groups: GrazingGroup[];
+  pastures?: Pasture[];
+  removals?: ForageRemoval[];
+  nowIso: string;
+}): { rounds: RoundView[]; unassigned: Stay[] } {
+  const { rounds, events, paddocks, groups, pastures = [], removals = [], nowIso } = input;
+
+  const paddockById = new Map(paddocks.map((p) => [p.id, p]));
+  const groupById = new Map(groups.map((g) => [g.id, g]));
+  const pastureById = new Map(pastures.map((p) => [p.id, p]));
+  const pastureOf = (paddockId: string) => paddockById.get(paddockId)?.pastureId ?? null;
+
+  // Rounds by scope, earliest first, so the one a stay belongs to is the last
+  // whose marker is not after it.
+  const byScope = new Map<string, GrazingRound[]>();
+  for (const r of rounds) {
+    const key = roundScope(r.groupId, r.pastureId);
+    const list = byScope.get(key);
+    if (list) list.push(r);
+    else byScope.set(key, [r]);
+  }
+  for (const list of byScope.values()) list.sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+
+  // Stays are built per mob. `staysFrom` joins consecutive events in the same
+  // paddock, and run across the whole farm it would join two different mobs'
+  // grazing of the same ground into one stay.
+  const held = new Map<string, Stay[]>();
+  const unassigned: Stay[] = [];
+
+  for (const groupId of new Set(events.map((e) => e.groupId))) {
+    const mine = events.filter((e) => e.groupId === groupId);
+    for (const stay of staysFrom({ events: mine, paddocks, removals, nowIso })) {
+      const key = roundScope(groupId, pastureOf(stay.paddockId));
+      const list = byScope.get(key) ?? [];
+      let found: GrazingRound | null = null;
+      for (const r of list) {
+        if (r.startedAt <= stay.enteredAt) found = r;
+        else break;
+      }
+      if (found === null) {
+        unassigned.push(stay);
+        continue;
+      }
+      const mineToo = held.get(found.id);
+      if (mineToo) mineToo.push(stay);
+      else held.set(found.id, [stay]);
+    }
+  }
+
+  // A cutting belongs to the round covering its ground at the time. Ground is
+  // cut, not grazed, so there is no mob in the act — it is filed under every
+  // round of that pasture whose window contains it, which on a farm running
+  // one mob per pasture is exactly one.
+  const cuttingsFor = (r: GrazingRound, next: GrazingRound | undefined): ForageRemoval[] =>
+    removals
+      .filter((rem) => pastureOf(rem.paddockId) === r.pastureId)
+      .filter((rem) => {
+        const at = `${rem.removedOn}T23:59:59.999Z`;
+        return at >= r.startedAt && (next === undefined || at < next.startedAt);
+      })
+      .sort((a, b) => a.removedOn.localeCompare(b.removedOn));
+
+  const views: RoundView[] = [];
+  for (const list of byScope.values()) {
+    list.forEach((r, i) => {
+      const stays = (held.get(r.id) ?? []).sort((a, b) => a.enteredAt.localeCompare(b.enteredAt));
+      const firstEntryAt = stays[0]?.enteredAt ?? null;
+      const exits = stays.map((s) => s.exitedAt);
+      const running = stays.length > 0 && exits[exits.length - 1] === null;
+      const lastExitAt = running
+        ? null
+        : (exits.filter((x): x is string => x !== null).sort().pop() ?? null);
+
+      views.push({
+        round: r,
+        index: i + 1,
+        group: groupById.get(r.groupId) ?? null,
+        pasture: r.pastureId === null ? null : (pastureById.get(r.pastureId) ?? null),
+        firstEntryAt,
+        lastExitAt,
+        days: firstEntryAt === null ? 0 : daysBetween(firstEntryAt, lastExitAt ?? nowIso),
+        running,
+        stays,
+        cuttings: cuttingsFor(r, list[i + 1]),
+      });
+    });
+  }
+
+  // Newest first: the round you are in is the one you came to look at.
+  views.sort((a, b) => b.round.startedAt.localeCompare(a.round.startedAt));
+  unassigned.sort((a, b) => a.enteredAt.localeCompare(b.enteredAt));
+  return { rounds: views, unassigned };
+}
+
+/** The round a mob is grazing under right now on the ground it stands on, if
+ *  any. What the Move page needs to say whether to start a new one. */
+export function currentRound(
+  views: RoundView[],
+  groupId: string,
+  pastureId: string | null,
+): RoundView | null {
+  return (
+    views.find((v) => v.round.groupId === groupId && v.round.pastureId === pastureId) ?? null
+  );
 }

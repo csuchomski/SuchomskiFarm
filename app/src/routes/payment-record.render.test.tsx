@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import type { GrazingEvent, GrazingGroup, Paddock, Pasture, Property } from "../lib/grazing";
+import type { GrazingEvent, GrazingGroup, GrazingRound, Paddock, Pasture, Property } from "../lib/grazing";
 import { REAL_ACRES, REAL_BOUNDARIES, REAL_SWEEP } from "../lib/__fixtures__/farm-geometry";
 
 /**
@@ -70,6 +70,7 @@ const property = (id: string, name: string): Property => ({
 let paddocks = [1, 2, 3, 4, 5].map(unit);
 let pastures: Pasture[] = [];
 let properties: Property[] = [];
+let rounds: GrazingRound[] = [];
 const events: GrazingEvent[] = [];
 
 vi.mock("../lib/grazing", async (importOriginal) => {
@@ -79,6 +80,7 @@ vi.mock("../lib/grazing", async (importOriginal) => {
     fetchPaddocks: vi.fn(async () => paddocks),
     fetchPastures: vi.fn(async () => pastures),
     fetchProperties: vi.fn(async () => properties),
+    fetchRounds: vi.fn(async () => rounds),
     fetchGrazingEvents: vi.fn(async () => events),
     fetchGrazingGroups: vi.fn(async () => [mob]),
   };
@@ -95,6 +97,7 @@ afterEach(() => {
   paddocks = [1, 2, 3, 4, 5].map(unit);
   pastures = [];
   properties = [];
+  rounds = [];
   events.length = 0;
 });
 
@@ -458,5 +461,163 @@ describe("narrowing the record to one pasture", () => {
     const picker = screen.getByLabelText("Ground");
     expect([...picker.querySelectorAll("option")].map((o) => o.textContent!.split(" ·")[0]))
       .toEqual(["The whole farm", "North Pasture", "Creek Pasture"]);
+  });
+});
+
+describe("reporting on a round rather than a month", () => {
+  /**
+   * The month was never the unit the farm works in. A trip through a pasture
+   * is, and it straddles the turn of a month as often as not — this fixture
+   * is deliberately one: into P4 on 28 July, out of P3 on 3 August.
+   *
+   * Both filters stay, because both questions are real: "what did we do in
+   * August" for the return, "how did that round go" for the grazing.
+   */
+  const round = (id: string, over: Partial<GrazingRound> = {}): GrazingRound => ({
+    id, groupId: "mob", pastureId: "north",
+    startedAt: "2026-07-01T00:00:00.000Z", name: null, notes: null, derived: false, ...over,
+  });
+
+  /** A round that runs over the turn of the month. */
+  const acrossTheMonth = () => {
+    pastures = [pasture("north", "North Pasture"), pasture("creek", "Creek Pasture")];
+    paddocks = paddocks.map((p, i) => ({ ...p, pastureId: i < 3 ? "north" : "creek" }));
+    rounds = [
+      round("r1", { startedAt: "2026-07-01T00:00:00.000Z" }),
+      round("r2", { startedAt: "2026-07-25T00:00:00.000Z" }),
+    ];
+    events.push(
+      // r1, all in July.
+      ev({ id: "j1", paddockId: "p1", enteredAt: "2026-07-02T12:00:00.000Z",
+           exitedAt: "2026-07-04T12:00:00.000Z" }),
+      // r2, over the turn of the month — this is the whole point.
+      ev({ id: "x1", paddockId: "p2", enteredAt: "2026-07-28T12:00:00.000Z",
+           exitedAt: "2026-07-30T12:00:00.000Z" }),
+      ev({ id: "x2", paddockId: "p3", enteredAt: "2026-08-01T12:00:00.000Z",
+           exitedAt: "2026-08-03T12:00:00.000Z" }),
+    );
+  };
+
+  const pickRound = (value: string) =>
+    fireEvent.change(screen.getByLabelText("Round"), { target: { value } });
+
+  it("offers no round picker on a farm that has started none", async () => {
+    someGrazing();
+    await mount();
+    expect(screen.queryByLabelText("Round")).toBeNull();
+  });
+
+  it("offers no round that has nothing grazed under it yet", async () => {
+    // One started this morning before the mob was moved is not a report.
+    pastures = [pasture("north", "North Pasture")];
+    paddocks = paddocks.map((p) => ({ ...p, pastureId: "north" }));
+    rounds = [round("empty", { startedAt: "2026-08-19T00:00:00.000Z" })];
+    await mount();
+    expect(screen.queryByLabelText("Round")).toBeNull();
+  });
+
+  it("opens on the date range, not on a round", async () => {
+    acrossTheMonth();
+    await mount();
+    expect((screen.getByLabelText("Round") as HTMLSelectElement).value).toBe("");
+    expect(screen.getByLabelText("From")).toBeTruthy();
+  });
+
+  it("takes the whole round, both sides of the month it straddles", async () => {
+    // The month view of August shows one of these two strips. The round shows
+    // both, which is the thing that could not be asked for before.
+    acrossTheMonth();
+    await mount();
+    expect(bodyRows()).toHaveLength(1);
+    pickRound("r2");
+    expect(bodyRows().map((r) => cellsOf(r)[0])).toEqual(["P2-1", "P3-1"]);
+  });
+
+  it("leaves out the round before it", async () => {
+    acrossTheMonth();
+    await mount();
+    pickRound("r1");
+    expect(bodyRows().map((r) => cellsOf(r)[0])).toEqual(["P1-1"]);
+  });
+
+  it("puts the dates away while a round is chosen", async () => {
+    // Two date boxes that no longer move the report are a lie about what the
+    // page is showing.
+    acrossTheMonth();
+    await mount();
+    pickRound("r2");
+    expect(screen.queryByLabelText("From")).toBeNull();
+    expect(screen.queryByLabelText("To")).toBeNull();
+  });
+
+  it("names the round and its real dates on the page", async () => {
+    // The picker is hidden on paper, so this line is the only thing telling a
+    // reviewer what the sheet in their hand covers.
+    acrossTheMonth();
+    await mount();
+    pickRound("r2");
+    const said = screen.getByText(/Grazing records for/).textContent!;
+    expect(said).toContain("Main mob · North Pasture · Round 2");
+    expect(said).toContain("Jul 28, 2026");
+    expect(said).toContain("Aug 3, 2026");
+  });
+
+  it("uses the name the farm gave the round", async () => {
+    acrossTheMonth();
+    rounds = rounds.map((r) => (r.id === "r2" ? { ...r, name: "After the hay" } : r));
+    await mount();
+    pickRound("r2");
+    expect(screen.getByText(/Grazing records for/).textContent).toContain("After the hay");
+  });
+
+  it("says when a round's start was guessed rather than recorded", async () => {
+    // 066 backfilled the history. Presenting a guess about last season as a
+    // record is worse than saying it is a guess.
+    acrossTheMonth();
+    rounds = rounds.map((r) => ({ ...r, derived: true }));
+    await mount();
+    pickRound("r2");
+    expect(screen.getByText(/worked out from the moves, not recorded at the time/)).toBeTruthy();
+  });
+
+  it("says nothing about guesswork on a round the farm started itself", async () => {
+    acrossTheMonth();
+    await mount();
+    pickRound("r2");
+    expect(screen.queryByText(/worked out from the moves/)).toBeNull();
+  });
+
+  it("offers only the rounds on the ground the report is scoped to", async () => {
+    acrossTheMonth();
+    rounds = [...rounds, round("creek1", { pastureId: "creek", startedAt: "2026-07-01T00:00:00.000Z" })];
+    events.push(ev({ id: "c1", paddockId: "p4", enteredAt: "2026-07-05T12:00:00.000Z",
+                     exitedAt: "2026-07-07T12:00:00.000Z" }));
+    await mount();
+    const named = () =>
+      [...screen.getByLabelText("Round").querySelectorAll("option")].map((o) => o.textContent);
+    expect(named().some((t) => t?.includes("Creek"))).toBe(true);
+    fireEvent.change(screen.getByLabelText("Ground"), { target: { value: "north" } });
+    expect(named().some((t) => t?.includes("Creek"))).toBe(false);
+  });
+
+  it("draws only the round's own ground, not the whole farm", async () => {
+    // Without this the table is one pasture's worth and the map beside it
+    // draws two — two answers to "what is this a record of" on one sheet.
+    acrossTheMonth();
+    await mount();
+    const outlines = () =>
+      [...svg()!.querySelectorAll("path")].filter((p) => p.getAttribute("fill") === "var(--paper-tint)");
+    expect(outlines()).toHaveLength(5);
+    pickRound("r2");
+    expect(outlines()).toHaveLength(3);
+  });
+
+  it("goes back to the date range when the round is cleared", async () => {
+    acrossTheMonth();
+    await mount();
+    pickRound("r2");
+    pickRound("");
+    expect(screen.getByLabelText("From")).toBeTruthy();
+    expect(bodyRows()).toHaveLength(1);
   });
 });

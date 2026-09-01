@@ -9,14 +9,18 @@ import {
   fetchPaddocks,
   fetchPastures,
   fetchProperties,
+  fetchRounds,
   isSwept,
   paddocksInPasture,
   pasturesInUse,
+  roundsFor,
   type GrazingEvent,
   type GrazingGroup,
   type Paddock,
   type Pasture,
   type Property,
+  type GrazingRound,
+  type RoundView,
 } from "../lib/grazing";
 import { gaps, reportRows, totalAcres, type ReportRow } from "../lib/grazing-report";
 import {
@@ -66,6 +70,7 @@ type Load =
       properties: Property[];
       events: GrazingEvent[];
       groups: GrazingGroup[];
+      rounds: GrazingRound[];
     };
 
 const WIDTH = 720;
@@ -76,6 +81,19 @@ const WIDTH = 720;
 const today = () => todayLocal();
 
 const monthStart = () => `${todayLocal().slice(0, 7)}-01`;
+
+/**
+ * How a round is named on the page.
+ *
+ * The mob and the ground come first because a farm running four mobs over six
+ * pastures has thirty rounds, and "Round 2" on its own says nothing about
+ * which. A named round uses its name; an unnamed one is numbered within its
+ * own mob and pasture, which is how it is spoken about.
+ */
+const roundLabel = (v: RoundView): string => {
+  const what = v.round.name ?? `Round ${v.index}`;
+  return [v.group?.name, v.pasture?.name, what].filter(Boolean).join(" · ");
+};
 
 const shortDate = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
@@ -91,20 +109,31 @@ export default function PaymentRecord() {
   /** Which ground the report covers. Null is the whole farm, which is what a
    *  farm with one piece of ground always gets. */
   const [pastureId, setPastureId] = useState<string | null>(null);
+  /**
+   * A round, when the report is of one rather than of a stretch of calendar.
+   *
+   * The month was never the unit the farm works in — a trip through a pasture
+   * is — and a round straddles the turn of a month as often as not. Held
+   * beside the dates rather than instead of them because both questions are
+   * real: "what did we do in August" for the quarterly return, "how did that
+   * round go" for the grazing itself.
+   */
+  const [roundId, setRoundId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!farmId) {
       setLoad({ state: "error", message: "No farm on this business." });
       return;
     }
-    const [paddocks, pastures, properties, events, groups] = await Promise.all([
+    const [paddocks, pastures, properties, events, groups, rounds] = await Promise.all([
       fetchPaddocks(farmId),
       fetchPastures(farmId),
       fetchProperties(farmId),
       fetchGrazingEvents(farmId),
       fetchGrazingGroups(farmId),
+      fetchRounds(farmId),
     ]);
-    setLoad({ state: "ok", paddocks, pastures, properties, events, groups });
+    setLoad({ state: "ok", paddocks, pastures, properties, events, groups, rounds });
   }, [farmId]);
 
   useEffect(() => {
@@ -114,13 +143,49 @@ export default function PaymentRecord() {
     );
   }, [refresh]);
 
+  /** Every round on the farm, with its grazing hung on it. */
+  const views: RoundView[] = useMemo(() => {
+    if (load.state !== "ok") return [];
+    return roundsFor({
+      rounds: load.rounds,
+      events: load.events,
+      paddocks: load.paddocks,
+      groups: load.groups,
+      pastures: load.pastures,
+      nowIso: new Date().toISOString(),
+    }).rounds;
+  }, [load]);
+
+  /** The rounds worth offering: those on the ground the report is scoped to,
+   *  and only ones with grazing under them — a round started this morning
+   *  with nothing in it yet is not a report. */
+  const rounds = useMemo(
+    () => views.filter((v) => v.stays.length > 0 && (pastureId === null || v.round.pastureId === pastureId)),
+    [views, pastureId],
+  );
+
+  const chosen = rounds.find((v) => v.round.id === roundId) ?? null;
+
   const rows: ReportRow[] = useMemo(() => {
     if (load.state !== "ok") return [];
+    // A round's rows are its own moves, not a date range that happens to
+    // cover it: two mobs can be out at once, and a window wide enough to hold
+    // this round would sweep in the other mob's grazing of other ground.
+    if (chosen !== null) {
+      const mine = new Set(chosen.stays.flatMap((st) => st.events.map((e) => e.id)));
+      return reportRows({
+        events: load.events.filter((e) => mine.has(e.id)),
+        paddocks: load.paddocks,
+        groups: load.groups,
+        from: "0000-01-01",
+        to: "9999-12-31",
+      });
+    }
     if (from > to) return [];
     return reportRows({
       events: load.events, paddocks: load.paddocks, groups: load.groups, from, to, pastureId,
     });
-  }, [load, from, to, pastureId]);
+  }, [load, from, to, pastureId, chosen]);
 
   const total = totalAcres(rows);
   const missing = gaps(rows);
@@ -146,7 +211,17 @@ export default function PaymentRecord() {
     return load.properties.filter((pr) => used.has(pr.id));
   }, [load, pastures]);
 
-  const here = pastures.find((r) => r.pasture.id === pastureId)?.pasture ?? null;
+  /**
+   * The ground the report is actually of.
+   *
+   * A round belongs to one pasture, so choosing one settles the question the
+   * Ground picker was asking. Without this the table is one pasture's worth
+   * and the map beside it draws the whole farm — two answers to "what is this
+   * a record of" on the same sheet.
+   */
+  const showing: string | null = chosen?.round.pastureId ?? pastureId;
+
+  const here = pastures.find((r) => r.pasture.id === showing)?.pasture ?? null;
 
   /** What the report is of, in the words the preamble and the empty state
    *  both need. The picker is hidden on paper, so a printout that did not say
@@ -162,7 +237,7 @@ export default function PaymentRecord() {
    */
   const drawn = useMemo(() => {
     if (load.state !== "ok") return null;
-    const units = paddocksInPasture(load.paddocks.filter((p) => p.active), pastureId)
+    const units = paddocksInPasture(load.paddocks.filter((p) => p.active), showing)
       .map((p) => ({ paddock: p, ring: asPolygonRing(p.boundary) }))
       .filter((u): u is { paddock: Paddock; ring: LonLat[] } => u.ring !== null);
     const projection = fitPasture(units.map((u) => u.ring), { width: WIDTH, padding: 14 });
@@ -191,7 +266,7 @@ export default function PaymentRecord() {
     // a duplicate that lands squarely on top of the labels that matter.
     const grazed = new Set(strips.map((s) => s.row.paddockId));
     return { units, projection, strips, grazed };
-  }, [load, rows, pastureId]);
+  }, [load, rows, showing]);
 
   return (
     <OpsShell>
@@ -212,14 +287,22 @@ export default function PaymentRecord() {
         <>
           <div className="grz-form pr-range">
             <div className="grz-form__row" style={{ marginBottom: 0 }}>
-              <label className="grz-field">
-                <span className="eyebrow">From</span>
-                <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From" />
-              </label>
-              <label className="grz-field">
-                <span className="eyebrow">To</span>
-                <input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To" />
-              </label>
+              {/* Hidden while a round is chosen rather than left sitting
+                  there deciding nothing. A round brings its own dates, and
+                  two date boxes that no longer move the report are a lie
+                  about what the page is showing. */}
+              {chosen === null && (
+                <>
+                  <label className="grz-field">
+                    <span className="eyebrow">From</span>
+                    <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From" />
+                  </label>
+                  <label className="grz-field">
+                    <span className="eyebrow">To</span>
+                    <input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To" />
+                  </label>
+                </>
+              )}
               {/* Only on a farm with ground to tell apart. One pasture, or
                   none assigned, and a picker would be a control with one
                   answer — the same rule the Move page's locator follows. */}
@@ -256,8 +339,30 @@ export default function PaymentRecord() {
                   </select>
                 </label>
               )}
+
+              {/* The month was never the unit the farm works in. A trip
+                  through a pasture is, and it straddles the turn of a month
+                  as often as not. Both are offered because both questions
+                  are real. */}
+              {rounds.length > 0 && (
+                <label className="grz-field grz-field--wide">
+                  <span className="eyebrow">Round</span>
+                  <select
+                    value={roundId ?? ""}
+                    onChange={(e) => setRoundId(e.target.value === "" ? null : e.target.value)}
+                    aria-label="Round"
+                  >
+                    <option value="">A date range instead</option>
+                    {rounds.map((v) => (
+                      <option key={v.round.id} value={v.round.id}>
+                        {roundLabel(v)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
-            {from > to && (
+            {chosen === null && from > to && (
               <p className="grz-warn" style={{ margin: "12px 0 0" }}>
                 The end of the range is before its start.
               </p>
@@ -269,18 +374,42 @@ export default function PaymentRecord() {
               covering one pasture out of six, is a worse document than one
               with no filter at all. */}
           <p className="rec-preamble">
-            Grazing records for {shortDate(from)} → {shortDate(to)}, covering{" "}
-            <strong>{covering}</strong>, from the moves logged on this farm. A strip counts as in
-            the range if the mob was on it at any point during it. Whether the record meets the
-            standard is the conservationist's determination.
+            {chosen === null ? (
+              <>
+                Grazing records for {shortDate(from)} → {shortDate(to)}, covering{" "}
+                <strong>{covering}</strong>, from the moves logged on this farm. A strip counts as
+                in the range if the mob was on it at any point during it.
+              </>
+            ) : (
+              <>
+                Grazing records for <strong>{roundLabel(chosen)}</strong>
+                {chosen.firstEntryAt !== null && (
+                  <>
+                    {" "}
+                    — {shortDate(chosen.firstEntryAt.slice(0, 10))} →{" "}
+                    {chosen.lastExitAt === null
+                      ? "still running"
+                      : shortDate(chosen.lastExitAt.slice(0, 10))}
+                  </>
+                )}
+                , from the moves logged on this farm. Every strip that mob took on that ground
+                during the round, whether or not it fell in one calendar month.
+                {chosen.round.derived && (
+                  <> This round's start was worked out from the moves, not recorded at the time.</>
+                )}
+              </>
+            )}{" "}
+            Whether the record meets the standard is the conservationist's determination.
           </p>
 
           {rows.length === 0 ? (
             <div style={{ marginTop: 16 }}>
               <Callout>
-                {here === null
-                  ? "No grazing recorded in this range."
-                  : `No grazing recorded on ${here.name} in this range.`}
+                {chosen !== null
+                  ? `No grazing recorded under ${roundLabel(chosen)}.`
+                  : here === null
+                    ? "No grazing recorded in this range."
+                    : `No grazing recorded on ${here.name} in this range.`}
               </Callout>
             </div>
           ) : (

@@ -516,11 +516,13 @@ describe("reporting on a round rather than a month", () => {
     expect(screen.queryByLabelText("Round")).toBeNull();
   });
 
-  it("opens on the date range, not on a round", async () => {
+  it("opens on the round you are in, not on a month", async () => {
+    // The report is of the grazing, and the grazing is a round. A month is
+    // an accident of the calendar that a round straddles as often as not.
     acrossTheMonth();
     await mount();
-    expect((screen.getByLabelText("Round") as HTMLSelectElement).value).toBe("");
-    expect(screen.getByLabelText("From")).toBeTruthy();
+    expect((screen.getByLabelText("Round") as HTMLSelectElement).value).toBe("r2");
+    expect(screen.queryByLabelText("From")).toBeNull();
   });
 
   it("takes the whole round, both sides of the month it straddles", async () => {
@@ -528,9 +530,9 @@ describe("reporting on a round rather than a month", () => {
     // both, which is the thing that could not be asked for before.
     acrossTheMonth();
     await mount();
-    expect(bodyRows()).toHaveLength(1);
-    pickRound("r2");
     expect(bodyRows().map((r) => cellsOf(r)[0])).toEqual(["P2-1", "P3-1"]);
+    pickRound("");
+    expect(bodyRows()).toHaveLength(1);
   });
 
   it("leaves out the round before it", async () => {
@@ -593,11 +595,14 @@ describe("reporting on a round rather than a month", () => {
     events.push(ev({ id: "c1", paddockId: "p4", enteredAt: "2026-07-05T12:00:00.000Z",
                      exitedAt: "2026-07-07T12:00:00.000Z" }));
     await mount();
-    const named = () =>
-      [...screen.getByLabelText("Round").querySelectorAll("option")].map((o) => o.textContent);
-    expect(named().some((t) => t?.includes("Creek"))).toBe(true);
+    // The mob and the ground are the group heading now; the option under it
+    // only says which round and when.
+    const scopes = () =>
+      [...screen.getByLabelText("Round").querySelectorAll("optgroup")]
+        .map((g) => g.getAttribute("label"));
+    expect(scopes().some((t) => t?.includes("Creek"))).toBe(true);
     fireEvent.change(screen.getByLabelText("Ground"), { target: { value: "north" } });
-    expect(named().some((t) => t?.includes("Creek"))).toBe(false);
+    expect(scopes().some((t) => t?.includes("Creek"))).toBe(false);
   });
 
   it("draws only the round's own ground, not the whole farm", async () => {
@@ -607,15 +612,102 @@ describe("reporting on a round rather than a month", () => {
     await mount();
     const outlines = () =>
       [...svg()!.querySelectorAll("path")].filter((p) => p.getAttribute("fill") === "var(--paper-tint)");
-    expect(outlines()).toHaveLength(5);
-    pickRound("r2");
+    // Opens on r2, which is North's three paddocks.
     expect(outlines()).toHaveLength(3);
+    pickRound("");
+    expect(outlines()).toHaveLength(5);
+  });
+
+  it("prefers a round the mob has not come out of", async () => {
+    // "The round you are in" is the one still running, even when another was
+    // walked into more recently and finished.
+    pastures = [pasture("north", "North Pasture"), pasture("creek", "Creek Pasture")];
+    paddocks = paddocks.map((p, i) => ({ ...p, pastureId: i < 3 ? "north" : "creek" }));
+    rounds = [
+      round("running", { pastureId: "north", startedAt: "2026-07-01T00:00:00.000Z" }),
+      round("finished", { pastureId: "creek", startedAt: "2026-08-01T00:00:00.000Z" }),
+    ];
+    events.push(
+      ev({ id: "open", paddockId: "p1", enteredAt: "2026-08-10T12:00:00.000Z", exitedAt: null }),
+      ev({ id: "shut", paddockId: "p4", enteredAt: "2026-08-15T12:00:00.000Z",
+           exitedAt: "2026-08-17T12:00:00.000Z" }),
+    );
+    await mount();
+    expect((screen.getByLabelText("Round") as HTMLSelectElement).value).toBe("running");
+  });
+
+  it("takes the most recently walked into when several are running", async () => {
+    // Four mobs out at once is the ordinary state of a big farm, so the rule
+    // has to say which — not leave it to whatever order the rows arrived in.
+    pastures = [pasture("north", "North Pasture"), pasture("creek", "Creek Pasture")];
+    paddocks = paddocks.map((p, i) => ({ ...p, pastureId: i < 3 ? "north" : "creek" }));
+    rounds = [
+      round("older", { pastureId: "north", startedAt: "2026-07-01T00:00:00.000Z" }),
+      round("newer", { pastureId: "creek", startedAt: "2026-07-01T00:00:00.000Z" }),
+    ];
+    events.push(
+      ev({ id: "a", paddockId: "p1", enteredAt: "2026-08-10T12:00:00.000Z", exitedAt: null }),
+      ev({ id: "b", paddockId: "p4", enteredAt: "2026-08-14T12:00:00.000Z", exitedAt: null }),
+    );
+    await mount();
+    expect((screen.getByLabelText("Round") as HTMLSelectElement).value).toBe("newer");
+  });
+
+  it("falls back to the last round grazed when nothing is running", async () => {
+    acrossTheMonth();
+    await mount();
+    expect((screen.getByLabelText("Round") as HTMLSelectElement).value).toBe("r2");
+  });
+
+  it("opens on the date range on a farm that has grazed no round", async () => {
+    // Nothing to default to, and a blank report would be worse than the month.
+    someGrazing();
+    await mount();
+    expect(screen.getByLabelText("From")).toBeTruthy();
+    expect(bodyRows()).toHaveLength(2);
+  });
+
+  it("stays on the date range once it has been asked for", async () => {
+    // The default must not keep reasserting itself over a deliberate choice.
+    acrossTheMonth();
+    await mount();
+    pickRound("");
+    fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-07-01" } });
+    expect(screen.getByLabelText("From")).toBeTruthy();
+    expect((screen.getByLabelText("Round") as HTMLSelectElement).value).toBe("");
+  });
+
+  it("re-defaults to the round you are in on the ground just picked", async () => {
+    // Narrowing Ground can take the chosen round off the list, and a picker
+    // showing a round it no longer offers is a page lying about itself.
+    acrossTheMonth();
+    rounds = [...rounds, round("creek1", { pastureId: "creek", startedAt: "2026-07-01T00:00:00.000Z" })];
+    events.push(ev({ id: "c1", paddockId: "p4", enteredAt: "2026-07-05T12:00:00.000Z",
+                     exitedAt: "2026-07-07T12:00:00.000Z" }));
+    await mount();
+    expect((screen.getByLabelText("Round") as HTMLSelectElement).value).toBe("r2");
+    fireEvent.change(screen.getByLabelText("Ground"), { target: { value: "creek" } });
+    expect((screen.getByLabelText("Round") as HTMLSelectElement).value).toBe("creek1");
+  });
+
+  it("re-defaults even after a round was picked by hand", async () => {
+    // The case the default alone does not cover: a deliberate choice has to
+    // be let go of when the ground it was on stops being on offer, or the
+    // picker sits blank while the table is still filtered by it.
+    acrossTheMonth();
+    rounds = [...rounds, round("creek1", { pastureId: "creek", startedAt: "2026-07-01T00:00:00.000Z" })];
+    events.push(ev({ id: "c1", paddockId: "p4", enteredAt: "2026-07-05T12:00:00.000Z",
+                     exitedAt: "2026-07-07T12:00:00.000Z" }));
+    await mount();
+    pickRound("r1");
+    fireEvent.change(screen.getByLabelText("Ground"), { target: { value: "creek" } });
+    expect((screen.getByLabelText("Round") as HTMLSelectElement).value).toBe("creek1");
+    expect(bodyRows().map((r) => cellsOf(r)[0])).toEqual(["P4-1"]);
   });
 
   it("goes back to the date range when the round is cleared", async () => {
     acrossTheMonth();
     await mount();
-    pickRound("r2");
     pickRound("");
     expect(screen.getByLabelText("From")).toBeTruthy();
     expect(bodyRows()).toHaveLength(1);

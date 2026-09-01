@@ -235,7 +235,9 @@ describe("deleting", () => {
     await mount();
     const rounds = document.querySelectorAll(".rot-round");
     const round1 = rounds[1] as HTMLElement;
-    fireEvent.click(round1.querySelector(".rot-round__del")!);
+    // By its accessible name, not its visible words: every round's link says
+    // "Delete these moves", and the name is what tells them apart.
+    fireEvent.click(within(round1).getByRole("button", { name: /delete the moves in/ }));
     fireEvent.click(within(round1).getByText("Delete these moves"));
     await waitFor(() => expect(deleteMoves).toHaveBeenCalled());
     // Round 1 is the three moves of the first trip round; the fourth belongs

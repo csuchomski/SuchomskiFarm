@@ -705,9 +705,10 @@ export default function Rotation() {
                     type="button"
                     className="rot-round__del"
                     disabled={busy}
+                    aria-label={`delete the moves in ${roundLabel(round)}`}
                     onClick={() => setConfirmRound(round.round.id)}
                   >
-                    Delete the moves in {roundLabel(round)}
+                    Delete these moves
                   </button>
                 </div>
               )}

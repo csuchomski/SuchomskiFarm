@@ -95,6 +95,32 @@ const roundLabel = (v: RoundView): string => {
   return [v.group?.name, v.pasture?.name, what].filter(Boolean).join(" · ");
 };
 
+/** The mob and the ground, which is what the picker groups by. */
+const roundScopeLabel = (v: RoundView): string =>
+  [v.group?.name, v.pasture?.name].filter(Boolean).join(" · ") || "The whole farm";
+
+/** Which round, and when — everything the heading above it does not say. */
+const roundWhen = (v: RoundView): string => {
+  const what = v.round.name ?? `Round ${v.index}`;
+  if (v.firstEntryAt === null) return `${what} · nothing grazed yet`;
+  const from = shortDate(v.firstEntryAt.slice(0, 10));
+  const to = v.lastExitAt === null ? "still running" : shortDate(v.lastExitAt.slice(0, 10));
+  return `${what} · ${from} → ${to}`;
+};
+
+/** Rounds under their mob and ground, each scope keeping the newest-first
+ *  order the list arrives in. */
+const roundGroups = (rounds: RoundView[]): [string, RoundView[]][] => {
+  const by = new Map<string, RoundView[]>();
+  for (const v of rounds) {
+    const key = roundScopeLabel(v);
+    const list = by.get(key);
+    if (list) list.push(v);
+    else by.set(key, [v]);
+  }
+  return [...by.entries()];
+};
+
 const shortDate = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
     year: "numeric", month: "short", day: "numeric",
@@ -118,7 +144,7 @@ export default function PaymentRecord() {
    * real: "what did we do in August" for the quarterly return, "how did that
    * round go" for the grazing itself.
    */
-  const [roundId, setRoundId] = useState<string | null>(null);
+  const [roundId, setRoundId] = useState<string | null | "auto">("auto");
 
   const refresh = useCallback(async () => {
     if (!farmId) {
@@ -164,7 +190,40 @@ export default function PaymentRecord() {
     [views, pastureId],
   );
 
-  const chosen = rounds.find((v) => v.round.id === roundId) ?? null;
+  /**
+   * The round you are in.
+   *
+   * A round still running wins — the mob has not come out of it, so it is the
+   * one you are living in — and among those, the one most recently walked
+   * into. On a farm with four mobs out at once that is a real choice between
+   * several, which is why the rule has to be stated rather than left to
+   * whatever order the rows arrived in. Falls back to the last round grazed
+   * when nothing is running, and to null on a farm that has grazed none.
+   */
+  const current = useMemo(() => {
+    const enteredAt = (v: RoundView) => v.stays[v.stays.length - 1]?.enteredAt ?? "";
+    const running = rounds.filter((v) => v.running);
+    const pool = running.length > 0 ? running : rounds;
+    return pool.reduce<RoundView | null>(
+      (best, v) => (best === null || enteredAt(v) > enteredAt(best) ? v : best),
+      null,
+    );
+  }, [rounds]);
+
+  /**
+   * The round the report is of.
+   *
+   * Derived rather than set by an effect. Defaulting in an effect renders the
+   * month first and the round a frame later — a visible flash of the wrong
+   * report, and the whole date-range table built for nothing. "auto" means
+   * nobody has chosen, so the round you are in stands.
+   */
+  const chosen =
+    roundId === "auto"
+      ? current
+      : roundId === null
+        ? null
+        : (rounds.find((v) => v.round.id === roundId) ?? null);
 
   const rows: ReportRow[] = useMemo(() => {
     if (load.state !== "ok") return [];
@@ -311,7 +370,13 @@ export default function PaymentRecord() {
                   <span className="eyebrow">Ground</span>
                   <select
                     value={pastureId ?? ""}
-                    onChange={(e) => setPastureId(e.target.value === "" ? null : e.target.value)}
+                    onChange={(e) => {
+                      setPastureId(e.target.value === "" ? null : e.target.value);
+                      // Back to the round you are in on the ground just
+                      // picked. Keeping the old one would leave the picker
+                      // showing a round that is no longer on offer.
+                      setRoundId("auto");
+                    }}
                     aria-label="Ground"
                   >
                     <option value="">The whole farm</option>
@@ -348,15 +413,24 @@ export default function PaymentRecord() {
                 <label className="grz-field grz-field--wide">
                   <span className="eyebrow">Round</span>
                   <select
-                    value={roundId ?? ""}
+                    value={chosen?.round.id ?? ""}
                     onChange={(e) => setRoundId(e.target.value === "" ? null : e.target.value)}
                     aria-label="Round"
                   >
                     <option value="">A date range instead</option>
-                    {rounds.map((v) => (
-                      <option key={v.round.id} value={v.round.id}>
-                        {roundLabel(v)}
-                      </option>
+                    {/* Grouped by mob and ground, because a farm running four
+                        mobs over six pastures has thirty rounds and a flat
+                        list of them is not a picker. The heading carries the
+                        mob and the ground, so the option itself only has to
+                        say which round and when. */}
+                    {roundGroups(rounds).map(([scope, mine]) => (
+                      <optgroup key={scope} label={scope}>
+                        {mine.map((v) => (
+                          <option key={v.round.id} value={v.round.id}>
+                            {roundWhen(v)}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </label>

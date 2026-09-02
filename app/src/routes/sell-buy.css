@@ -1,0 +1,238 @@
+/* Herd → Market: the sell/buy analyzer.
+   Numbered sections, because the page is an argument in four steps rather
+   than four independent panels: the animal, the prices, the crossing, the
+   trade. Each one needs the one above it. */
+
+.sb-lede {
+  font-size: 15px;
+  color: var(--ink-soft);
+  max-width: 60ch;
+  margin: 4px 0 0;
+}
+
+.sb-section { margin-top: 34px; }
+
+.sb-h {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.sb-h__n { font-size: 11px; color: var(--herd-green); font-weight: 500; }
+
+/* Pushed right so the section reads as its title first and its caveat
+   second — and every one of these is a caveat. */
+.sb-h__note {
+  margin-left: auto;
+  font: 400 11.5px/1.3 "IBM Plex Sans", sans-serif;
+  color: var(--ink-faint);
+}
+
+.sb-two {
+  display: grid;
+  gap: 22px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 900px) {
+  .sb-two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  /* The trade's one input does not need half the page. */
+  .sb-two--narrow-first { grid-template-columns: minmax(0, 260px) minmax(0, 1fr); }
+}
+
+.sb-pick { margin-bottom: 14px; max-width: 22rem; }
+
+/* ── the weight table ─────────────────────────────────────────────── */
+
+.sb-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+}
+
+.sb-table th {
+  text-align: left;
+  font: 500 10px/1 "IBM Plex Sans", sans-serif;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 0 8px 7px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.sb-table td {
+  padding: 6px 8px 6px 0;
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: baseline;
+}
+
+.sb-table input {
+  font: 400 14px/1.2 "IBM Plex Mono", monospace;
+  color: var(--ink);
+  background: var(--paper-tint);
+  border: 1px solid var(--hairline);
+  padding: 6px 7px;
+  min-height: 38px;
+}
+
+.sb-table input:focus-visible { outline: 2px solid var(--herd-green); outline-offset: 1px; }
+
+.sb-lb { width: 5.5rem; }
+.sb-unit { font-size: 11.5px; color: var(--ink-muted); margin-left: 5px; }
+.sb-unit--tall { align-self: center; padding-bottom: 10px; }
+
+.sb-dim { font-size: 13px; color: var(--ink-muted); }
+.sb-empty { margin: 0 0 12px; }
+.sb-note { margin: 12px 0 0; max-width: 72ch; }
+
+.sb-stats { margin: 0; }
+
+@media (min-width: 900px) {
+  /* Two up rather than four across: beside the table they have half the
+     width, and four columns of money there is four columns of wrapping. */
+  .sb-two .sb-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ── panels ──────────────────────────────────────────────────────── */
+
+.sb-panel {
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  padding: 14px;
+}
+
+.sb-panel--tight { align-self: start; }
+
+.sb-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.sb-panel__head p { max-width: 52ch; }
+
+.sb-rungs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 10px;
+}
+
+.sb-rung { display: flex; flex-direction: column; gap: 4px; }
+
+.sb-rung input {
+  font: 400 14px/1.2 "IBM Plex Mono", monospace;
+  color: var(--ink);
+  background: var(--paper-tint);
+  border: 1px solid var(--hairline);
+  padding: 7px;
+  min-height: 40px;
+  width: 100%;
+}
+
+.sb-rung input:focus-visible { outline: 2px solid var(--herd-green); outline-offset: 1px; }
+
+/* Read-only, the slide is a row of figures rather than a table: ten pairs
+   is a sentence, and a grid for it would be more furniture than data. */
+.sb-slide-read {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+/* ── the crossing ────────────────────────────────────────────────── */
+
+.sb-controls {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.sb-narrow { flex: 0 0 8rem; }
+.sb-modes { display: flex; gap: 6px; }
+
+.sb-figure { margin: 0; }
+
+.sb-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+.sb-grid { stroke: var(--hairline); stroke-width: 1; stroke-dasharray: 2 4; }
+.sb-zero { stroke: var(--ink-faint); stroke-width: 1; }
+
+.sb-axis {
+  font: 400 11px/1 "IBM Plex Mono", monospace;
+  fill: var(--ink-muted);
+}
+
+.sb-line { fill: none; }
+.sb-line--vog { stroke: var(--herd-green); stroke-width: 2; }
+.sb-line--cog { stroke: var(--red); stroke-width: 1.5; stroke-dasharray: 5 4; }
+
+/* The ground where gain still pays for itself. Faint: it is the answer, but
+   the lines are what carry it. */
+.sb-window { fill: var(--herd-green); opacity: .1; }
+
+.sb-mark { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 4 3; }
+
+.sb-mark__label {
+  font: 500 11px/1 "IBM Plex Mono", monospace;
+  fill: var(--ink);
+}
+
+.sb-caption {
+  font-size: 12px;
+  color: var(--ink-faint);
+  padding: 8px 2px 0;
+  max-width: 68ch;
+}
+
+/* ── the verdict ─────────────────────────────────────────────────── */
+
+.sb-verdict {
+  margin-top: 14px;
+  padding: 14px;
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  /* The one thing on the page you are meant to read first, so it gets an
+     edge. Red until the trade pays, which is the more common answer and the
+     one worth being sure about. */
+  border-left: 3px solid var(--red);
+}
+
+.sb-verdict--yes { border-left-color: var(--herd-green); }
+
+.sb-verdict__say {
+  font-size: 19px;
+  line-height: 1.45;
+  color: var(--ink);
+  margin: 8px 0 10px;
+  max-width: 56ch;
+}
+
+.sb-foot {
+  margin-top: 34px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-faint);
+  max-width: 76ch;
+}

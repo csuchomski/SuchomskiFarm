@@ -49,6 +49,11 @@ export const allGroups: NavGroup[] = [
       { label: "Animals", to: "/animals" },
       { label: "Milking", to: "/milking" },
       { label: "Breeding", to: "/breeding" },
+      // The market side: what the next hundred pounds are worth, and whether
+      // trading down the weight ladder beats keeping what you have. Under
+      // Herd rather than in a section of its own, which for one page would be
+      // more heading than page.
+      { label: "Market", to: "/market" },
     ],
   },
   {

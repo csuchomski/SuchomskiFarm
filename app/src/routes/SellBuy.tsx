@@ -11,6 +11,7 @@ import {
   SAMPLE_SLIDE,
   SAMPLE_WEIGHTS,
   sellBuy,
+  sellBuyHerd,
   sellWindow,
   valueAt,
   type ProjectionPoint,
@@ -109,6 +110,8 @@ export default function SellBuy() {
   const [editingSlide, setEditingSlide] = useState(false);
   const [cog, setCog] = useState("1.15");
   const [replacement, setReplacement] = useState("500");
+  /** How many are going. One is the per-head trade; a draft is the argument. */
+  const [head, setHead] = useState("40");
   /**
    * Margin first.
    *
@@ -201,6 +204,12 @@ export default function SellBuy() {
   const trade = useMemo(
     () => sellBuy({ slide, sellLb: currentLb, replacementLb, costOfGain, adg: gain.adg }),
     [slide, currentLb, replacementLb, costOfGain, gain.adg],
+  );
+
+  const headSold = num(head);
+  const draft = useMemo(
+    () => sellBuyHerd({ slide, sellLb: currentLb, replacementLb, headSold, adg: gain.adg }),
+    [slide, currentLb, replacementLb, headSold, gain.adg],
   );
 
   /**
@@ -514,6 +523,15 @@ export default function SellBuy() {
         <div className="sb-two sb-two--narrow-first">
           <div className="sb-panel sb-panel--tight">
             <label className="grz-field">
+              <span className="eyebrow">Head to sell</span>
+              <input
+                value={head}
+                inputMode="numeric"
+                onChange={(e) => setHead(e.target.value)}
+                aria-label="Head to sell"
+              />
+            </label>
+            <label className="grz-field" style={{ marginTop: 12 }}>
               <span className="eyebrow">Buy back in at</span>
               <input
                 value={replacement}
@@ -522,7 +540,7 @@ export default function SellBuy() {
                 aria-label="Buy back in at"
               />
             </label>
-            <p className="sb-dim" style={{ marginBottom: 0 }}>
+            <p className="sb-dim" style={{ margin: "12px 0 0" }}>
               Sell at {currentLb} lb for {priceAt(slide, currentLb).toFixed(0)} $/cwt, buy back at{" "}
               {replacementLb} lb for {priceAt(slide, replacementLb).toFixed(0)} $/cwt.
             </p>
@@ -530,10 +548,58 @@ export default function SellBuy() {
 
           <div>
             <div className="stat-row sb-stats">
-              <StatTile value={money(trade.proceeds)} label={`Sale, at ${currentLb} lb`} size="md" />
+              <StatTile
+                value={draft.headBought}
+                unit="head"
+                label={
+                  draft.extraHead === 0
+                    ? "Bought back, same number"
+                    : draft.extraHead > 0
+                      ? `Bought back — ${draft.extraHead} more`
+                      : `Bought back — ${-draft.extraHead} fewer`
+                }
+                size="md"
+              />
+              <StatTile value={money(draft.proceeds)} label={`Draft of ${draft.headSold}, gross`} size="md" />
+              <StatTile
+                value={money(draft.cashLeft)}
+                label="Left over after buying"
+                size="md"
+              />
+              <StatTile
+                value={Math.abs(draft.poundsGivenUp).toLocaleString()}
+                unit="lb"
+                label={draft.poundsGivenUp >= 0 ? "Inventory given up" : "Inventory gained"}
+                size="md"
+              />
+            </div>
+
+            {/* The argument the per-head view cannot make: more mouths on the
+                same grass, all gaining at the same rate. */}
+            {draft.gainPerDayAfter !== null && draft.gainPerDayBefore !== null && draft.headSold > 0 && (
+              <p className="sb-dim sb-note">
+                {draft.headBought} head at {gain.adg!.toFixed(2)} lb a day is{" "}
+                <strong className="mono">{Math.round(draft.gainPerDayAfter)} lb</strong> a day
+                across the draft, against{" "}
+                <strong className="mono">{Math.round(draft.gainPerDayBefore)} lb</strong> from the{" "}
+                {draft.headSold} you sold
+                {draft.daysToRegain !== null && (
+                  <>
+                    {" "}
+                    — so the {draft.poundsGivenUp.toLocaleString()} lb of inventory comes back in
+                    about {Math.round(draft.daysToRegain)} days, and the extra keeps accruing after
+                    that
+                  </>
+                )}
+                .
+              </p>
+            )}
+
+            <div className="stat-row sb-stats sb-stats--second">
+              <StatTile value={money(trade.proceeds)} label={`Sale, at ${currentLb} lb, each`} size="md" />
               <StatTile
                 value={money(trade.replacementCost)}
-                label={`Replacement, at ${replacementLb} lb`}
+                label={`Replacement, at ${replacementLb} lb, each`}
                 size="md"
               />
               <StatTile

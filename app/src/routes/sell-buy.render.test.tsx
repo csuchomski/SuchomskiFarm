@@ -267,3 +267,61 @@ describe("trading down the ladder", () => {
     expect(screen.getByText(/Worth doing/)).toBeTruthy();
   });
 });
+
+describe("the trade across a draft", () => {
+  /**
+   * The argument the per-head view cannot make: lighter cattle cost more a
+   * pound, so the money buys fewer pounds but more head — and every one of
+   * them gains at the same rate.
+   */
+  it("says how many the proceeds buy back, and how many more that is", async () => {
+    await mount();
+    fireEvent.change(screen.getByLabelText("Head to sell"), { target: { value: "40" } });
+    fireEvent.change(screen.getByLabelText("Buy back in at"), { target: { value: "500" } });
+    // 40 × $1,830 is $73,200; a 500 lb replacement is $1,588 each.
+    expect(tile(/Bought back/)).toBe("46 head");
+    expect(tile(/Bought back/)).toBeTruthy();
+    expect(screen.getByText(/Bought back — 6 more/)).toBeTruthy();
+  });
+
+  it("keeps the remainder as cash rather than part of a steer", async () => {
+    await mount();
+    fireEvent.change(screen.getByLabelText("Head to sell"), { target: { value: "40" } });
+    const left = tile("Left over after buying");
+    expect(left).toMatch(/^\$/);
+    expect(left).not.toBe("$0");
+  });
+
+  it("makes the case that more mouths gain more a day", async () => {
+    // The reason the method exists, and the thing per-head figures hide.
+    await mount();
+    fireEvent.change(screen.getByLabelText("Head to sell"), { target: { value: "40" } });
+    const said = screen.getByText(/a day across the draft/).textContent!;
+    expect(said).toContain("46 head");
+    expect(said).toContain("comes back in");
+  });
+
+  it("says inventory was gained, not given up, when trading up", async () => {
+    await mount();
+    fireEvent.change(screen.getByLabelText("Head to sell"), { target: { value: "40" } });
+    fireEvent.change(screen.getByLabelText("Buy back in at"), { target: { value: "800" } });
+    expect(screen.getByText("Inventory gained")).toBeTruthy();
+    expect(screen.getByText(/Bought back — \d+ fewer/)).toBeTruthy();
+  });
+
+  it("makes no gain-rate case without a gain rate", async () => {
+    // Two rates and a countdown, all invented from nothing, is worse than
+    // saying less.
+    animals = [animal("a1", "Martha")];
+    weighings = [weighing("w1", "2026-05-01", 500)];
+    await mount();
+    fireEvent.change(screen.getByLabelText("Take the weights from"), { target: { value: "a1" } });
+    await waitFor(() => expect(screen.getByText(/needs two weighings/)).toBeTruthy());
+    expect(screen.queryByText(/a day across the draft/)).toBeNull();
+  });
+
+  it("still gives the per-head figures under the draft's", async () => {
+    await mount();
+    expect(tile(/Sale, at 676 lb, each/)).toBe("$1,830");
+  });
+});

@@ -266,6 +266,90 @@ export function sellBuy(input: {
   };
 }
 
+export interface SellBuyHerd {
+  headSold: number;
+  /** Gross, for the whole draft. */
+  proceeds: number;
+  costEach: number;
+  /** Whole animals: the proceeds will not stretch to a fraction of a steer,
+   *  and the remainder stays as cash. */
+  headBought: number;
+  extraHead: number;
+  cashLeft: number;
+  poundsSold: number;
+  poundsBought: number;
+  /** Pounds of inventory given up. Negative when the trade buys more pounds
+   *  than it sold, which happens trading up. */
+  poundsGivenUp: number;
+  /** Pounds a day the draft puts on, before and after. The point of the whole
+   *  exercise: more mouths at the same rate is more pounds a day, for ever.
+   *  Null with no rate on file. */
+  gainPerDayBefore: number | null;
+  gainPerDayAfter: number | null;
+  /** How long the bigger draft takes to make the given-up pounds back. Null
+   *  with no rate, or when nothing was given up. */
+  daysToRegain: number | null;
+}
+
+/**
+ * The same trade, at the scale it is actually done.
+ *
+ * Per head, sell/buy is a spread. Across a draft it is a different and better
+ * argument: lighter cattle cost more a pound, so the money buys fewer pounds —
+ * but *more head*, and every one of them gains at the same rate. Sell forty at
+ * 750 and buy back at 500 and you have forty-eight mouths on the same grass,
+ * putting on twenty per cent more a day than the forty did, for as long as you
+ * keep them.
+ *
+ * That is what the per-head view cannot show, and it is the reason the method
+ * exists.
+ *
+ * Whole animals only. A draft of 48.3 head is not a thing you can buy, and
+ * rounding up would spend money the sale did not raise; the remainder comes
+ * back as cash.
+ */
+export function sellBuyHerd(input: {
+  slide: SlidePoint[];
+  sellLb: number;
+  replacementLb: number;
+  headSold: number;
+  adg: number | null;
+}): SellBuyHerd {
+  const { slide, sellLb, replacementLb, headSold, adg } = input;
+  const head = Math.max(0, Math.floor(headSold));
+  const proceeds = head * valueAt(slide, sellLb);
+  const costEach = valueAt(slide, replacementLb);
+
+  // A replacement worth nothing would buy infinitely many of itself. That is
+  // an empty or zeroed slide, not a bargain.
+  const headBought = costEach > 0 ? Math.floor(proceeds / costEach) : 0;
+
+  const poundsSold = head * sellLb;
+  const poundsBought = headBought * replacementLb;
+  const poundsGivenUp = poundsSold - poundsBought;
+
+  const gainPerDayBefore = adg === null ? null : head * adg;
+  const gainPerDayAfter = adg === null ? null : headBought * adg;
+
+  return {
+    headSold: head,
+    proceeds,
+    costEach,
+    headBought,
+    extraHead: headBought - head,
+    cashLeft: proceeds - headBought * costEach,
+    poundsSold,
+    poundsBought,
+    poundsGivenUp,
+    gainPerDayBefore,
+    gainPerDayAfter,
+    daysToRegain:
+      gainPerDayAfter !== null && gainPerDayAfter > 0 && poundsGivenUp > 0
+        ? poundsGivenUp / gainPerDayAfter
+        : null,
+  };
+}
+
 /**
  * A price slide to start from.
  *

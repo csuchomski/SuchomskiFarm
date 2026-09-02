@@ -94,6 +94,15 @@
 
 .sb-stats { margin: 0; }
 
+/* The per-head figures, under the draft's. Ruled off rather than merely
+   spaced: they are the same trade told at a different scale, and running
+   them together makes eight tiles nobody can tell apart. */
+.sb-stats--second {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+
 @media (min-width: 900px) {
   /* Two up rather than four across: beside the table they have half the
      width, and four columns of money there is four columns of wrapping. */

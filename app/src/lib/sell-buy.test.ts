@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   gainFrom,
   SAMPLE_SLIDE,
+  sellBuyHerd,
   priceAt,
   projection,
   sellBuy,
@@ -270,5 +271,82 @@ describe("sell here, buy back there", () => {
     expect(up.cashFreed).toBeCloseTo(-255, 6);
     expect(up.poundsToReplace).toBe(-150);
     expect(up.worthIt).toBe(false);
+  });
+});
+
+describe("the same trade, across a draft", () => {
+  /**
+   * The argument the per-head view cannot make: lighter cattle cost more a
+   * pound, so the money buys fewer pounds but more head — and every one of
+   * them gains at the same rate. That is the whole point of the method.
+   */
+  const base = { slide: EVEN, sellLb: 650, replacementLb: 500, headSold: 40, adg: 2 };
+
+  it("buys as many head as the proceeds stretch to", () => {
+    // 40 head at 650 lb and 270 $/cwt is $70,200; a 500 lb replacement at
+    // 300 $/cwt is $1,500 each, so 46 of them and change.
+    const t = sellBuyHerd(base);
+    expect(t.proceeds).toBeCloseTo(70_200, 6);
+    expect(t.costEach).toBeCloseTo(1500, 6);
+    expect([t.headBought, t.extraHead]).toEqual([46, 6]);
+  });
+
+  it("keeps the remainder as cash rather than buying part of a steer", () => {
+    // Rounding up would spend money the sale did not raise.
+    const t = sellBuyHerd(base);
+    expect(t.cashLeft).toBeCloseTo(70_200 - 46 * 1500, 6);
+    expect(t.cashLeft).toBeGreaterThanOrEqual(0);
+    expect(t.cashLeft).toBeLessThan(t.costEach);
+  });
+
+  it("shows the pounds given up to get the extra head", () => {
+    const t = sellBuyHerd(base);
+    expect([t.poundsSold, t.poundsBought]).toEqual([26_000, 23_000]);
+    expect(t.poundsGivenUp).toBe(3_000);
+  });
+
+  it("puts on more a day afterwards, which is the reason for the trade", () => {
+    const t = sellBuyHerd(base);
+    expect([t.gainPerDayBefore, t.gainPerDayAfter]).toEqual([80, 92]);
+  });
+
+  it("says how long the bigger draft takes to make the pounds back", () => {
+    // 3,000 lb at 92 lb a day.
+    expect(sellBuyHerd(base).daysToRegain).toBeCloseTo(3000 / 92, 9);
+  });
+
+  it("has no days and no rates without a gain rate on file", () => {
+    const t = sellBuyHerd({ ...base, adg: null });
+    expect([t.gainPerDayBefore, t.gainPerDayAfter, t.daysToRegain]).toEqual([null, null, null]);
+  });
+
+  it("has nothing to regain when the trade bought more pounds than it sold", () => {
+    // Trading up: fewer head, more pounds. There is no catching up to do.
+    const t = sellBuyHerd({ ...base, sellLb: 500, replacementLb: 650 });
+    expect(t.poundsGivenUp).toBeLessThan(0);
+    expect(t.daysToRegain).toBeNull();
+  });
+
+  it("buys fewer head when trading up, and says so", () => {
+    const t = sellBuyHerd({ ...base, sellLb: 500, replacementLb: 650 });
+    expect(t.extraHead).toBeLessThan(0);
+    expect(t.headBought).toBeLessThan(t.headSold);
+  });
+
+  it("buys nothing on a slide that prices the replacement at nothing", () => {
+    // Otherwise the money buys infinitely many of it, which is an empty slide
+    // rather than a bargain.
+    const t = sellBuyHerd({ ...base, slide: [] });
+    expect([t.headBought, t.proceeds]).toEqual([0, 0]);
+  });
+
+  it("is all noughts for a draft of none", () => {
+    const t = sellBuyHerd({ ...base, headSold: 0 });
+    expect([t.headSold, t.headBought, t.proceeds, t.poundsSold]).toEqual([0, 0, 0, 0]);
+  });
+
+  it("does not take a fraction of an animal as a draft", () => {
+    expect(sellBuyHerd({ ...base, headSold: 40.9 }).headSold).toBe(40);
+    expect(sellBuyHerd({ ...base, headSold: -5 }).headSold).toBe(0);
   });
 });

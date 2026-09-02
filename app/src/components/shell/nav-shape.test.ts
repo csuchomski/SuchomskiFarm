@@ -18,8 +18,11 @@ const group = (heading: string) => allGroups.find((g) => g.heading === heading)!
 const labels = (heading: string) => group(heading).items.map((i) => i.label);
 
 describe("the Herd section", () => {
-  it("is three subjects, not eleven views of them", () => {
-    expect(labels("Herd")).toEqual(["Animals", "Milking", "Breeding"]);
+  it("is subjects, not eleven views of them", () => {
+    // Eleven entries became three by folding views into the subject they
+    // were views of. Market joined later and is not one of those: the price
+    // of cattle is its own subject, not another way of looking at Animals.
+    expect(labels("Herd")).toEqual(["Animals", "Milking", "Breeding", "Market"]);
   });
 
   it("no longer lists the pages that folded into those three", () => {

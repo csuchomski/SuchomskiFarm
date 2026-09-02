@@ -76,6 +76,11 @@ vi.mock("../lib/grazing", async (importOriginal) => {
     fetchPlanPaddockTargets: vi.fn(async () => []),
     fetchInfrastructure: vi.fn(async () => []),
     fetchWeighings: vi.fn(async () => []),
+    // The Report tab grew these when rounds and properties arrived, and this
+    // file was not updated — so it fell through to the live client on every
+    // mount, which is why this suite was slow and occasionally raced.
+    fetchRounds: vi.fn(async () => []),
+    fetchProperties: vi.fn(async () => []),
   };
 });
 

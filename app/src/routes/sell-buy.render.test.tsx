@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import type { RealAnimal } from "../lib/herd";
 import type { Weighing } from "../lib/grazing";
+import type { MarketSeries } from "../lib/market";
 
 /**
  * Herd → Market: the sell/buy analyzer.
@@ -43,6 +44,31 @@ const weighing = (id: string, date: string, weightLb: number): Weighing => ({
 
 let animals: RealAnimal[] = [];
 let weighings: Weighing[] = [];
+let series: MarketSeries[] = [];
+/** Set when the test wants the market reports to be unreachable — a puller
+ *  that has not run, or a schema the app cannot read. */
+let marketFails = false;
+
+/** Iowa's grade 1 steers as reported on 2026-08-24, trimmed to five rungs. */
+const iowaSteers = (over: Partial<MarketSeries> = {}): MarketSeries => ({
+  key: "2|Steers|1",
+  sourceId: 2,
+  label: "Iowa Weekly Cattle Auction Summary",
+  reportDate: "2026-08-24",
+  isLocal: true,
+  klass: "Steers",
+  grade: "1",
+  head: 2_140,
+  rungs: [
+    { weightLb: 472, cwt: 456 },
+    { weightLb: 627, cwt: 365.82 },
+    { weightLb: 731, cwt: 350.45 },
+    { weightLb: 870, cwt: 316.75 },
+    { weightLb: 1165, cwt: 256 },
+  ],
+  dropped: [],
+  ...over,
+});
 
 vi.mock("../lib/herd", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/herd")>()),
@@ -54,9 +80,19 @@ vi.mock("../lib/grazing", async (importOriginal) => ({
   fetchWeighings: vi.fn(async () => weighings),
 }));
 
+vi.mock("../lib/market", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/market")>()),
+  fetchMarketSeries: vi.fn(async () => {
+    if (marketFails) throw new Error("market.latest_slide: permission denied");
+    return series;
+  }),
+}));
+
 beforeEach(() => {
   animals = [];
   weighings = [];
+  series = [];
+  marketFails = false;
 });
 
 afterEach(() => {
@@ -73,6 +109,11 @@ const mount = async () => {
   await waitFor(() => expect(screen.queryAllByText("Loading…")).toHaveLength(0));
 };
 
+/** The caveat at the right of a section's heading. Every section has one, so
+ *  they are addressed by number rather than by being first. */
+const sectionNote = (n: number) =>
+  document.querySelectorAll(".sb-h__note")[n - 1]?.textContent ?? null;
+
 const tile = (label: RegExp | string) => {
   const el = [...document.querySelectorAll(".stat-tile")].find((t) =>
     typeof label === "string" ? t.textContent?.includes(label) : label.test(t.textContent ?? ""),
@@ -81,12 +122,12 @@ const tile = (label: RegExp | string) => {
 };
 
 describe("what the page admits about itself", () => {
-  it("says the slide is play data, not a quote", async () => {
+  it("says the figures are the farm's own when no report is on file", async () => {
     // A printout of invented prices that does not say so is worse than no
     // page at all.
     await mount();
-    expect(screen.getByText(/play data — no market feed yet/)).toBeTruthy();
-    expect(screen.getByText(/not a quote/)).toBeTruthy();
+    expect(screen.getByText(/your own figures — no report on file/)).toBeTruthy();
+    expect(screen.getByText(/your own typed figures, not a quote/)).toBeTruthy();
   });
 
   it("says every figure is gross", async () => {
@@ -323,5 +364,128 @@ describe("the trade across a draft", () => {
   it("still gives the per-head figures under the draft's", async () => {
     await mount();
     expect(tile(/Sale, at 676 lb, each/)).toBe("$1,830");
+  });
+});
+
+describe("taking prices from a market report", () => {
+  /**
+   * The USDA auction summaries, once the puller has run. What matters is that
+   * the page says which report it is showing and when it was, that editing a
+   * rung stops it claiming to be that report, and that a row the report got
+   * wrong is named rather than quietly dropped.
+   */
+  const pick = (value: string) =>
+    fireEvent.change(screen.getByLabelText("Take the prices from"), { target: { value } });
+
+  it("offers no picker on a farm with no report on file", async () => {
+    // The puller may never have run, and the page has to work on typed
+    // figures alone — which is what it did before any of this.
+    await mount();
+    expect(screen.queryByLabelText("Take the prices from")).toBeNull();
+  });
+
+  it("opens on the farm's own figures, not on a report", async () => {
+    // Somebody's own slide is not to be replaced by a market average without
+    // them asking.
+    series = [iowaSteers()];
+    await mount();
+    expect((screen.getByLabelText("Take the prices from") as HTMLSelectElement).value).toBe("");
+    expect(tile("Price at this weight")).toContain("270.78");
+  });
+
+  it("takes the report's rungs when one is picked", async () => {
+    series = [iowaSteers()];
+    await mount();
+    pick("2|Steers|1");
+    // 676 lb interpolates between Iowa's 627 and 731 rungs, not the sample's.
+    expect(tile("Price at this weight")).not.toContain("270.78");
+    // Twice over on purpose: the section heading carries it so it is legible
+    // at a glance, and the panel repeats it with the detail.
+    expect(screen.getAllByText(/Iowa Weekly Cattle Auction Summary, Aug 24, 2026/)).toHaveLength(2);
+    expect(sectionNote(2)).toContain("Iowa Weekly Cattle Auction Summary, Aug 24, 2026");
+  });
+
+  it("says how deep the market behind it was", async () => {
+    // A series built on nine head is a rumour; one on two thousand is a
+    // market, and which one you have changes how much to trust it.
+    series = [iowaSteers()];
+    await mount();
+    pick("2|Steers|1");
+    expect(screen.getByText(/across 2,140 head/)).toBeTruthy();
+  });
+
+  it("says when the barn is not a local one", async () => {
+    series = [iowaSteers({ isLocal: false })];
+    await mount();
+    pick("2|Steers|1");
+    expect(screen.getByText(/freight is on you/)).toBeTruthy();
+  });
+
+  it("names the rows the report got wrong rather than hiding them", async () => {
+    // Iowa's real 2026-08-24 heifers: a 450 lb lot quoted at "1900", which as
+    // a price per hundredweight makes her worth $8,550.
+    series = [
+      iowaSteers({
+        key: "2|Heifers|1",
+        klass: "Heifers",
+        dropped: [{ weightLb: 450, cwt: 1900 }],
+      }),
+    ];
+    await mount();
+    pick("2|Heifers|1");
+    expect(screen.getByText(/left out as impossible/)).toBeTruthy();
+    expect(screen.getByText(/450 lb at \$1900/)).toBeTruthy();
+    expect(screen.getByText(/per-head figure in the per-hundredweight column/)).toBeTruthy();
+  });
+
+  it("says nothing about dropped rows on a clean report", async () => {
+    series = [iowaSteers()];
+    await mount();
+    pick("2|Steers|1");
+    expect(screen.queryByText(/left out as impossible/)).toBeNull();
+  });
+
+  it("stops claiming to be the report once a rung is edited", async () => {
+    // A slide with a report's name on it that has since been hand-edited is
+    // the worst of both: it is neither the market's figures nor plainly the
+    // farm's.
+    series = [iowaSteers()];
+    await mount();
+    pick("2|Steers|1");
+    fireEvent.click(screen.getByRole("button", { name: "Edit the slide" }));
+    fireEvent.change(screen.getByLabelText("Price at 627 lb"), { target: { value: "300" } });
+    expect(screen.queryAllByText(/Iowa Weekly Cattle Auction Summary, Aug 24, 2026/)).toHaveLength(0);
+    expect(sectionNote(2)).toContain("your own figures");
+  });
+
+  it("goes back to the farm's own figures when the report is cleared", async () => {
+    series = [iowaSteers()];
+    await mount();
+    pick("2|Steers|1");
+    pick("");
+    expect(tile("Price at this weight")).toContain("270.78");
+  });
+
+  it("changes what the footer claims the figures are", async () => {
+    series = [iowaSteers()];
+    await mount();
+    expect(screen.getByText(/your own typed figures, not a quote/)).toBeTruthy();
+    pick("2|Steers|1");
+    expect(screen.getByText(/what cattle actually sold for at that barn/)).toBeTruthy();
+  });
+
+  it("still works when the market reports cannot be reached", async () => {
+    // A puller that has not run, or a schema the app cannot read, must not
+    // take the page down with it — the farm's own figures were the whole
+    // page before any of this existed.
+    marketFails = true;
+    series = [iowaSteers()];
+    await mount();
+    // The page's sections are not gated on the load, so it draws either way.
+    // What must not happen is an error banner over a page that is working —
+    // unreachable market reports are an absence, not a fault.
+    expect(screen.queryByText(/permission denied/)).toBeNull();
+    expect(screen.queryByLabelText("Take the prices from")).toBeNull();
+    expect(tile("Price at this weight")).toContain("270.78");
   });
 });

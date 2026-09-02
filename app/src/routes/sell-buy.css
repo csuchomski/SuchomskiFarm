@@ -49,6 +49,10 @@
 
 .sb-pick { margin-bottom: 14px; max-width: 22rem; }
 
+/* Wider than the animal picker: a series names its auction, its class and
+   its grade, and truncating any of those makes two reports look alike. */
+.sb-report { margin-bottom: 12px; max-width: 44rem; }
+
 /* ── the weight table ─────────────────────────────────────────────── */
 
 .sb-table {

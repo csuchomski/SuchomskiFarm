@@ -4,6 +4,7 @@ import { Button, Callout, StatTile } from "../components/ui";
 import { useWorkspace } from "../lib/workspace";
 import { fetchAnimals, type RealAnimal } from "../lib/herd";
 import { fetchWeighings } from "../lib/grazing";
+import { fetchMarketSeries, seriesLabel, type MarketSeries } from "../lib/market";
 import {
   gainFrom,
   priceAt,
@@ -47,7 +48,7 @@ import "./sell-buy.css";
 type Load =
   | { state: "loading" }
   | { state: "error"; message: string }
-  | { state: "ok"; animals: RealAnimal[] };
+  | { state: "ok"; animals: RealAnimal[]; series: MarketSeries[] };
 
 /** The farm's own slide, per browser. Not a schema: there is no feed yet, and
  *  a table for figures that will be replaced by one is a table to migrate
@@ -87,6 +88,13 @@ const num = (s: string): number => {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+/** A report's date. Day-only, so midnight is appended rather than parsed as
+ *  UTC and shown a day early. */
+const shortDate = (iso: string) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+    year: "numeric", month: "short", day: "numeric",
+  });
+
 /** What the table holds, as typed rather than as parsed — same reason the
  *  wire's width box holds a draft: "5" on its way to "550" must not be read
  *  as a five-pound calf mid-keystroke. */
@@ -108,6 +116,16 @@ export default function SellBuy() {
   const [fromAnimal, setFromAnimal] = useState<string | null>(null);
   const [slide, setSlide] = useState<SlidePoint[]>(readSlide);
   const [editingSlide, setEditingSlide] = useState(false);
+  /**
+   * Which report the slide came from, when it came from one.
+   *
+   * Null means the figures on screen are the farm's own — either typed, or
+   * the sample nobody has replaced yet. Kept apart from the slide itself
+   * because the page has to be able to say which it is looking at, and a
+   * slide with a report's name on it that has since been hand-edited would
+   * be the worst of both.
+   */
+  const [fromReport, setFromReport] = useState<string | null>(null);
   const [cog, setCog] = useState("1.15");
   const [replacement, setReplacement] = useState("500");
   /** How many are going. One is the per-head trade; a draft is the argument. */
@@ -128,8 +146,14 @@ export default function SellBuy() {
       setLoad({ state: "error", message: "No farm on this business." });
       return;
     }
-    const animals = await fetchAnimals(farmId);
-    setLoad({ state: "ok", animals: animals.filter((a) => a.status === "active") });
+    // The market reports are not farm data and not required: a farm can work
+    // this page on its own typed figures, and a puller that has not run must
+    // not take the page down with it.
+    const [animals, series] = await Promise.all([
+      fetchAnimals(farmId),
+      fetchMarketSeries().catch(() => [] as MarketSeries[]),
+    ]);
+    setLoad({ state: "ok", animals: animals.filter((a) => a.status === "active"), series });
   }, [farmId]);
 
   useEffect(() => {
@@ -232,10 +256,25 @@ export default function SellBuy() {
     setFromAnimal(null);
   };
 
-  const setRung = (i: number, cwt: string) =>
+  const setRung = (i: number, cwt: string) => {
     setSlide((rs) => rs.map((r, j) => (i === j ? { ...r, cwt: num(cwt) } : r)));
+    // Edited, so it is the farm's slide now rather than the report's.
+    setFromReport(null);
+  };
 
   const animals = load.state === "ok" ? load.animals : [];
+  const series = load.state === "ok" ? load.series : [];
+  const report = series.find((x) => x.key === fromReport) ?? null;
+
+  /** Take a report's rungs as the slide. Hand-editing one afterwards drops
+   *  the report's name, because it is no longer that report. */
+  const takeReport = (key: string) => {
+    const chosen = series.find((x) => x.key === key) ?? null;
+    setFromReport(chosen === null ? null : key);
+    if (chosen !== null) setSlide(chosen.rungs);
+    else setSlide(SAMPLE_SLIDE);
+    setEditingSlide(false);
+  };
 
   return (
     <OpsShell>
@@ -244,7 +283,14 @@ export default function SellBuy() {
         title="Sell/buy analyzer"
         actions={
           slide !== SAMPLE_SLIDE ? (
-            <Button onClick={() => setSlide(SAMPLE_SLIDE)}>Reset the slide</Button>
+            <Button
+              onClick={() => {
+                setSlide(SAMPLE_SLIDE);
+                setFromReport(null);
+              }}
+            >
+              Reset the slide
+            </Button>
           ) : undefined
         }
       />
@@ -378,7 +424,13 @@ export default function SellBuy() {
         <h2 className="sb-h">
           <span className="mono sb-h__n">02</span>
           <span className="serif">Price slide</span>
-          <span className="sb-h__note">play data — no market feed yet</span>
+          <span className="sb-h__note">
+            {report === null
+              ? series.length > 0
+                ? "your own figures — or take a report below"
+                : "your own figures — no report on file"
+              : `${report.label}, ${shortDate(report.reportDate)}`}
+          </span>
         </h2>
 
         <div className="sb-panel">
@@ -391,6 +443,58 @@ export default function SellBuy() {
               {editingSlide ? "Done" : "Edit the slide"}
             </Button>
           </div>
+
+          {/* The reports, when the puller has run. A series is one auction,
+              one class and one grade: mixing classes puts slaughter cows in
+              with feeders, and mixing grades compares cattle that are not the
+              same cattle. */}
+          {series.length > 0 && (
+            <label className="grz-field sb-report">
+              <span className="eyebrow">Take the prices from</span>
+              <select
+                value={fromReport ?? ""}
+                onChange={(e) => takeReport(e.target.value)}
+                aria-label="Take the prices from"
+              >
+                <option value="">My own figures</option>
+                {series.map((x) => (
+                  <option key={x.key} value={x.key}>
+                    {seriesLabel(x)} — {x.rungs.length} weights, {x.head.toLocaleString()} head
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {report !== null && (
+            <p className="sb-dim sb-note" style={{ marginTop: 0 }}>
+              {report.label}, {shortDate(report.reportDate)} — {report.klass}
+              {report.grade !== null && report.grade !== "N/A" && <> grade {report.grade}</>}, across{" "}
+              {report.head.toLocaleString()} head.{" "}
+              {report.isLocal ? "A local barn." : "Not a local barn — freight is on you."} Editing a
+              rung makes it your slide rather than the report's.
+            </p>
+          )}
+
+          {/* Never dropped silently: a farmer who knows their barn will spot a
+              misread row faster than any rule does, and a slide quietly
+              missing its lightest cattle is worse than one with a hole you
+              can see. */}
+          {report !== null && report.dropped.length > 0 && (
+            <p className="grz-warn sb-note" style={{ marginTop: 0 }}>
+              {report.dropped.length === 1 ? "One row was" : `${report.dropped.length} rows were`}{" "}
+              left out as impossible —{" "}
+              {report.dropped.map((d, i) => (
+                <span key={d.weightLb} className="mono">
+                  {i > 0 && ", "}
+                  {d.weightLb} lb at ${d.cwt.toFixed(0)}
+                </span>
+              ))}
+              . At that price a {report.dropped[0].weightLb} lb head would be worth{" "}
+              {money((report.dropped[0].weightLb * report.dropped[0].cwt) / 100)}, so it is a
+              per-head figure in the per-hundredweight column rather than a price.
+            </p>
+          )}
 
           {editingSlide ? (
             <div className="sb-rungs">
@@ -660,7 +764,9 @@ export default function SellBuy() {
       <p className="sb-foot">
         Every figure here is gross. Commission, yardage, brand and health paper, freight, pencil
         shrink and death loss come out before any of it is money, and none of them is worked in.
-        The slide is the farm's own typed figures, not a quote.
+        {report === null
+          ? "The slide is your own typed figures, not a quote."
+          : "The slide is a USDA auction summary — what cattle actually sold for at that barn on that day, which is not a quote for yours."}
       </p>
     </OpsShell>
   );

@@ -773,12 +773,73 @@ export default function SellBuy() {
 }
 
 /**
+ * Round tick steps.
+ *
+ * The axis used to label whatever the padded extremes happened to be —
+ * `$0.17`, `$0.43` — which are not numbers anybody holds in their head. These
+ * step 1, 2, 2.5 or 5 times a power of ten, so the gridlines land on figures
+ * you can read a value off between.
+ */
+function niceTicks(min: number, max: number, count: number): { step: number; values: number[] } {
+  const span = max - min;
+  if (!(span > 0)) return { step: 1, values: [min] };
+  const raw = span / count;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag;
+  const values: number[] = [];
+  for (let v = Math.ceil(min / step) * step; v <= max + step * 1e-9; v += step) {
+    values.push(Number(v.toFixed(10)));
+  }
+  return { step, values };
+}
+
+/**
+ * Money at the precision the tick step needs.
+ *
+ * A step of 2.5 labelled to the nearest dollar prints `$-2` against a
+ * gridline that is at −2.50, which is a chart quietly lying about where its
+ * own rules are. The step decides the decimals.
+ */
+function tickMoney(v: number, step: number): string {
+  const places = step >= 1 ? (Number.isInteger(step) ? 0 : 1) : 2;
+  const n = Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: places });
+  return `${v < 0 ? "-" : ""}$${n}`;
+}
+
+/** Whether the page is narrow enough that a 720-wide chart would shrink its
+ *  own labels to nothing. */
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(
+    () => typeof matchMedia === "function" && matchMedia("(max-width: 700px)").matches,
+  );
+  useEffect(() => {
+    if (typeof matchMedia !== "function") return;
+    const mq = matchMedia("(max-width: 700px)");
+    const on = () => setNarrow(mq.matches);
+    mq.addEventListener("change", on);
+    on();
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return narrow;
+}
+
+/** Per hundredweight, back out of what the animal is worth at that weight. */
+const cwtAt = (p: ProjectionPoint) => (p.weightLb > 0 ? (p.value * 100) / p.weightLb : 0);
+
+const perLb = (n: number) => `$${n.toFixed(2)}`;
+
+/**
  * The crossing, drawn.
  *
  * Two lines and the place they cross, which is the whole point — so it is a
  * line chart rather than the bars the rest of the app uses, and hand-drawn
  * rather than pulled from a library. The app has four runtime dependencies;
  * a charting one for two polylines would be more code than this, not less.
+ *
+ * **Everything the hover shows is also reachable without hovering** — the
+ * figures table under the chart carries every column, so a printout, a
+ * keyboard and a phone all get the same numbers. A tooltip that is the only
+ * way to read a value is a chart with its data hidden in it.
  */
 function GainChart({
   points,
@@ -791,9 +852,23 @@ function GainChart({
   window_: ProjectionPoint | null;
   mode: "vog" | "margin";
 }) {
-  const W = 720;
-  const H = 260;
-  const PAD = { top: 14, right: 16, bottom: 34, left: 54 };
+  /** Which point the pointer or the arrow keys are on. Null is not hovering. */
+  const [at, setAt] = useState<number | null>(null);
+  const narrow = useNarrow();
+
+  // Two geometries, not one scaled down. Everything in an SVG scales with its
+  // viewBox, so a 720-wide chart in a 330px phone column renders its 11px
+  // labels at five — present, unreadable, and worse than absent because the
+  // page looks like it said something. The narrow one is drawn at close to
+  // the size it is shown.
+  const W = narrow ? 380 : 720;
+  const H = narrow ? 300 : 276;
+  // Room at the bottom for a tick row and an axis title under it, and at the
+  // left for the rotated one: an axis of bare numbers does not say $ of what.
+  const PAD = narrow
+    ? { top: 18, right: 14, bottom: 48, left: 54 }
+    : { top: 18, right: 18, bottom: 50, left: 64 };
+  const plotBottom = H - PAD.bottom;
 
   const xs = points.map((p) => p.weightLb);
   const ys =
@@ -813,89 +888,236 @@ function GainChart({
 
   const x = (w: number) =>
     PAD.left + ((w - minX) / (maxX - minX || 1)) * (W - PAD.left - PAD.right);
-  const y = (v: number) =>
-    PAD.top + (1 - (v - minY) / (maxY - minY || 1)) * (H - PAD.top - PAD.bottom);
+  const y = (v: number) => PAD.top + (1 - (v - minY) / (maxY - minY || 1)) * (H - PAD.top - PAD.bottom);
 
   const line = (pick: (p: ProjectionPoint) => number) =>
     points.map((p, i) => `${i === 0 ? "M" : "L"}${x(p.weightLb).toFixed(1)} ${y(pick(p)).toFixed(1)}`).join(" ");
 
-  const ticksX = points.filter((_, i) => i % Math.ceil(points.length / 6) === 0);
-  const ticksY = [minY, (minY + maxY) / 2, maxY];
-  const fmtY = (v: number) => (mode === "vog" ? `$${v.toFixed(2)}` : `$${Math.round(v)}`);
+  const ticksY = niceTicks(minY, maxY, narrow ? 3 : 4);
+
+  // The last weight always gets a tick — it is the end of the road and the
+  // question is how far to go — but not on top of the one before it.
+  const every = Math.max(1, Math.ceil(points.length / (narrow ? 4 : 7)));
+  const last = points.length - 1;
+  const ticksX = points.filter(
+    (_, i) => i === last || (i % every === 0 && last - i >= every),
+  );
+
+  const fmtY = (v: number) => (mode === "vog" ? perLb(v) : tickMoney(v, ticksY.step));
+
+  const yTitle = mode === "vog" ? "$ per pound of gain" : "$ per head, over cost of gain";
+  const drawn = mode === "vog" ? "What the next 10 lb add" : "Margin per head";
+
+  /** The pointer lands on a weight, not on a 2px line: nearest point wins. */
+  const moveTo = (clientX: number, rect: DOMRect) => {
+    if (rect.width === 0 || points.length === 0) return;
+    const ux = ((clientX - rect.left) / rect.width) * W;
+    const w = minX + ((ux - PAD.left) / Math.max(1, W - PAD.left - PAD.right)) * (maxX - minX);
+    let best = 0;
+    for (let i = 1; i < points.length; i += 1) {
+      if (Math.abs(points[i].weightLb - w) < Math.abs(points[best].weightLb - w)) best = i;
+    }
+    setAt(best);
+  };
+
+  const onKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (points.length === 0) return;
+    const cur = at ?? 0;
+    const go = (i: number) => {
+      setAt(Math.max(0, Math.min(points.length - 1, i)));
+      e.preventDefault();
+    };
+    if (e.key === "ArrowRight") go(cur + 1);
+    else if (e.key === "ArrowLeft") go(cur - 1);
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(points.length - 1);
+    else if (e.key === "Escape") setAt(null);
+  };
+
+  const hovered = at === null ? null : (points[at] ?? null);
 
   return (
     <figure className="sb-figure">
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        className="sb-svg"
-        role="img"
-        aria-label={
-          mode === "vog"
-            ? "What the next ten pounds add, against cost of gain, as weight rises"
-            : "Margin per head over cost of gain, as weight rises"
-        }
+      {/* Two lines get a legend; one does not — the caption names it. */}
+      {mode === "vog" && (
+        <ul className="sb-legend">
+          <li>
+            <svg className="sb-key" viewBox="0 0 22 8" aria-hidden="true">
+              <line x1="1" x2="21" y1="4" y2="4" className="sb-line--vog" />
+            </svg>
+            What the next 10 lb add, per pound
+          </li>
+          <li>
+            <svg className="sb-key" viewBox="0 0 22 8" aria-hidden="true">
+              <line x1="1" x2="21" y1="4" y2="4" className="sb-line--cog" />
+            </svg>
+            Cost of gain, {perLb(costOfGain)} a pound
+          </li>
+        </ul>
+      )}
+
+      <div
+        className="sb-plot"
+        tabIndex={0}
+        role="group"
+        aria-label={`${drawn}, from ${minX} to ${maxX} lb. Arrow keys read the figures along it.`}
+        onPointerMove={(e) => moveTo(e.clientX, e.currentTarget.getBoundingClientRect())}
+        onPointerLeave={() => setAt(null)}
+        onKeyDown={onKey}
+        onBlur={() => setAt(null)}
       >
-        {ticksY.map((v) => (
-          <g key={v}>
-            <line x1={PAD.left} x2={W - PAD.right} y1={y(v)} y2={y(v)} className="sb-grid" />
-            <text x={PAD.left - 8} y={y(v) + 4} className="sb-axis" textAnchor="end">
-              {fmtY(v)}
-            </text>
-          </g>
-        ))}
+        <svg viewBox={`0 0 ${W} ${H}`} className="sb-svg" role="img" aria-label={drawn}>
+          {ticksY.values.map((v) => (
+            <g key={v}>
+              <line x1={PAD.left} x2={W - PAD.right} y1={y(v)} y2={y(v)} className="sb-grid" />
+              <text x={PAD.left - 8} y={y(v) + 4} className="sb-axis" textAnchor="end">
+                {fmtY(v)}
+              </text>
+            </g>
+          ))}
 
-        {ticksX.map((p) => (
-          <text key={p.weightLb} x={x(p.weightLb)} y={H - 12} className="sb-axis" textAnchor="middle">
-            {p.weightLb}
+          {ticksX.map((p) => (
+            <text
+              key={p.weightLb}
+              x={x(p.weightLb)}
+              y={plotBottom + 17}
+              className="sb-axis"
+              textAnchor="middle"
+            >
+              {p.weightLb}
+            </text>
+          ))}
+
+          {/* The axis titles. Without them the numbers are dollars of nothing
+              in particular, which is most of what makes a chart unreadable. */}
+          <text
+            x={PAD.left + (W - PAD.left - PAD.right) / 2}
+            y={H - 8}
+            className="sb-axis sb-axis--title"
+            textAnchor="middle"
+          >
+            {narrow ? `Weight, lb — today's ${minX} at the left` : `Weight, lb — today's ${minX} lb at the left`}
           </text>
-        ))}
+          <text
+            className="sb-axis sb-axis--title"
+            textAnchor="middle"
+            transform={`translate(15 ${PAD.top + (H - PAD.top - PAD.bottom) / 2}) rotate(-90)`}
+          >
+            {yTitle}
+          </text>
 
-        {/* The ground the gain still pays for. */}
-        {mode === "vog" && window_ !== null && (
-          <rect
-            x={x(minX)}
-            y={PAD.top}
-            width={Math.max(0, x(window_.weightLb) - x(minX))}
-            height={H - PAD.top - PAD.bottom}
-            className="sb-window"
-          />
-        )}
-
-        {mode === "vog" ? (
-          <>
-            <path d={line((p) => p.marginalVog)} className="sb-line sb-line--vog" />
-            <line
-              x1={x(minX)}
-              x2={x(maxX)}
-              y1={y(costOfGain)}
-              y2={y(costOfGain)}
-              className="sb-line sb-line--cog"
+          {/* The ground the gain still pays for. */}
+          {mode === "vog" && window_ !== null && (
+            <rect
+              x={x(minX)}
+              y={PAD.top}
+              width={Math.max(0, x(window_.weightLb) - x(minX))}
+              height={H - PAD.top - PAD.bottom}
+              className="sb-window"
             />
-          </>
-        ) : (
-          <>
-            {minY < 0 && maxY > 0 && (
-              <line x1={x(minX)} x2={x(maxX)} y1={y(0)} y2={y(0)} className="sb-zero" />
-            )}
-            <path d={line((p) => p.margin)} className="sb-line sb-line--vog" />
-          </>
-        )}
+          )}
 
-        {window_ !== null && (
-          <>
-            <line
-              x1={x(window_.weightLb)}
-              x2={x(window_.weightLb)}
-              y1={PAD.top}
-              y2={H - PAD.bottom}
-              className="sb-mark"
-            />
-            <text x={x(window_.weightLb)} y={PAD.top - 2} className="sb-mark__label" textAnchor="middle">
-              {window_.weightLb} lb
-            </text>
-          </>
+          {mode === "vog" ? (
+            <>
+              <path d={line((p) => p.marginalVog)} className="sb-line sb-line--vog" />
+              <line
+                x1={x(minX)}
+                x2={x(maxX)}
+                y1={y(costOfGain)}
+                y2={y(costOfGain)}
+                className="sb-line sb-line--cog"
+              />
+            </>
+          ) : (
+            <>
+              {minY < 0 && maxY > 0 && (
+                <>
+                  <line x1={x(minX)} x2={x(maxX)} y1={y(0)} y2={y(0)} className="sb-zero" />
+                  <text x={W - PAD.right} y={y(0) - 6} className="sb-axis" textAnchor="end">
+                    break even
+                  </text>
+                </>
+              )}
+              <path d={line((p) => p.margin)} className="sb-line sb-line--vog" />
+            </>
+          )}
+
+          {window_ !== null && (
+            <>
+              <line
+                x1={x(window_.weightLb)}
+                x2={x(window_.weightLb)}
+                y1={PAD.top}
+                y2={plotBottom}
+                className="sb-mark"
+              />
+              <circle
+                cx={x(window_.weightLb)}
+                cy={y(mode === "vog" ? window_.marginalVog : window_.margin)}
+                r={5}
+                className="sb-peak"
+              />
+              <text x={x(window_.weightLb)} y={PAD.top - 4} className="sb-mark__label" textAnchor="middle">
+                sell by {window_.weightLb} lb
+              </text>
+            </>
+          )}
+
+          {/* The hover layer. The hairline finds the weight; the dots say
+              which figure on the readout is which line. */}
+          {hovered !== null && (
+            <g className="sb-cursor">
+              <line
+                x1={x(hovered.weightLb)}
+                x2={x(hovered.weightLb)}
+                y1={PAD.top}
+                y2={plotBottom}
+                className="sb-hair"
+              />
+              {mode === "vog" ? (
+                <>
+                  <circle cx={x(hovered.weightLb)} cy={y(hovered.marginalVog)} r={5} className="sb-dot sb-dot--vog" />
+                  <circle cx={x(hovered.weightLb)} cy={y(costOfGain)} r={5} className="sb-dot sb-dot--cog" />
+                </>
+              ) : (
+                <circle cx={x(hovered.weightLb)} cy={y(hovered.margin)} r={5} className="sb-dot sb-dot--vog" />
+              )}
+            </g>
+          )}
+        </svg>
+
+        {hovered !== null && (
+          <div
+            className={`sb-tip${x(hovered.weightLb) > W * 0.6 ? " sb-tip--left" : ""}`}
+            style={{ left: `${(x(hovered.weightLb) / W) * 100}%` }}
+            role="status"
+            aria-live="polite"
+          >
+            <p className="sb-tip__head">
+              <strong className="mono">{hovered.weightLb} lb</strong>
+              {hovered.days !== null && hovered.days > 0 && (
+                <span className="sb-tip__when"> · {Math.round(hovered.days)} days out</span>
+              )}
+            </p>
+            <dl className="sb-tip__rows">
+              {mode === "vog" ? (
+                <>
+                  <TipRow keyClass="vog" label="Next 10 lb add" value={`${perLb(hovered.marginalVog)}/lb`} />
+                  <TipRow keyClass="cog" label="Cost of gain" value={`${perLb(costOfGain)}/lb`} />
+                  <TipRow label="Margin so far" value={money2(hovered.margin)} />
+                </>
+              ) : (
+                <>
+                  <TipRow keyClass="vog" label="Margin over cost of gain" value={money2(hovered.margin)} />
+                  <TipRow label="Next 10 lb add" value={`${perLb(hovered.marginalVog)}/lb`} />
+                </>
+              )}
+              <TipRow label="Price" value={`$${cwtAt(hovered).toFixed(2)}/cwt`} />
+              <TipRow label="Worth, gross" value={money(hovered.value)} />
+            </dl>
+          </div>
         )}
-      </svg>
+      </div>
 
       <figcaption className="sb-caption">
         {mode === "vog" ? (
@@ -903,15 +1125,66 @@ function GainChart({
             The solid line is what the next ten pounds add, per pound; the dashed line is what they
             cost. It crosses more than once — the slide eases at every weight class, so the
             marginal value steps back up each time one is passed. The mark is where total margin
-            peaks, which is what those crossings add up to.
+            peaks, which is what those crossings add up to. Point at the chart, or tab to it and
+            use the arrow keys, for the figures at any weight.
           </>
         ) : (
           <>
             Value gained less what it cost to gain it, per head, from today's weight. The top of
-            the hump is the weight worth growing to.
+            the hump is the weight worth growing to. Point at the chart, or tab to it and use the
+            arrow keys, for the figures at any weight.
           </>
         )}
       </figcaption>
+
+      {/* The same numbers without a pointer: for print, for a screen reader,
+          and for anyone who wants to read down them rather than hunt. */}
+      <details className="sb-figures">
+        <summary>The figures behind the line</summary>
+        <div className="sb-figures__scroll">
+          <table className="sb-table sb-table--read">
+            <thead>
+              <tr>
+                <th scope="col">Weight</th>
+                <th scope="col">Days out</th>
+                <th scope="col">Price</th>
+                <th scope="col">Worth</th>
+                <th scope="col">Next 10 lb</th>
+                <th scope="col">Margin</th>
+              </tr>
+            </thead>
+            <tbody>
+              {points.map((p) => (
+                <tr key={p.weightLb} className={window_?.weightLb === p.weightLb ? "sb-row--peak" : undefined}>
+                  <th scope="row" className="mono">{p.weightLb} lb</th>
+                  <td className="mono">{p.days === null ? "—" : Math.round(p.days)}</td>
+                  <td className="mono">${cwtAt(p).toFixed(2)}</td>
+                  <td className="mono">{money(p.value)}</td>
+                  <td className="mono">{perLb(p.marginalVog)}</td>
+                  <td className="mono">{money2(p.margin)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
     </figure>
+  );
+}
+
+/** One line of the readout: the number leads, the name follows it. */
+function TipRow({ keyClass, label, value }: { keyClass?: "vog" | "cog"; label: string; value: string }) {
+  return (
+    <div className="sb-tip__row">
+      <dt>
+        {keyClass !== undefined && (
+          <svg className="sb-key" viewBox="0 0 22 8" aria-hidden="true">
+            <line x1="1" x2="21" y1="4" y2="4" className={keyClass === "vog" ? "sb-line--vog" : "sb-line--cog"} />
+          </svg>
+        )}
+        {label}
+      </dt>
+      <dd className="mono">{value}</dd>
+    </div>
   );
 }

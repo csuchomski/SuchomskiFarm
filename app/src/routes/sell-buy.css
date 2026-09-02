@@ -187,12 +187,21 @@
   overflow: visible;
 }
 
-.sb-grid { stroke: var(--hairline); stroke-width: 1; stroke-dasharray: 2 4; }
+/* Solid, one shade off the paper. A dashed gridline reads as a threshold —
+   and this chart has a real one in it, so the two must not look alike. */
+.sb-grid { stroke: var(--hairline); stroke-width: 1; }
 .sb-zero { stroke: var(--ink-faint); stroke-width: 1; }
 
 .sb-axis {
   font: 400 11px/1 "IBM Plex Mono", monospace;
   fill: var(--ink-muted);
+}
+
+/* What the numbers are dollars of. Sans, because it is a label and not a
+   figure, and faint enough to stay behind the ticks it explains. */
+.sb-axis--title {
+  font: 400 11px/1 "IBM Plex Sans", sans-serif;
+  fill: var(--ink-faint);
 }
 
 .sb-line { fill: none; }
@@ -208,6 +217,188 @@
 .sb-mark__label {
   font: 500 11px/1 "IBM Plex Mono", monospace;
   fill: var(--ink);
+}
+
+/* The peak, on the line. Ringed in paper so it stays a dot where it sits on
+   top of the stroke rather than merging into it. */
+.sb-peak {
+  fill: var(--ink);
+  stroke: var(--paper);
+  stroke-width: 2;
+}
+
+/* ── the legend ──────────────────────────────────────────────────── */
+
+.sb-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.sb-legend li { display: flex; align-items: center; gap: 7px; }
+
+/* A stroke, not a swatch: these are lines on the chart, and the key should
+   mirror the mark it stands for. */
+.sb-key { width: 22px; height: 8px; flex: none; overflow: visible; }
+.sb-key .sb-line--vog,
+.sb-key .sb-line--cog { fill: none; }
+
+/* ── the hover layer ─────────────────────────────────────────────── */
+
+.sb-plot { position: relative; }
+
+/* The whole plot is the hit target — you aim at a weight, never at a 2px
+   line — so the focus ring goes round the plot rather than any one mark. */
+.sb-plot:focus-visible { outline: 2px solid var(--herd-green); outline-offset: 3px; }
+
+.sb-hair { stroke: var(--ink-faint); stroke-width: 1; }
+
+.sb-dot { stroke: var(--paper); stroke-width: 2; }
+.sb-dot--vog { fill: var(--herd-green); }
+.sb-dot--cog { fill: var(--red); }
+
+.sb-tip {
+  position: absolute;
+  /* Clear of the peak's label, which lives on the chart's top edge and is the
+     one annotation worth never covering. */
+  top: 22px;
+  transform: translateX(10px);
+  z-index: 2;
+  min-width: 13rem;
+  max-width: 17rem;
+  padding: 9px 11px;
+  background: var(--paper);
+  border: 1px solid var(--ink-faint);
+  box-shadow: 0 1px 6px rgb(25 26 22 / 12%);
+  /* It follows the pointer; it must never eat the pointer's next move. */
+  pointer-events: none;
+}
+
+/* Past the middle of the plot it would run off the right edge. */
+.sb-tip--left { transform: translateX(calc(-100% - 10px)); }
+
+/* On a phone a floating readout is most of the chart, and the finger that
+   summoned it is sitting on top of it. So it stops floating: same figures,
+   parked under the plot, where nothing it explains is behind it. */
+@media (max-width: 700px) {
+  .sb-tip {
+    position: static;
+    transform: none;
+    min-width: 0;
+    max-width: none;
+    margin-top: 10px;
+    box-shadow: none;
+  }
+}
+
+.sb-tip__head {
+  margin: 0 0 7px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.sb-tip__when { color: var(--ink-muted); font-size: 12px; }
+
+.sb-tip__rows { margin: 0; }
+
+/* The value leads and the name follows — the legend's hierarchy inverted,
+   because here you already know the series and want the number. */
+.sb-tip__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 3px;
+}
+
+.sb-tip__row:last-child { margin-bottom: 0; }
+
+.sb-tip__row dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.sb-tip__row dd {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── the figures, without a pointer ──────────────────────────────── */
+
+.sb-figures {
+  margin-top: 12px;
+  border-top: 1px solid var(--hairline);
+  padding-top: 10px;
+}
+
+.sb-figures > summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  min-height: 24px;
+}
+
+.sb-figures > summary:focus-visible { outline: 2px solid var(--herd-green); outline-offset: 2px; }
+
+.sb-figures__scroll { max-height: 20rem; overflow: auto; margin-top: 10px; }
+
+.sb-table--read td,
+.sb-table--read th[scope="row"] {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The row header is a weight, not a column name: it should not inherit the
+   small-caps treatment the header row wears. */
+.sb-table--read th[scope="row"] {
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  color: var(--ink);
+  padding: 6px 8px 6px 0;
+}
+
+/* Twenty rows scroll under it, and a column of dollars with the heading gone
+   is a column of unlabelled money. */
+.sb-table--read thead th {
+  position: sticky;
+  top: 0;
+  background: var(--paper);
+  z-index: 1;
+}
+
+/* The one row the chart's mark points at. */
+.sb-row--peak td,
+.sb-row--peak th { background: var(--paper-tint); font-weight: 500; }
+
+/* Paper does not hover. The chart keeps its marks and its axis titles; the
+   readout and the fold-away table are the parts that need a pointer. */
+@media print {
+  .sb-tip { display: none; }
+  /* Folded away on screen, printed open: paper has no pointer to get the
+     figures with any other way. Both properties are needed — older engines
+     hide a closed details' content with `display`, current Chrome skips
+     painting it with `content-visibility` on `::details-content`. */
+  .sb-figures > :not(summary) { display: block; }
+  .sb-figures::details-content { content-visibility: visible; }
+  .sb-figures > summary { list-style: none; }
+  .sb-figures__scroll { max-height: none; overflow: visible; }
 }
 
 .sb-caption {

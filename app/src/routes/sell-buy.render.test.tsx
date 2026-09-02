@@ -489,3 +489,169 @@ describe("taking prices from a market report", () => {
     expect(tile("Price at this weight")).toContain("270.78");
   });
 });
+
+/**
+ * Reading the chart.
+ *
+ * The chart drew two lines against an axis of bare dollars and said nowhere
+ * what they were dollars of. These are the parts that answer "what am I
+ * looking at" — and the rule that the hover must never be the only place a
+ * figure lives.
+ */
+describe("what the chart says about itself", () => {
+  /** Text inside the SVG, which testing-library's text queries reach but the
+   *  `.textContent` of a node concatenates without spaces. */
+  const chartText = () => document.querySelector(".sb-figure")?.textContent ?? "";
+
+  const toVog = () => fireEvent.click(screen.getByRole("button", { name: "Value of gain" }));
+
+  it("says what the money on the y axis is money of", async () => {
+    await mount();
+    expect(chartText()).toContain("$ per head, over cost of gain");
+    toVog();
+    expect(chartText()).toContain("$ per pound of gain");
+  });
+
+  it("says which end of the weight axis is today", async () => {
+    // Weight rising left to right is a convention, not a fact on the page,
+    // and the first thing a reader has to settle before anything else means
+    // anything.
+    await mount();
+    expect(chartText()).toContain("Weight, lb — today's 676 lb at the left");
+  });
+
+  it("names both lines when there are two of them", async () => {
+    await mount();
+    toVog();
+    const legend = document.querySelector(".sb-legend");
+    expect(legend?.textContent).toContain("What the next 10 lb add, per pound");
+    expect(legend?.textContent).toContain("Cost of gain, $1.15 a pound");
+  });
+
+  it("carries no legend for a single line", async () => {
+    // A legend box for one series is furniture: the caption already names it.
+    await mount();
+    expect(document.querySelector(".sb-legend")).toBeNull();
+  });
+
+  it("labels the line margin is measured against", async () => {
+    await mount();
+    expect(chartText()).toContain("break even");
+  });
+
+  it("labels its axis in steps that match where the rules are drawn", async () => {
+    // The axis used to round every label to the dollar. On a 2.5 step that
+    // prints "-$2" against a gridline sitting at -2.50 — a chart lying about
+    // its own scale. Read back, the labels must be evenly spaced, because
+    // the gridlines they sit on are.
+    await mount();
+    const ticks = [...document.querySelectorAll(".sb-svg text.sb-axis")]
+      .filter((t) => t.getAttribute("text-anchor") === "end")
+      // "break even" sits on the same rule with the same anchor; it is a
+      // label for the line, not a step on the scale.
+      .map((t) => /^(-?)\$([\d,.]+)$/.exec(t.textContent ?? ""))
+      .filter((m) => m !== null)
+      .map((m) => Number(m[1] + m[2].replace(/,/g, "")));
+    expect(ticks.length).toBeGreaterThan(2);
+    const gaps = ticks.slice(1).map((v, i) => Math.abs(v - ticks[i]));
+    for (const g of gaps) expect(g).toBeCloseTo(gaps[0], 6);
+  });
+});
+
+describe("reading a figure off the chart", () => {
+  /** The chart is driven from the keyboard as well as the pointer, and only
+   *  the keyboard works in jsdom — a pointer needs a layout to aim at. */
+  const step = (times: number) => {
+    const plot = document.querySelector(".sb-plot")!;
+    for (let i = 0; i < times; i += 1) fireEvent.keyDown(plot, { key: "ArrowRight" });
+    return plot;
+  };
+
+  const readout = () => document.querySelector(".sb-tip")?.textContent ?? null;
+
+  it("shows nothing until asked", async () => {
+    await mount();
+    expect(document.querySelector(".sb-tip")).toBeNull();
+  });
+
+  it("gives the weight, the day it falls on, and what it is worth there", async () => {
+    await mount();
+    step(2);
+    // Third step from 676 at 10 lb a step, and the sample's own gain rate.
+    expect(readout()).toContain("696 lb");
+    expect(readout()).toContain("9 days out");
+    expect(readout()).toContain("$266.38/cwt");
+    expect(readout()).toContain("$1,854");
+  });
+
+  it("puts the drawn line's own figure first", async () => {
+    await mount();
+    step(2);
+    expect(readout()).toContain("Margin over cost of gain");
+    fireEvent.click(screen.getByRole("button", { name: "Value of gain" }));
+    step(2);
+    expect(readout()).toContain("Next 10 lb add");
+    expect(readout()).toContain("Cost of gain");
+  });
+
+  it("stops at the ends of the road rather than running off them", async () => {
+    await mount();
+    const plot = step(500);
+    const far = readout();
+    fireEvent.keyDown(plot, { key: "ArrowRight" });
+    expect(readout()).toBe(far);
+    expect(far).toContain("866 lb");
+  });
+
+  it("clears on escape and on leaving the chart", async () => {
+    await mount();
+    const plot = step(2);
+    fireEvent.keyDown(plot, { key: "Escape" });
+    expect(document.querySelector(".sb-tip")).toBeNull();
+    step(2);
+    fireEvent.blur(plot);
+    expect(document.querySelector(".sb-tip")).toBeNull();
+  });
+
+  it("is never the only place a figure lives", async () => {
+    // A tooltip that is the only way to read a value is a chart with its
+    // data hidden inside it — no print, no screen reader, no reading down a
+    // column. Every weight on the line is in the table, unhovered.
+    await mount();
+    const rows = [...document.querySelectorAll(".sb-figures tbody tr")];
+    expect(rows).toHaveLength(20);
+    expect(rows[2].textContent).toContain("696 lb");
+    expect(rows[2].textContent).toContain("$266.38");
+    expect(rows[2].textContent).toContain("$1,854");
+  });
+
+  it("marks the sell weight in the table as well as on the line", async () => {
+    await mount();
+    const peak = document.querySelectorAll(".sb-figures tbody tr.sb-row--peak");
+    expect(peak).toHaveLength(1);
+    expect(peak[0].textContent).toContain("696 lb");
+  });
+});
+
+describe("the chart on a phone", () => {
+  const viewBox = () => document.querySelector(".sb-svg")?.getAttribute("viewBox") ?? null;
+
+  it("is drawn narrow rather than drawn wide and shrunk", async () => {
+    // Everything in an SVG scales with its viewBox, so a 720-wide chart in a
+    // 330px column renders its 11px labels at five: present, unreadable, and
+    // worse than absent because the page looks like it said something.
+    await mount();
+    expect(viewBox()).toBe("0 0 720 276");
+    cleanup();
+
+    vi.stubGlobal("matchMedia", (q: string) => ({
+      matches: /max-width:\s*700px/.test(q),
+      media: q,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    await mount();
+    expect(viewBox()).toBe("0 0 380 300");
+    vi.unstubAllGlobals();
+  });
+});

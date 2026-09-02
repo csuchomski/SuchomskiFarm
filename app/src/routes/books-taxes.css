@@ -50,16 +50,18 @@
 }
 
 /* Printing the schedule is a legitimate way to file it, so drop the app
-   furniture and let the form run down the page. */
+   furniture and let the form run down the page.
+ *
+ * Scoped to this page. Vite bundles every route's CSS into one file, so a
+ * bare `.stat-row { display: none }` in a print block is a rule about every
+ * page in the app — it was deleting the headline figures from anything else
+ * anybody printed. `.tax-head` is this page and only this page.
+ *
+ * The topbar, the rail and the main padding are not repeated here: the
+ * shell's own print block already handles them, for every page. */
 @media print {
-  .ops-shell__body > *:not(.ops-shell__main),
-  .topbar,
   .tax-years,
-  .stat-row {
+  body:has(.tax-head) .stat-row {
     display: none !important;
-  }
-
-  .ops-shell__main {
-    padding: 0 !important;
   }
 }

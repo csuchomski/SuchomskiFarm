@@ -12,7 +12,7 @@ import AlertsPage from "./routes/Alerts";
 import BreedsPage from "./routes/Breeds";
 import DepreciationPage from "./routes/Depreciation";
 import GrazingPage from "./routes/Grazing";
-import SellBuyPage from "./routes/SellBuy";
+import MarketPage from "./routes/MarketPage";
 import RotationPage from "./routes/Rotation";
 import GrazingPlanPage from "./routes/GrazingPlan";
 import GrazingRecordPage from "./routes/GrazingRecord";
@@ -77,7 +77,7 @@ export default function App() {
                 <Route path="/calvings" element={<CalvingsPage />} />
                 <Route path="/breeds" element={<BreedsPage />} />
                 <Route path="/depreciation" element={<DepreciationPage />} />
-                <Route path="/market" element={<SellBuyPage />} />
+                <Route path="/market" element={<MarketPage />} />
                 <Route path="/grazing" element={<GrazingPage />} />
                 <Route path="/grazing/move" element={<MovePage />} />
                 <Route path="/grazing/records" element={<GrazingRecordsPage />} />

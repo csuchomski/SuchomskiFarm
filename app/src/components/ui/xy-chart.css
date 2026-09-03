@@ -1,0 +1,125 @@
+/* A line chart with a hover readout, shared by the Market pages. */
+
+.xy-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.xy-legend li { display: flex; align-items: center; gap: 7px; }
+
+/* A stroke, not a swatch: these are lines on the chart, and the key should
+   mirror the mark it stands for. */
+.xy-key { width: 22px; height: 8px; flex: none; overflow: visible; }
+
+.xy-plot { position: relative; }
+
+/* The whole plot is the hit target — you aim at a week, never at a 2px
+   line — so the focus ring goes round the plot rather than any one mark. */
+.xy-plot:focus-visible { outline: 2px solid var(--herd-green); outline-offset: 3px; }
+
+.xy-svg { width: 100%; height: auto; display: block; overflow: visible; }
+
+/* Solid, one shade off the paper. A dashed gridline reads as a threshold,
+   and this chart draws real ones. */
+.xy-grid { stroke: var(--hairline); stroke-width: 1; }
+.xy-rule { stroke: var(--ink-faint); stroke-width: 1; }
+.xy-hair { stroke: var(--ink-faint); stroke-width: 1; }
+.xy-dot { stroke: var(--paper); stroke-width: 2; }
+
+.xy-axis { font: 400 11px/1 "IBM Plex Mono", monospace; fill: var(--ink-muted); }
+
+/* What the numbers are numbers of. Sans, because it is a label and not a
+   figure, and faint enough to stay behind the ticks it explains. */
+.xy-axis--title { font: 400 11px/1 "IBM Plex Sans", sans-serif; fill: var(--ink-faint); }
+
+.xy-empty { font-size: 13px; color: var(--ink-muted); margin: 0; padding: 20px 0; }
+
+.xy-tip {
+  position: absolute;
+  top: 6px;
+  transform: translateX(10px);
+  z-index: 2;
+  min-width: 12rem;
+  max-width: 19rem;
+  padding: 9px 11px;
+  background: var(--paper);
+  border: 1px solid var(--ink-faint);
+  box-shadow: 0 1px 6px rgb(25 26 22 / 12%);
+  /* It follows the pointer; it must never eat the pointer's next move. */
+  pointer-events: none;
+}
+
+/* Past the middle of the plot it would run off the right edge. */
+.xy-tip--left { transform: translateX(calc(-100% - 10px)); }
+
+.xy-tip__head {
+  margin: 0 0 7px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.xy-tip__rows { margin: 0; }
+
+/* The value leads and the name follows — the legend's hierarchy inverted,
+   because here you already know the series and want the number. */
+.xy-tip__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 3px;
+}
+
+.xy-tip__row:last-child { margin-bottom: 0; }
+
+.xy-tip__row dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.xy-tip__row dd {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* On a phone a floating readout is most of the chart, and the finger that
+   summoned it is sitting on top of it. So it stops floating. */
+@media (max-width: 700px) {
+  .xy-tip {
+    position: static;
+    transform: none;
+    min-width: 0;
+    max-width: none;
+    margin-top: 10px;
+    box-shadow: none;
+  }
+}
+
+@media print {
+  .xy-tip { display: none; }
+}
+
+/* Drawn small, in a panel rather than across the page: a floating readout
+   would be most of the chart and would cover the line it describes. */
+.xy--compact .xy-tip {
+  position: static;
+  transform: none;
+  min-width: 0;
+  max-width: none;
+  margin-top: 10px;
+  box-shadow: none;
+}

@@ -57,6 +57,7 @@ const iowaSteers = (over: Partial<MarketSeries> = {}): MarketSeries => ({
   reportDate: "2026-08-24",
   isLocal: true,
   klass: "Steers",
+  commodity: "Feeder Cattle",
   grade: "1",
   head: 2_140,
   rungs: [

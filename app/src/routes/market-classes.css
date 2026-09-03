@@ -1,0 +1,175 @@
+/* Herd → Market → Classes: one class of cattle against another. */
+
+.mc-lede {
+  font-size: 15px;
+  color: var(--ink-soft);
+  max-width: 62ch;
+  margin: 4px 0 16px;
+}
+
+.mc-dim { font-size: 13px; color: var(--ink-muted); }
+.mc-note { margin: 10px 0 0; max-width: 76ch; }
+
+/* One row, above everything it scopes — never inside a chart card. */
+.mc-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+  margin: 16px 0 4px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.mc-controls--inner { border-bottom: none; padding-bottom: 0; margin-top: 0; }
+
+.mc-narrow { flex: 0 0 8.5rem; }
+.mc-pick-date { max-width: 16rem; margin-bottom: 12px; }
+
+/* ── picking classes ─────────────────────────────────────────────── */
+
+.mc-pick { border: none; padding: 0; margin: 18px 0 0; }
+.mc-pick > legend { padding: 0; margin-bottom: 8px; }
+
+.mc-pick__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(258px, 1fr));
+  gap: 6px 12px;
+}
+
+.mc-chip {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  color: var(--ink-soft);
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.mc-chip > input { margin-top: 2px; flex: none; }
+
+/* The name on one line and the size of the market under it. Side by side they
+   fought for the same width and the name wrapped to three lines. */
+.mc-chip__body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+
+.mc-chip__name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  line-height: 1.3;
+}
+
+.mc-chip--on { border-color: var(--ink-soft); color: var(--ink); }
+.mc-chip:has(input:disabled) { opacity: .5; cursor: default; }
+.mc-chip:has(input:focus-visible) { outline: 2px solid var(--herd-green); outline-offset: 1px; }
+
+/* The colour the class is drawn in, where it is drawn in one. */
+.mc-swatch { width: 11px; height: 11px; flex: none; }
+
+.mc-chip__n { font-size: 11px; color: var(--ink-faint); line-height: 1.3; }
+
+/* ── which drawing ───────────────────────────────────────────────── */
+
+.mc-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 20px 0 16px;
+}
+
+/* ── panels ──────────────────────────────────────────────────────── */
+
+.mc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 18px;
+}
+
+.mc-panel {
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  padding: 14px;
+  margin: 0;
+}
+
+.mc-panel--wide { margin: 0; }
+
+.mc-panel__head { margin-bottom: 10px; }
+.mc-panel__title { font-size: 18px; font-weight: 400; margin: 0; line-height: 1.2; }
+.mc-panel__sub { margin: 2px 0 0; }
+
+.mc-panel__now {
+  margin: 8px 0 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 21px;
+  color: var(--ink);
+}
+
+.mc-move { font-size: 12.5px; color: var(--ink-muted); }
+.mc-move--up { color: var(--herd-green); }
+.mc-move--down { color: var(--red); }
+
+.mc-caption {
+  font-size: 12px;
+  color: var(--ink-faint);
+  padding: 10px 2px 0;
+  max-width: 74ch;
+  line-height: 1.5;
+}
+
+/* ── the figures ─────────────────────────────────────────────────── */
+
+.mc-figures { overflow-x: auto; }
+
+.mc-table { width: 100%; border-collapse: collapse; }
+
+.mc-table th {
+  text-align: left;
+  font: 500 10px/1.3 "IBM Plex Sans", sans-serif;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 0 10px 7px 0;
+  border-bottom: 1px solid var(--hairline);
+  position: sticky;
+  top: 0;
+  background: var(--page);
+}
+
+.mc-table td,
+.mc-table th[scope="row"] {
+  padding: 6px 10px 6px 0;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A date is a value, not a column name. */
+.mc-table th[scope="row"] {
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 400;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+  position: static;
+  background: none;
+}
+
+.mc-foot {
+  margin-top: 30px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-faint);
+  max-width: 76ch;
+}

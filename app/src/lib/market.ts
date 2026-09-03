@@ -31,6 +31,10 @@ interface SlideRow {
   wt: number | null;
   cwt: number | null;
   head: number | null;
+  /** "Feeder Cattle" or "Slaughter Cattle". Added by migration 069; a view
+   *  from before it returns undefined, and the series says nothing rather
+   *  than guessing. */
+  commodity?: string | null;
 }
 
 /** One source, class and grade — the unit that makes a usable slide. */
@@ -42,6 +46,15 @@ export interface MarketSeries {
   reportDate: string;
   isLocal: boolean;
   klass: string;
+  /**
+   * Feeder or slaughter cattle.
+   *
+   * Not decoration. On one Iowa report "Steers" is both a 472 lb feeder at
+   * $456 and a 1,774 lb slaughter steer at $186, told apart only by a grade
+   * of "1" against none. Pricing a draft of feeders off the wrong one is out
+   * by better than $100/cwt with nothing on screen to catch it.
+   */
+  commodity: string | null;
   /** Null where the report did not grade the lot. */
   grade: string | null;
   /** Head across every rung, which is how much of a market this is. A series
@@ -80,11 +93,41 @@ const median = (xs: number[]): number => {
   return s.length % 2 === 0 ? (s[mid - 1] + s[mid]) / 2 : s[mid];
 };
 
-const seriesKey = (r: SlideRow) => `${r.source_id}|${r.class ?? ""}|${r.grade ?? ""}`;
+/**
+ * Split a class's rungs into the believable and the impossible.
+ *
+ * Shared with the history, which has the same problem one report at a time:
+ * whatever rule decides a rung is a misread here has to decide it there too,
+ * or the same lot is in one chart and out of the other.
+ */
+export function cleanRungs(list: SlidePoint[]): {
+  rungs: SlidePoint[];
+  dropped: SlidePoint[];
+} {
+  const mid = median(list.map((r) => r.cwt));
+  const rungs: SlidePoint[] = [];
+  const dropped: SlidePoint[] = [];
+  for (const r of list) {
+    const off = mid > 0 ? r.cwt / mid : 1;
+    if (off > OUTLIER_HIGH || off < OUTLIER_LOW) dropped.push(r);
+    else rungs.push(r);
+  }
+  rungs.sort((a, b) => a.weightLb - b.weightLb);
+  dropped.sort((a, b) => a.weightLb - b.weightLb);
+  return { rungs, dropped };
+}
+
+const seriesKey = (r: SlideRow) =>
+  `${r.source_id}|${r.commodity ?? ""}|${r.class ?? ""}|${r.grade ?? ""}`;
 
 /** How a series reads in a picker: the ground it came from, then the cattle. */
 export function seriesLabel(s: MarketSeries): string {
-  return [s.label, s.klass, s.grade === null || s.grade === "N/A" ? null : `grade ${s.grade}`]
+  return [
+    s.label,
+    s.commodity,
+    s.klass,
+    s.grade === null || s.grade === "N/A" ? null : `grade ${s.grade}`,
+  ]
     .filter(Boolean)
     .join(" · ");
 }
@@ -108,22 +151,11 @@ export function seriesFrom(rows: SlideRow[]): MarketSeries[] {
 
   const out: MarketSeries[] = [];
   for (const [key, list] of groups) {
-    const mid = median(list.map((r) => Number(r.cwt)));
-    const rungs: SlidePoint[] = [];
-    const dropped: { weightLb: number; cwt: number }[] = [];
-
-    for (const r of list) {
-      const cwt = Number(r.cwt);
-      const weightLb = Number(r.wt);
-      const off = mid > 0 ? cwt / mid : 1;
-      if (off > OUTLIER_HIGH || off < OUTLIER_LOW) dropped.push({ weightLb, cwt });
-      else rungs.push({ weightLb, cwt });
-    }
+    const { rungs, dropped } = cleanRungs(
+      list.map((r) => ({ weightLb: Number(r.wt), cwt: Number(r.cwt) })),
+    );
 
     if (rungs.length < 2) continue;
-
-    rungs.sort((a, b) => a.weightLb - b.weightLb);
-    dropped.sort((a, b) => a.weightLb - b.weightLb);
 
     const first = list[0];
     out.push({
@@ -133,6 +165,7 @@ export function seriesFrom(rows: SlideRow[]): MarketSeries[] {
       reportDate: first.report_date,
       isLocal: Boolean(first.is_local),
       klass: first.class ?? "Cattle",
+      commodity: first.commodity ?? null,
       grade: first.grade,
       head: list.reduce((n, r) => n + (r.head ?? 0), 0),
       rungs,
@@ -154,7 +187,7 @@ export async function fetchMarketSeries(): Promise<MarketSeries[]> {
   const { data, error } = await supabase
     .schema("market")
     .from("latest_slide")
-    .select("source_id, label, is_local, report_date, class, grade, wt, cwt, head");
+    .select("source_id, label, is_local, report_date, class, grade, wt, cwt, head, commodity");
   if (error) throw new Error(`market.latest_slide: ${error.message}`);
   return seriesFrom((data ?? []) as unknown as SlideRow[]);
 }

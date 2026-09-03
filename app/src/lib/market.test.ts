@@ -185,3 +185,36 @@ describe("which series to offer first", () => {
     expect(out.map((s) => s.label)).toEqual(["B", "A"]);
   });
 });
+
+describe("feeder cattle and slaughter cattle are not the same steer", () => {
+  it("keeps them apart even where the class and grade read alike", () => {
+    // One Iowa report calls both "Steers". The feeder is a 472 lb calf at
+    // $456; the slaughter steer is 1,774 lb at $186. Blended, a draft of
+    // feeders gets priced out by better than $100 a hundredweight.
+    const out = seriesFrom([
+      row({ commodity: "Feeder Cattle", grade: "N/A", wt: 500, cwt: 450 }),
+      row({ commodity: "Feeder Cattle", grade: "N/A", wt: 600, cwt: 420 }),
+      row({ commodity: "Slaughter Cattle", grade: "N/A", wt: 1200, cwt: 210 }),
+      row({ commodity: "Slaughter Cattle", grade: "N/A", wt: 1400, cwt: 200 }),
+    ]);
+    expect(out).toHaveLength(2);
+    expect(out.every((s) => s.rungs.length === 2)).toBe(true);
+  });
+
+  it("says which it is, because a grade of 1 against none does not say it", () => {
+    const [s] = seriesFrom([
+      row({ commodity: "Slaughter Cattle", grade: "N/A", wt: 1200, cwt: 210 }),
+      row({ commodity: "Slaughter Cattle", grade: "N/A", wt: 1400, cwt: 200 }),
+    ]);
+    expect(seriesLabel(s)).toBe(
+      "Iowa Weekly Cattle Auction Summary · Slaughter Cattle · Steers",
+    );
+  });
+
+  it("says nothing rather than guessing when the view predates the column", () => {
+    // Migration 069 added it. A cached view without it must not invent one.
+    const [s] = seriesFrom(IOWA_STEERS);
+    expect(s.commodity).toBeNull();
+    expect(seriesLabel(s)).toBe("Iowa Weekly Cattle Auction Summary · Steers · grade 1");
+  });
+});

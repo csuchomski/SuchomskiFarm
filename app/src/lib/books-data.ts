@@ -277,3 +277,76 @@ export async function addTransaction(input: {
   if (error) throw new Error(error.message);
   return data as RealTransaction;
 }
+
+/**
+ * Correct an entry that is already posted.
+ *
+ * A straight overwrite: `ledger_transactions` keeps no `updated_at`, no
+ * revision and no soft delete, so the row after this is the only row there
+ * ever was. That is worth knowing before leaning on it as an audit trail —
+ * it is a cheque book you can rub out, not a journal.
+ *
+ * The business can move too. An entry logged against the farm that belonged
+ * to the rental is one of the likelier things to be fixing, and RLS checks
+ * membership of the business being written either way.
+ */
+export async function updateTransaction(input: {
+  id: number;
+  businessId: number;
+  date: string;
+  type: string;
+  category: string;
+  amount: number;
+  note: string | null;
+  payer: string;
+  account: string;
+}): Promise<RealTransaction> {
+  const { data, error } = await supabase
+    .from("ledger_transactions")
+    .update({
+      business_id: input.businessId,
+      date: input.date,
+      type: input.type,
+      category: input.category,
+      amount: input.amount,
+      note: input.note,
+      payer: input.payer,
+      account: input.account,
+    })
+    .eq("id", input.id)
+    .select("id, business_id, date, type, category, amount, note, payer, account")
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as RealTransaction;
+}
+
+/**
+ * Remove an entry.
+ *
+ * Hard: the table has no `deleted_at`, so this is gone rather than hidden.
+ *
+ * Anything attributed to an animal has to be taken off it **first**. The
+ * foreign key from `herd.cost_entries` and `herd.revenue_entries` is `on
+ * delete set null`, so deleting the transaction on its own would leave the
+ * animal carrying a cost with nothing tying it back to the cheque — a figure
+ * on an animal's record that no page can explain. The caller does that part,
+ * because undoing an attribution is a herd write and lives in
+ * `lib/attribution.ts`.
+ */
+export async function deleteTransaction(id: number): Promise<void> {
+  // `select()` so a delete that matched nothing is an error rather than a
+  // shrug. RLS does not refuse a row you may not touch — it filters it, and
+  // the delete then succeeds having removed nothing. Without this the page
+  // would close the panel, re-read, and show the entry still sitting there
+  // with no word about why.
+  const { data, error } = await supabase
+    .from("ledger_transactions")
+    .delete()
+    .eq("id", id)
+    .select("id");
+  if (error) throw new Error(error.message);
+  if ((data ?? []).length === 0) {
+    throw new Error(`Entry ${id} was not deleted — it may belong to a business you are not a member of.`);
+  }
+}

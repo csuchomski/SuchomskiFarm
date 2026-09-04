@@ -5,7 +5,7 @@
       "x": 0,
       "y": 0,
       "w": 1440,
-      "h": 5000,
+      "h": 5150,
       "title": "Landing"
     },
     {
@@ -29,7 +29,7 @@
       "x": 4800,
       "y": 0,
       "w": 390,
-      "h": 2080,
+      "h": 2250,
       "title": "Landing \u2014 phone"
     }
   ],
@@ -39,7 +39,7 @@
       "x": 0,
       "y": -230,
       "w": 460,
-      "text": "Direction: the site wears the app's own \"Herd\" system \u2014 flat paper, no shadows, no rounded corners, hairline rules, Newsreader over IBM Plex. Colours and type lifted from app/src/styles/tokens.css, not approximated.\n\nThe argument: everyone else sells a dashboard. This sells one record that four jobs share."
+      "text": "Direction: the site wears the app's own \"Herd\" system \u2014 flat paper, no shadows, no rounded corners, hairline rules, Newsreader over IBM Plex. Colours and type lifted from app/src/styles/tokens.css, not approximated.\n\nThe hero map is Golden Acres' Home pasture, projected from the farm's own GeoJSON: five real paddocks, 9.6 acres, with the wire, the mob and the round where they actually stood on 4 September 2026."
     },
     {
       "id": "placeholders",

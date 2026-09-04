@@ -7,3 +7,7 @@ node_modules
 # rebuilt from them by the design skill's helper and published, never read
 # back from here.
 .design/**/animal-record.html
+
+# The design canvas's seeded page — 2.5 MB of editor payload, rebuilt from
+# design/*.dc.html and design/canvas.json whenever the design changes.
+design/grazerbook-site.html

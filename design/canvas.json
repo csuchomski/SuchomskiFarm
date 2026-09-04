@@ -1,0 +1,55 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 5000,
+      "title": "Landing"
+    },
+    {
+      "file": "Features.dc.html",
+      "x": 1600,
+      "y": 0,
+      "w": 1440,
+      "h": 3720,
+      "title": "How it works"
+    },
+    {
+      "file": "Pricing.dc.html",
+      "x": 3200,
+      "y": 0,
+      "w": 1440,
+      "h": 2980,
+      "title": "Pricing"
+    },
+    {
+      "file": "Phone.dc.html",
+      "x": 4800,
+      "y": 0,
+      "w": 390,
+      "h": 2080,
+      "title": "Landing \u2014 phone"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "direction",
+      "x": 0,
+      "y": -230,
+      "w": 460,
+      "text": "Direction: the site wears the app's own \"Herd\" system \u2014 flat paper, no shadows, no rounded corners, hairline rules, Newsreader over IBM Plex. Colours and type lifted from app/src/styles/tokens.css, not approximated.\n\nThe argument: everyone else sells a dashboard. This sells one record that four jobs share."
+    },
+    {
+      "id": "placeholders",
+      "x": 3200,
+      "y": -230,
+      "w": 460,
+      "text": "Everything in [BRACKETS] is a real decision, not a design gap \u2014 prices, trial terms, the offline answer, what happens when someone stops paying.\n\nNothing invented: no fake customer counts, no made-up testimonials, no invented prices. The proof block on the landing page is deliberately empty until you have one real sentence from a real grazier."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

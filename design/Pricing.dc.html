@@ -1,0 +1,269 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    :root {
+      --page: #e8e4d8; --paper: #efece3; --paper-tint: #dfe0d3;
+      --ink: #191a16; --ink-soft: #43443c; --ink-muted: #767263; --ink-faint: #a9a496;
+      --hairline: #d6d2c6; --herd-green: #5c6248; --ochre: #8a6a2e; --red: #8a2f22;
+    }
+    *, *::before, *::after { box-sizing: border-box; border-radius: 0; }
+    body {
+      margin: 0; background: var(--page); color: var(--ink);
+      font-family: "IBM Plex Sans", system-ui, sans-serif; font-size: 15px; line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--herd-green); text-decoration: none; }
+    a:hover { color: var(--ink); }
+    .serif { font-family: "Newsreader", serif; font-weight: 400; letter-spacing: -0.01em; line-height: 1.15; }
+    .mono { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+    .eyebrow { font: 500 11px/1 "IBM Plex Sans", sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-muted); }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 40px; }
+    .rule { border: none; border-top: 1px solid var(--hairline); margin: 0; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 48px; padding: 0 22px; font: 500 14px/1 "IBM Plex Sans", sans-serif;
+      border: 1px solid var(--ink); background: var(--ink); color: var(--paper); cursor: pointer;
+    }
+    .btn:hover { background: #000; }
+    .btn--ghost { background: transparent; color: var(--ink); }
+    .btn--ghost:hover { background: var(--paper); }
+    .lede { font-size: 19px; line-height: 1.55; color: var(--ink-soft); max-width: 58ch; text-wrap: pretty; }
+    .body { font-size: 15.5px; line-height: 1.6; color: var(--ink-soft); text-wrap: pretty; }
+    .panel { background: var(--paper); border: 1px solid var(--hairline); }
+    .kicker { font-size: 12.5px; color: var(--ink-faint); }
+    .tick { flex: none; margin-top: 3px; }
+  </style>
+</helmet>
+
+<div>
+
+  <header style="border-bottom: 1px solid var(--hairline); background: var(--paper);">
+    <div class="wrap" style="display: flex; align-items: center; gap: 32px; min-height: 72px;">
+      <span class="serif" style="font-size: 23px; letter-spacing: -0.02em;">Grazerbook.</span>
+      <nav style="display: flex; gap: 26px; margin-left: 18px; font-size: 14px; color: var(--ink-soft);">
+        <a href="#">How it works</a>
+        <a href="#" style="color: var(--ink); border-bottom: 1px solid var(--ink); padding-bottom: 2px;">Pricing</a>
+        <a href="#">The record</a>
+      </nav>
+      <div style="display: flex; gap: 14px; align-items: center; margin-left: auto;">
+        <a href="#" style="font-size: 14px; color: var(--ink-soft);">Sign in</a>
+        <a href="#" class="btn" style="min-height: 40px; padding: 0 18px;">Start your farm</a>
+      </div>
+    </div>
+  </header>
+
+  <section style="padding: 82px 0 52px;">
+    <div class="wrap">
+      <p class="eyebrow" style="margin: 0 0 22px;">Pricing</p>
+      <h1 class="serif" style="font-size: 54px; margin: 0 0 22px; max-width: 18ch;">
+        Priced by the ground you run, not per seat.
+      </h1>
+      <p class="lede" style="margin: 0;">
+        Everyone who works on your place gets a login — the hired man, your daughter, the
+        agronomist. Charging by the head that walks through the gate is bad enough without
+        charging by the person who opens it.
+      </p>
+      <div style="display: inline-flex; border: 1px solid var(--ink); margin-top: 30px;">
+        <span style="padding: 11px 20px; background: var(--ink); color: var(--paper); font-size: 13.5px; font-weight: 500;">Monthly</span>
+        <span style="padding: 11px 20px; font-size: 13.5px; color: var(--ink-soft);">Yearly — [YOUR DISCOUNT]</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── the plans ──────────────────────────────────────────────── -->
+  <section style="padding: 0 0 76px;">
+    <div class="wrap" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; align-items: start;">
+
+      <div class="panel" style="padding: 30px 30px 34px;">
+        <p class="eyebrow" style="margin: 0 0 14px;">Smallholding</p>
+        <div style="display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px;">
+          <span class="mono" style="font-size: 40px;">$[__]</span>
+          <span class="kicker" style="font-size: 13.5px;">/ month</span>
+        </div>
+        <p class="kicker" style="margin: 0 0 22px;">Up to [__] head · [__] paddocks</p>
+        <a href="#" class="btn btn--ghost" style="width: 100%; margin-bottom: 24px;">Start your farm</a>
+        <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 11px;">
+          <li style="display: flex; gap: 10px; font-size: 14px; color: var(--ink-soft);">
+            <svg class="tick" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#5c6248" stroke-width="1.8"><path d="M3 8.5l3.2 3.2L13 5"></path></svg>
+            <span>Grazing — moves, rounds, rest, forage balance</span>
+          </li>
+          <li style="display: flex; gap: 10px; font-size: 14px; color: var(--ink-soft);">
+            <svg class="tick" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#5c6248" stroke-width="1.8"><path d="M3 8.5l3.2 3.2L13 5"></path></svg>
+            <span>Herd — animals, breeding, alerts</span>
+          </li>
+          <li style="display: flex; gap: 10px; font-size: 14px; color: var(--ink-soft);">
+            <svg class="tick" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#5c6248" stroke-width="1.8"><path d="M3 8.5l3.2 3.2L13 5"></path></svg>
+            <span>Printable grazing record</span>
+          </li>
+          <li style="display: flex; gap: 10px; font-size: 14px; color: var(--ink-soft);">
+            <svg class="tick" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#5c6248" stroke-width="1.8"><path d="M3 8.5l3.2 3.2L13 5"></path></svg>
+            <span>Everyone on the place, no seat charge</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="panel" style="padding: 30px 30px 34px; border: 1px solid var(--ink); position: relative;">
+        <span class="eyebrow" style="position: absolute; top: -9px; left: 30px; background: var(--ink); color: var(--paper); padding: 4px 9px; letter-spacing: .1em;">Most farms</span>
+        <p class="eyebrow" style="margin: 0 0 14px;">Working farm</p>
+        <div style="display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px;">
+          <span class="mono" style="font-size: 40px;">$[__]</span>
+          <span class="kicker" style="font-size: 13.5px;">/ month</span>
+        </div>
+        <p class="kicker" style="margin: 0 0 22px;">Up to [__] head · unlimited paddocks</p>
+        <a href="#" class="btn" style="width: 100%; margin-bottom: 24px;">Start your farm</a>
+        <p class="kicker" style="margin: 0 0 12px; color: var(--ink-muted);">Everything in Smallholding, and:</p>
+        <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 11px;">
+          <li style="display: flex; gap: 10px; font-size: 14px; color: var(--ink-soft);">
+            <svg class="tick" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#5c6248" stroke-width="1.8"><path d="M3 8.5l3.2 3.2L13 5"></path></svg>
+            <span><strong style="font-weight: 500; color: var(--ink);">Market</strong> — value of gain, sell/buy, auction reports</span>
+          </li>
+          <li style="display: flex; gap: 10px; font-size: 14px; color: var(--ink-soft);">
+            <svg class="tick" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#5c6248" stroke-width="1.8"><path d="M3 8.5l3.2 3.2L13 5"></path></svg>
+            <span><strong style="font-weight: 500; color: var(--ink);">Books</strong> — ledger, cash flow, Schedule F, depreciation</span>
+          </li>
+          <li style="display: flex; gap: 10px; font-size: 14px; color: var(--ink-soft);">
+            <svg class="tick" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#5c6248" stroke-width="1.8"><path d="M3 8.5l3.2 3.2L13 5"></path></svg>
+            <span>Milking and lactations</span>
+          </li>
+          <li style="display: flex; gap: 10px; font-size: 14px; color: var(--ink-soft);">
+            <svg class="tick" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#5c6248" stroke-width="1.8"><path d="M3 8.5l3.2 3.2L13 5"></path></svg>
+            <span>Several properties — owned, leased, shared</span>
+          </li>
+          <li style="display: flex; gap: 10px; font-size: 14px; color: var(--ink-soft);">
+            <svg class="tick" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#5c6248" stroke-width="1.8"><path d="M3 8.5l3.2 3.2L13 5"></path></svg>
+            <span>The farm store — products, orders, customers</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="panel" style="padding: 30px 30px 34px;">
+        <p class="eyebrow" style="margin: 0 0 14px;">More than one business</p>
+        <div style="display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px;">
+          <span class="mono" style="font-size: 40px;">$[__]</span>
+          <span class="kicker" style="font-size: 13.5px;">/ month</span>
+        </div>
+        <p class="kicker" style="margin: 0 0 22px;">[__] head · [__] sets of books</p>
+        <a href="#" class="btn btn--ghost" style="width: 100%; margin-bottom: 24px;">Talk to us</a>
+        <p class="kicker" style="margin: 0 0 12px; color: var(--ink-muted);">Everything in Working farm, and:</p>
+        <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 11px;">
+          <li style="display: flex; gap: 10px; font-size: 14px; color: var(--ink-soft);">
+            <svg class="tick" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#5c6248" stroke-width="1.8"><path d="M3 8.5l3.2 3.2L13 5"></path></svg>
+            <span>Separate books per business — the farm, the rental, the trucking</span>
+          </li>
+          <li style="display: flex; gap: 10px; font-size: 14px; color: var(--ink-soft);">
+            <svg class="tick" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#5c6248" stroke-width="1.8"><path d="M3 8.5l3.2 3.2L13 5"></path></svg>
+            <span>Per-person roles — hired help sees the gate, not the ledger</span>
+          </li>
+          <li style="display: flex; gap: 10px; font-size: 14px; color: var(--ink-soft);">
+            <svg class="tick" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#5c6248" stroke-width="1.8"><path d="M3 8.5l3.2 3.2L13 5"></path></svg>
+            <span>[WHATEVER ELSE YOU GATE HERE]</span>
+          </li>
+        </ul>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── pricing decisions the user still has to make ───────────── -->
+  <section style="padding: 0 0 70px;">
+    <div class="wrap">
+      <div style="border: 1px dashed var(--ink-faint); padding: 26px 30px;">
+        <p class="eyebrow" style="margin: 0 0 12px; color: var(--ochre);">Not designed — decided by you</p>
+        <p class="body" style="margin: 0 0 14px; font-size: 14.5px; max-width: 78ch;">
+          Every figure above is a blank on purpose. Three calls to make before this page is
+          real, and none of them is a design question:
+        </p>
+        <ul style="margin: 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 7px;">
+          <li class="kicker" style="font-size: 13px;">The prices, and whether yearly is a discount or just convenience.</li>
+          <li class="kicker" style="font-size: 13px;">What the bands are counted in — head, paddocks, acres, or nothing at all.</li>
+          <li class="kicker" style="font-size: 13px;">Whether Books and Market are really a tier up, or belong in every plan.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <!-- ── questions ──────────────────────────────────────────────── -->
+  <section style="padding: 70px 0;">
+    <div class="wrap" style="display: grid; grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr); gap: 60px; align-items: start;">
+      <h2 class="serif" style="font-size: 36px; margin: 0;">Before you ask</h2>
+      <div style="display: flex; flex-direction: column;">
+        <div style="padding: 20px 0; border-top: 1px solid var(--hairline);">
+          <h3 style="font-size: 15.5px; font-weight: 500; margin: 0 0 7px;">Do I need to draw my paddocks to start?</h3>
+          <p class="body" style="margin: 0; font-size: 14.5px;">
+            No. Import the fence lines you already have as KML, or type paddock names and
+            acres and add shapes later. The record works either way.
+          </p>
+        </div>
+        <div style="padding: 20px 0; border-top: 1px solid var(--hairline);">
+          <h3 style="font-size: 15.5px; font-weight: 500; margin: 0 0 7px;">Does it work at the gate, with no signal?</h3>
+          <p class="body" style="margin: 0; font-size: 14.5px;">
+            [ANSWER THIS HONESTLY — offline behaviour is the first question every grazier
+            asks, and the answer belongs here rather than in a support email.]
+          </p>
+        </div>
+        <div style="padding: 20px 0; border-top: 1px solid var(--hairline);">
+          <h3 style="font-size: 15.5px; font-weight: 500; margin: 0 0 7px;">Can I get my data out?</h3>
+          <p class="body" style="margin: 0; font-size: 14.5px;">
+            Yes — the records print, and the ledger and herd export. It's your farm's
+            history; it should never be hostage to a subscription.
+          </p>
+        </div>
+        <div style="padding: 20px 0; border-top: 1px solid var(--hairline);">
+          <h3 style="font-size: 15.5px; font-weight: 500; margin: 0 0 7px;">Will it do my taxes?</h3>
+          <p class="body" style="margin: 0; font-size: 14.5px;">
+            It gets your Schedule F to the line, with cattle depreciation worked out, so
+            your preparer starts from a schedule instead of a shoebox. It is not a tax
+            filing service and it does not give tax advice.
+          </p>
+        </div>
+        <div style="padding: 20px 0; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline);">
+          <h3 style="font-size: 15.5px; font-weight: 500; margin: 0 0 7px;">What if I stop paying?</h3>
+          <p class="body" style="margin: 0; font-size: 14.5px;">
+            [YOUR POLICY — read-only access, an export window, or something else. Say it
+            plainly; the vague version costs you sign-ups.]
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section style="padding: 76px 0 84px;">
+    <div class="wrap" style="text-align: center;">
+      <h2 class="serif" style="font-size: 42px; margin: 0 auto 20px; max-width: 22ch;">Try it on one pasture.</h2>
+      <p class="lede" style="margin: 0 auto 30px;">
+        Put one mob and one pasture in, move them for a fortnight, and see whether the
+        record is worth keeping.
+      </p>
+      <a href="#" class="btn">Start your farm</a>
+      <p class="kicker" style="margin: 18px 0 0;">[YOUR TRIAL TERMS]</p>
+    </div>
+  </section>
+
+  <footer style="border-top: 1px solid var(--hairline); background: var(--paper); padding: 34px 0;">
+    <div class="wrap" style="display: flex; gap: 26px; align-items: center; flex-wrap: wrap;">
+      <span class="serif" style="font-size: 19px;">Grazerbook.</span>
+      <span class="kicker">© [YEAR] [YOUR COMPANY] · grazerbook.com</span>
+      <span style="margin-left: auto; display: flex; gap: 20px;">
+        <a href="#" style="font-size: 14px;">Privacy</a>
+        <a href="#" style="font-size: 14px;">Terms</a>
+        <a href="#" style="font-size: 14px;">[SUPPORT EMAIL]</a>
+      </span>
+    </div>
+  </footer>
+
+</div>
+</x-dc>
+</body>
+</html>

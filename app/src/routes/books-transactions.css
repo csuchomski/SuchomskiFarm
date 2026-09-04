@@ -49,10 +49,17 @@
   gap: 8px;
 }
 
-/* Eight fields don't fit one row at 1280 without squeezing the text
-   fields to uselessness, so this one wraps into two. */
+/* Eight fields don't fit one row at 1280 without squeezing the text fields
+   to uselessness, so this one wraps.
+ *
+ * It wraps because the tracks are generated, not listed. The named template
+ * that used to be here asked for 1,186px of columns inside a 974px main and
+ * an explicit grid template does not wrap — so it overflowed, taking the
+ * amount field off the right-hand edge where nothing suggested it was there.
+ * `auto-fit` fits as many 150px fields as the room allows and moves the rest
+ * down, at any width, on either form. */
 .entry-form__grid--wide {
-  grid-template-columns: 140px 150px minmax(180px, 2fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(140px, 1fr) 120px 120px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
 .new-type-row {
@@ -185,4 +192,61 @@
   .attribute-existing__row > :first-child {
     grid-column: 1 / -1;
   }
+}
+
+/* ── correcting a posted entry ─────────────────────────────────────── */
+
+/* The description is the way into an entry. It reads as the row's text
+   rather than as a control until you go near it — a ledger of eight hundred
+   underlined links is a ledger nobody can read down. */
+.tx-open {
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+}
+
+.tx-open:hover,
+.tx-open:focus-visible { text-decoration: underline; }
+
+/* Set in from the row above it, so an open entry reads as belonging to the
+   line it came out of rather than as a new section. */
+.tx-edit {
+  margin: 4px 0 14px;
+  border-left: 3px solid var(--ink-soft);
+}
+
+.tx-edit__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+
+/* Not beside Save. Deleting is the one thing on this page that cannot be
+   undone, and it should take a deliberate reach to get to. */
+.tx-edit__delete {
+  margin-left: auto;
+  color: var(--red);
+}
+
+.tx-edit__confirm { background: var(--red); border-color: var(--red); }
+
+.tx-edit__note {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  max-width: 44ch;
+  line-height: 1.45;
+}
+
+.tx-edit__warn {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ochre);
+  max-width: 74ch;
 }

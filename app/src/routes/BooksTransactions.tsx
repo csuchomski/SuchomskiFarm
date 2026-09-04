@@ -4,10 +4,12 @@ import { Button, Callout, GridRow, StatTile } from "../components/ui";
 import {
   addTransaction,
   addTransactionType,
+  deleteTransaction,
   directionOf,
   fetchBooksData,
   summarise,
   typeMap,
+  updateTransaction,
   type BooksData,
   type Direction,
   type RealTransaction,
@@ -36,6 +38,23 @@ type Save = { state: "idle" } | { state: "saving" } | { state: "saved" } | { sta
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const money = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** A posted entry, as it is being corrected. */
+interface EntryDraft {
+  businessId: number | null;
+  date: string;
+  type: string;
+  note: string;
+  category: string;
+  payer: string;
+  account: string;
+  amount: string;
+}
+
+const EMPTY_DRAFT: EntryDraft = {
+  businessId: null, date: "", type: "expense", note: "",
+  category: "", payer: "", account: "", amount: "",
+};
 
 const COLS = "96px 1fr 130px 110px 110px 110px 130px 110px";
 /** Eight tracks need ~900px. On a phone a ledger line is a date, what it
@@ -82,6 +101,20 @@ export default function BooksTransactions() {
   // categories that map to a line. Absent before migration 018, in which
   // case the field simply falls back to plain free text.
   const [taxCategories, setTaxCategories] = useState<TaxCategory[]>([]);
+
+  /**
+   * The entry open for correcting, and the draft of it.
+   *
+   * Held apart from the row so a half-typed amount is never what the table is
+   * showing, and so Cancel is a matter of dropping the draft rather than
+   * putting the old figures back.
+   */
+  const [editing, setEditing] = useState<number | null>(null);
+  const [draft, setDraft] = useState<EntryDraft>(EMPTY_DRAFT);
+  const [editSave, setEditSave] = useState<Save>({ state: "idle" });
+  /** Deleting asks first, in place. Nothing else on this page destroys a row,
+   *  and this one cannot be undone — the table keeps no `deleted_at`. */
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const [showNewType, setShowNewType] = useState(false);
   const [newTypeLabel, setNewTypeLabel] = useState("");
@@ -307,6 +340,87 @@ export default function BooksTransactions() {
       setTimeout(() => setSave((s) => (s.state === "saved" ? { state: "idle" } : s)), 4000);
     } catch (err) {
       setSave({ state: "error", message: err instanceof Error ? err.message : String(err) });
+    }
+  };
+
+  const openEdit = (t: RealTransaction) => {
+    setEditing(t.id);
+    setAttributing(null);
+    setConfirmDelete(false);
+    setEditSave({ state: "idle" });
+    setDraft({
+      businessId: t.business_id,
+      date: t.date,
+      type: t.type,
+      note: t.note ?? "",
+      category: t.category,
+      payer: t.payer,
+      account: t.account,
+      // Shown positive, as it is entered: the type carries the direction, and
+      // an amount that reads "-42" in the box would post as +42 anyway.
+      amount: String(Math.abs(Number(t.amount))),
+    });
+  };
+
+  const draftAmount = Number(draft.amount);
+  const canSaveEdit =
+    draft.businessId !== null &&
+    draft.date !== "" &&
+    draft.payer.trim() !== "" &&
+    draft.amount.trim() !== "" &&
+    !Number.isNaN(draftAmount) &&
+    draftAmount !== 0;
+
+  const handleUpdate = async () => {
+    if (editing === null || !canSaveEdit || draft.businessId === null) return;
+    setEditSave({ state: "saving" });
+    try {
+      await updateTransaction({
+        id: editing,
+        businessId: draft.businessId,
+        date: draft.date,
+        type: draft.type,
+        category: draft.category.trim() || "Uncategorised",
+        amount: Math.abs(draftAmount),
+        note: draft.note.trim() || null,
+        payer: draft.payer.trim(),
+        account: draft.account.trim() || "",
+      });
+      const fresh = await load();
+      await refreshAttributions(
+        fresh.transactions.filter((t) => t.business_id === businessId).map((t) => t.id),
+      );
+      setEditing(null);
+      setEditSave({ state: "idle" });
+    } catch (err) {
+      setEditSave({ state: "error", message: err instanceof Error ? err.message : String(err) });
+    }
+  };
+
+  /**
+   * Delete the entry, and take its attributions off the animals first.
+   *
+   * The foreign key is `on delete set null`, so deleting the transaction on
+   * its own would leave each animal carrying a cost with nothing tying it
+   * back to a cheque — a figure on an animal's record that no page can
+   * explain. Undone in that order so a failure part-way leaves the entry
+   * still there to try again, rather than the reverse.
+   */
+  const handleDelete = async () => {
+    if (editing === null) return;
+    setEditSave({ state: "saving" });
+    try {
+      for (const a of attributionsByTx.get(editing) ?? []) await unattribute(a);
+      await deleteTransaction(editing);
+      const fresh = await load();
+      await refreshAttributions(
+        fresh.transactions.filter((t) => t.business_id === businessId).map((t) => t.id),
+      );
+      setEditing(null);
+      setConfirmDelete(false);
+      setEditSave({ state: "idle" });
+    } catch (err) {
+      setEditSave({ state: "error", message: err instanceof Error ? err.message : String(err) });
     }
   };
 
@@ -587,7 +701,20 @@ export default function BooksTransactions() {
               <div key={t.id}>
               <GridRow cols={COLS} mobileCols={COLS_SM} as="body" className="mono">
                 <span>{t.date}</span>
-                <span style={{ fontFamily: "var(--font-sans)" }}>{t.note || "—"}</span>
+                {/* The way into the entry. The columns this row hides on a
+                    phone — category, type, payer, account — have always been
+                    "detail you open the entry for"; this is where opening it
+                    lives, and correcting it is the same panel. */}
+                <span style={{ fontFamily: "var(--font-sans)" }}>
+                  <button
+                    type="button"
+                    className="link-button tx-open"
+                    aria-expanded={editing === t.id}
+                    onClick={() => (editing === t.id ? setEditing(null) : openEdit(t))}
+                  >
+                    {t.note || "(no description)"}
+                  </button>
+                </span>
                 <span className="hide-sm">{t.category}</span>
                 <span
                   className="hide-sm"
@@ -628,6 +755,28 @@ export default function BooksTransactions() {
                   {money(Math.abs(Number(t.amount)))}
                 </span>
               </GridRow>
+
+              {editing === t.id && (
+                <EditPanel
+                  draft={draft}
+                  setDraft={setDraft}
+                  businesses={data.businesses}
+                  types={data.types}
+                  accounts={data.accounts}
+                  transactions={data.transactions}
+                  taxCategories={taxCategories}
+                  typeMapping={types}
+                  attributed={(attributionsByTx.get(t.id) ?? []).reduce((n, a) => n + a.amount, 0)}
+                  attributedCount={(attributionsByTx.get(t.id) ?? []).length}
+                  canSave={canSaveEdit}
+                  save={editSave}
+                  confirmDelete={confirmDelete}
+                  setConfirmDelete={setConfirmDelete}
+                  onSave={() => void handleUpdate()}
+                  onDelete={() => void handleDelete()}
+                  onCancel={() => setEditing(null)}
+                />
+              )}
 
               {attributing === t.id && (
                 <div className="attribute-panel">
@@ -776,5 +925,225 @@ export default function BooksTransactions() {
         </>
       )}
     </OpsShell>
+  );
+}
+
+/**
+ * One posted entry, open for correcting.
+ *
+ * The same eight fields the entry was made with, because a correction that
+ * cannot reach a field is a correction you end up making by deleting and
+ * re-typing. The business is among them: an entry logged against the farm
+ * that belonged to the rental is one of the likelier things to be fixing.
+ *
+ * Its own datalist ids. The add form's lists are keyed to *its* business and
+ * direction, and two lists under one id is not something the browser resolves
+ * in your favour.
+ */
+function EditPanel({
+  draft,
+  setDraft,
+  businesses,
+  types,
+  accounts,
+  transactions,
+  taxCategories,
+  typeMapping,
+  attributed,
+  attributedCount,
+  canSave,
+  save,
+  confirmDelete,
+  setConfirmDelete,
+  onSave,
+  onDelete,
+  onCancel,
+}: {
+  draft: EntryDraft;
+  setDraft: (f: (d: EntryDraft) => EntryDraft) => void;
+  businesses: BooksData["businesses"];
+  types: BooksData["types"];
+  accounts: BooksData["accounts"];
+  transactions: BooksData["transactions"];
+  taxCategories: TaxCategory[];
+  typeMapping: ReturnType<typeof typeMap>;
+  attributed: number;
+  attributedCount: number;
+  canSave: boolean;
+  save: Save;
+  confirmDelete: boolean;
+  setConfirmDelete: (v: boolean) => void;
+  onSave: () => void;
+  onDelete: () => void;
+  onCancel: () => void;
+}) {
+  const set = <K extends keyof EntryDraft>(k: K, v: EntryDraft[K]) =>
+    setDraft((d) => ({ ...d, [k]: v }));
+
+  const business = businesses.find((b) => b.id === draft.businessId) ?? null;
+  const direction = typeMapping.get(draft.type.trim())?.direction;
+  const categoryOptions =
+    direction === "income" || direction === "expense"
+      ? categoriesFor(taxCategories, business?.type ?? "", direction)
+      : [];
+  const accountOptions = accountsForBusiness(accounts, transactions, draft.businessId);
+
+  // Attributions were split against the old figure. Dropping the entry below
+  // what is already on the animals does not fail — nothing enforces it — so
+  // the page is the only thing that will ever mention it.
+  const amount = Math.abs(Number(draft.amount));
+  const overAttributed =
+    attributedCount > 0 && Number.isFinite(amount) && amount > 0 && attributed > amount;
+
+  return (
+    <div className="entry-form tx-edit">
+      <div className="eyebrow" style={{ marginBottom: 10 }}>
+        Correcting this entry
+      </div>
+      <div className="entry-form__grid entry-form__grid--wide">
+        <select
+          className="entry-form__field"
+          value={draft.businessId ?? ""}
+          onChange={(e) => set("businessId", e.target.value === "" ? null : Number(e.target.value))}
+          aria-label="Edit business"
+        >
+          {businesses.map((b) => (
+            <option key={b.id} value={b.id}>{b.name}</option>
+          ))}
+        </select>
+        <input
+          className="entry-form__field mono"
+          type="date"
+          value={draft.date}
+          onChange={(e) => set("date", e.target.value)}
+          aria-label="Edit date"
+        />
+        <select
+          className="entry-form__field"
+          value={draft.type}
+          onChange={(e) => set("type", e.target.value)}
+          aria-label="Edit type"
+        >
+          {/* An inactive type still shows when the entry already carries it —
+              otherwise opening an old entry would silently re-file it under
+              whatever happened to be first in the list. */}
+          {types
+            .filter((t) => t.active || t.code === draft.type)
+            .map((t) => (
+              <option key={t.code} value={t.code}>{t.label}</option>
+            ))}
+        </select>
+        <input
+          className="entry-form__field"
+          placeholder="Description"
+          value={draft.note}
+          onChange={(e) => set("note", e.target.value)}
+          aria-label="Edit description"
+        />
+        <input
+          className="entry-form__field"
+          placeholder="Category"
+          list="edit-tax-category-options"
+          value={draft.category}
+          onChange={(e) => set("category", e.target.value)}
+          aria-label="Edit category"
+        />
+        <datalist id="edit-tax-category-options">
+          {categoryOptions.map((c) => (
+            <option key={c.id} value={c.label}>
+              {c.schedule_line ? `line ${c.schedule_line}` : ""}
+            </option>
+          ))}
+        </datalist>
+        <input
+          className="entry-form__field"
+          placeholder="Payer"
+          value={draft.payer}
+          onChange={(e) => set("payer", e.target.value)}
+          aria-label="Edit payer"
+          required
+        />
+        <input
+          className="entry-form__field"
+          placeholder="Account"
+          list="edit-ledger-accounts"
+          value={draft.account}
+          onChange={(e) => set("account", e.target.value)}
+          aria-label="Edit account"
+        />
+        <datalist id="edit-ledger-accounts">
+          {accountOptions.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
+        <input
+          className="entry-form__field mono"
+          placeholder="Amount"
+          inputMode="decimal"
+          value={draft.amount}
+          onChange={(e) => set("amount", e.target.value)}
+          aria-label="Edit amount"
+        />
+        <button
+          className="entry-form__submit"
+          onClick={onSave}
+          disabled={!canSave || save.state === "saving"}
+        >
+          {save.state === "saving" ? "Saving…" : "Save changes"}
+        </button>
+      </div>
+
+      {overAttributed && (
+        <p className="tx-edit__warn">
+          {money(attributed)} of this entry is already attributed to{" "}
+          {attributedCount === 1 ? "an animal" : `${attributedCount} animals`}, which is more than
+          the {money(amount)} you are saving it as. Nothing stops the save — the split just no
+          longer adds up, and the animals keep the older figures until you change them.
+        </p>
+      )}
+
+      <div className="tx-edit__actions">
+        <Button size="sm" onClick={onCancel} disabled={save.state === "saving"}>
+          Cancel
+        </Button>
+
+        {confirmDelete ? (
+          <>
+            {/* The note first and the destructive button last, hard right.
+                Asking the question puts "Yes, delete it" on the screen, and
+                it must not land where the hand was already going for Cancel. */}
+            <span className="tx-edit__note">
+              Gone for good — this table keeps no history of deleted entries.
+              {attributedCount > 0 &&
+                ` The ${attributedCount === 1 ? "attribution" : `${attributedCount} attributions`} on ${
+                  attributedCount === 1 ? "an animal" : "animals"
+                } comes off too, so nothing is left carrying a cost with no cheque behind it.`}
+            </span>
+            <Button size="sm" onClick={() => setConfirmDelete(false)} disabled={save.state === "saving"}>
+              Keep it
+            </Button>
+            <Button
+              size="sm"
+              variant="filled"
+              className="tx-edit__confirm"
+              disabled={save.state === "saving"}
+              onClick={onDelete}
+            >
+              {save.state === "saving" ? "Deleting…" : "Yes, delete it"}
+            </Button>
+          </>
+        ) : (
+          <button type="button" className="link-button tx-edit__delete" onClick={() => setConfirmDelete(true)}>
+            Delete this entry
+          </button>
+        )}
+      </div>
+
+      {save.state === "error" && (
+        <p className="mono" style={{ fontSize: 13, color: "var(--red)", marginTop: 8 }}>
+          {save.message}
+        </p>
+      )}
+    </div>
   );
 }

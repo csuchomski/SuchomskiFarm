@@ -252,3 +252,73 @@ describe("deleting", () => {
     expect(screen.getByText(/all 3 of them off the record/)).toBeTruthy();
   });
 });
+
+/**
+ * A wire that nobody moved.
+ *
+ * The percentages are shown to a tenth — 0.905782805986017 reads as "90.6" —
+ * and a fraction rebuilt from that display is not the fraction that came out
+ * of the database. Send the rebuilt one back on an edit that never touched
+ * the wire and `edit_grazing_move` sees the strip go backwards, because its
+ * tolerance is a hundredth of a percentage point and the display's is a
+ * tenth: ten times coarser.
+ *
+ * The farm this was reported from grazes in strips with fractions like
+ * 0.8211121495327103 and 0.5191121495327102, so it is not a rare corner.
+ */
+describe("a wire the edit never touched", () => {
+  /** The last stay in the paddock — the one whose wire continues from the
+   *  one before it, which is where the round trip has to hold. */
+  const openLast = async () => {
+    await mount();
+    openStay("Paddock 2");
+    const edits = screen.getAllByText("Edit");
+    fireEvent.click(edits[edits.length - 1]);
+  };
+
+  it("sends back the fraction that was stored, not one rebuilt from the display", async () => {
+    events = [
+      ev({ id: "e1", paddockId: "p2", enteredAt: "2026-08-01T12:00:00.000Z",
+           exitedAt: "2026-08-02T12:00:00.000Z", sweptFrom: 0, sweptTo: 0.5191121495327102 }),
+      ev({ id: "e2", paddockId: "p2", enteredAt: "2026-08-02T12:00:00.000Z",
+           exitedAt: null, sweptFrom: 0.5191121495327102, sweptTo: 0.6745046728971962 }),
+    ];
+    await openLast();
+    // Only the date is touched.
+    fireEvent.change(screen.getByLabelText("They arrived"), { target: { value: "2026-08-02T09:00" } });
+    fireEvent.click(screen.getByText("Save the correction"));
+    await waitFor(() => expect(editMove).toHaveBeenCalled());
+    expect(editMove.mock.calls[0][2]).toMatchObject({
+      sweptFrom: 0.5191121495327102,
+      sweptTo: 0.6745046728971962,
+    });
+  });
+
+  it("still converts the percentage when somebody types one", async () => {
+    events = [
+      ev({ id: "e1", paddockId: "p2", enteredAt: "2026-08-01T12:00:00.000Z",
+           exitedAt: null, sweptFrom: 0.5191121495327102, sweptTo: 0.6745046728971962 }),
+    ];
+    await openLast();
+    fireEvent.change(screen.getByLabelText("Wire to, %"), { target: { value: "72" } });
+    fireEvent.click(screen.getByText("Save the correction"));
+    await waitFor(() => expect(editMove).toHaveBeenCalled());
+    expect(editMove.mock.calls[0][2]).toMatchObject({
+      sweptFrom: 0.5191121495327102,
+      sweptTo: 0.72,
+    });
+  });
+
+  it("clears a wire that is emptied rather than restoring the stored one", async () => {
+    events = [
+      ev({ id: "e1", paddockId: "p2", enteredAt: "2026-08-01T12:00:00.000Z",
+           exitedAt: null, sweptFrom: 0.51, sweptTo: 0.67 }),
+    ];
+    await openLast();
+    fireEvent.change(screen.getByLabelText("Wire from, %"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Wire to, %"), { target: { value: "" } });
+    fireEvent.click(screen.getByText("Save the correction"));
+    await waitFor(() => expect(editMove).toHaveBeenCalled());
+    expect(editMove.mock.calls[0][2]).toMatchObject({ sweptFrom: null, sweptTo: null });
+  });
+});

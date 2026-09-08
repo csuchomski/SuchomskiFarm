@@ -39,6 +39,13 @@ const num = (s: string): number | null => {
   return Number.isFinite(v) ? v : null;
 };
 
+/**
+ * The wire as a percentage, to a tenth. Nobody reads a paddock as 0.38.
+ *
+ * Lossy on purpose, which is why `asStored` exists below: a fraction of
+ * 0.5191121495327102 shows as "51.9", and 51.9 back out is 0.519 — off by
+ * more than `edit_grazing_move` allows a wire to move backwards.
+ */
 const pct = (f: number | null): string => (f === null ? "" : String(Math.round(f * 1000) / 10));
 
 export function MoveEditor({
@@ -72,8 +79,29 @@ export function MoveEditor({
   );
   const [moisture, setMoisture] = useState<SoilMoisture | "">(event.soilMoisture ?? "");
   const [notes, setNotes] = useState(event.notes ?? "");
-  const [from, setFrom] = useState(pct(event.sweptFrom));
-  const [to, setTo] = useState(pct(event.sweptTo));
+  // What the boxes were filled with. A box still reading this has not been
+  // touched, whatever the fraction behind it looks like.
+  const shownFrom = pct(event.sweptFrom);
+  const shownTo = pct(event.sweptTo);
+  const [from, setFrom] = useState(shownFrom);
+  const [to, setTo] = useState(shownTo);
+
+  /**
+   * The fraction to save for a wire.
+   *
+   * An untouched box sends back the fraction that came out of the database,
+   * not one rebuilt from the tenth-of-a-percent it was displayed as. The
+   * display loses up to 0.0005 and `edit_grazing_move` refuses a strip that
+   * starts more than 0.0001 behind the one before it — so re-deriving turned
+   * "I changed the date" into "that strip goes back over ground grazed
+   * earlier in the same pass", naming a percentage identical to the one on
+   * screen.
+   */
+  const asStored = (typed: string, shown: string, stored: number | null): number | null => {
+    if (typed === shown) return stored;
+    const v = num(typed);
+    return v === null ? null : v / 100;
+  };
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,8 +115,8 @@ export function MoveEditor({
       setError("That move needs a date and time for when they arrived.");
       return;
     }
-    const f = num(from);
-    const t = num(to);
+    const f = asStored(from, shownFrom, event.sweptFrom);
+    const t = asStored(to, shownTo, event.sweptTo);
     if ((f === null) !== (t === null)) {
       setError("A strip needs both ends of the wire, or neither.");
       return;
@@ -109,8 +137,8 @@ export function MoveEditor({
         utilizationPct: event.utilizationPct,
         soilMoisture: moisture === "" ? null : moisture,
         notes,
-        sweptFrom: f === null ? null : f / 100,
-        sweptTo: t === null ? null : t / 100,
+        sweptFrom: f,
+        sweptTo: t,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

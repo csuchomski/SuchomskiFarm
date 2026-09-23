@@ -48,6 +48,11 @@ const num = (s: string): number | null => {
  */
 const pct = (f: number | null): string => (f === null ? "" : String(Math.round(f * 1000) / 10));
 
+const FT_PER_YD = 3;
+
+/** One decimal, and no "-0" or trailing ".0" noise on a whole number. */
+const tidy = (n: number): string => String(Math.round(n * 10) / 10);
+
 export function MoveEditor({
   event,
   events,
@@ -85,6 +90,60 @@ export function MoveEditor({
   const shownTo = pct(event.sweptTo);
   const [from, setFrom] = useState(shownFrom);
   const [to, setTo] = useState(shownTo);
+
+  /**
+   * How far the wire moved, in yards.
+   *
+   * The percentage is what the record keeps, because a fraction of the sweep
+   * survives a paddock being remeasured. Yards is what you actually paced
+   * out, so it is the figure worth showing and the one worth being able to
+   * type — and it only exists where the paddock knows how long its sweep is.
+   *
+   * It is its own state rather than derived on every render: typing "20"
+   * should leave "20" in the box, not the 19.9 that comes back from putting
+   * it through a percentage rounded to a tenth.
+   */
+  const sweepFtOf = (id: string): number | null =>
+    paddocks.find((p) => p.id === id)?.sweepLengthFt ?? null;
+
+  const yardsFor = (fromPct: string, toPct: string, ft: number | null): string => {
+    if (ft === null || ft <= 0) return "";
+    const f = num(fromPct);
+    const t = num(toPct);
+    if (f === null || t === null) return "";
+    return tidy((((t - f) / 100) * ft) / FT_PER_YD);
+  };
+
+  const sweepFt = sweepFtOf(paddockId);
+  const [yards, setYards] = useState(() => yardsFor(shownFrom, shownTo, sweepFtOf(event.paddockId)));
+
+  // The three fields are one fact said two ways, so each keeps the others
+  // honest rather than letting the form show a strip that is not the strip.
+  const onFrom = (v: string) => {
+    setFrom(v);
+    setYards(yardsFor(v, to, sweepFt));
+  };
+  const onTo = (v: string) => {
+    setTo(v);
+    setYards(yardsFor(from, v, sweepFt));
+  };
+  const onPaddock = (id: string) => {
+    setPaddockId(id);
+    // A different paddock is a different sweep, so the same wire is a
+    // different number of yards.
+    setYards(yardsFor(from, to, sweepFtOf(id)));
+  };
+  /** Yards moves the *far* wire. The near one is where the last strip ended
+   *  and is not ours to shift. */
+  const onYards = (v: string) => {
+    setYards(v);
+    const y = num(v);
+    const f = num(from);
+    if (y === null || f === null || sweepFt === null || sweepFt <= 0) return;
+    setTo(tidy(f + ((y * FT_PER_YD) / sweepFt) * 100));
+  };
+
+  const pastTheEnd = (num(to) ?? 0) > 100;
 
   /**
    * The fraction to save for a wire.
@@ -162,7 +221,7 @@ export function MoveEditor({
       <div className="grz-form__row">
         <label className="grz-field grz-field--wide">
           <span className="eyebrow">Which paddock</span>
-          <select value={paddockId} onChange={(e) => setPaddockId(e.target.value)} aria-label="Which paddock">
+          <select value={paddockId} onChange={(e) => onPaddock(e.target.value)} aria-label="Which paddock">
             {paddocks
               .filter((p) => p.active || p.id === paddockId)
               .map((p) => (
@@ -245,12 +304,18 @@ export function MoveEditor({
       <div className="grz-form__row">
         <label className="grz-field">
           <span className="eyebrow">Wire from, %</span>
-          <input value={from} onChange={(e) => setFrom(e.target.value)} inputMode="decimal" aria-label="Wire from, %" />
+          <input value={from} onChange={(e) => onFrom(e.target.value)} inputMode="decimal" aria-label="Wire from, %" />
         </label>
         <label className="grz-field">
           <span className="eyebrow">Wire to, %</span>
-          <input value={to} onChange={(e) => setTo(e.target.value)} inputMode="decimal" aria-label="Wire to, %" />
+          <input value={to} onChange={(e) => onTo(e.target.value)} inputMode="decimal" aria-label="Wire to, %" />
         </label>
+        {sweepFt !== null && sweepFt > 0 && (
+          <label className="grz-field">
+            <span className="eyebrow">Strip, yd</span>
+            <input value={yards} onChange={(e) => onYards(e.target.value)} inputMode="decimal" aria-label="Strip, yd" />
+          </label>
+        )}
         <label className="grz-field">
           <span className="eyebrow">Ground</span>
           <select
@@ -266,6 +331,20 @@ export function MoveEditor({
           </select>
         </label>
       </div>
+
+      {sweepFt !== null && sweepFt > 0 ? (
+        <p className="grz-optional">
+          {paddocks.find((p) => p.id === paddockId)?.name ?? "This paddock"} sweeps{" "}
+          <span className="mono">{tidy(sweepFt / FT_PER_YD)} yd</span> end to end. Yards move the
+          far wire; the near one is where the last strip finished.
+          {pastTheEnd && " That takes the wire past the end of the paddock."}
+        </p>
+      ) : (
+        <p className="grz-optional">
+          Yards need this paddock's sweep length, which it has not got — the wire is in
+          percentages only. Draw its boundary, or set the sweep on the paddock, and yards appear.
+        </p>
+      )}
 
       <label className="grz-field grz-field--wide">
         <span className="eyebrow">Notes</span>

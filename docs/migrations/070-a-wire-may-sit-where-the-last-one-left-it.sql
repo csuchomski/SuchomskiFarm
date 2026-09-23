@@ -1,6 +1,6 @@
 -- 070 — a wire may sit where the last one left it
 --
--- STATUS: not yet run
+-- STATUS: run 2026-09-23
 --
 -- Reported from the field: editing nothing but the date on a move is refused
 -- with
@@ -204,13 +204,105 @@ begin
 end;
 $$;
 
--- ── What this does NOT change ─────────────────────────────────────────────
+-- ── The logging path, the same way ────────────────────────────────────────
 --
--- 039's `log_grazing_move` guards a new strip against the one standing open
--- with the same 0.0001, and its wire box takes the same tenth of a
--- percentage point — so a typed figure can be refused there for exactly this
--- reason. It is left alone here on purpose: it is a long function, this is
--- one line inside it, and it wants the same treatment as above — its own
--- text, edited in one place, rehearsed in a rolled-back transaction first.
--- Logging is the less likely path to hit it, because the figure typed there
--- is a fresh one rather than a stored fraction handed back.
+-- `log_grazing_move` guards a new strip against the one standing open with
+-- the same 0.0001, against the same tenth-of-a-percent box, so a typed figure
+-- is refused there for the same reason. Its body below is the live function's
+-- own source with the same three edits and nothing else — its signature is
+-- unchanged, so this replaces it in place.
+
+create or replace function herd.log_grazing_move(
+  p_farm_id uuid,
+  p_group_id uuid,
+  p_paddock_id uuid,
+  p_at timestamptz default now(),
+  p_head_count integer default null,
+  p_avg_weight_lb numeric default null,
+  p_forage_height_in_entry numeric default null,
+  p_soil_moisture text default null,
+  p_notes text default null,
+  p_latitude numeric default null,
+  p_longitude numeric default null,
+  p_residual_height_in_exit numeric default null,
+  p_utilization_pct numeric default null,
+  p_swept_from numeric default null,
+  p_swept_to numeric default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = herd, public
+as $$
+declare
+  -- Same slack, same reason as above.
+  c_slack constant numeric := 0.001;
+  v_open   grazing_events%rowtype;
+  v_new_id uuid;
+begin
+  if p_farm_id is null or not can_write_farm(p_farm_id) then
+    raise exception 'That is not a farm you can write to.';
+  end if;
+
+  if not exists (
+    select 1 from paddocks where id = p_paddock_id and farm_id = p_farm_id and deleted_at is null
+  ) then
+    raise exception 'That paddock is not on this farm.';
+  end if;
+
+  if not exists (
+    select 1 from grazing_groups where id = p_group_id and farm_id = p_farm_id and deleted_at is null
+  ) then
+    raise exception 'That group is not on this farm.';
+  end if;
+
+  if (p_swept_from is null) <> (p_swept_to is null) then
+    raise exception 'A strip needs both ends of the wire, or neither.';
+  end if;
+
+  select * into v_open
+    from grazing_events
+   where group_id = p_group_id and exited_at is null and deleted_at is null
+   limit 1;
+
+  if found then
+    if p_at < v_open.entered_at then
+      raise exception 'They arrived where they are on %, which is after %.',
+        to_char(v_open.entered_at, 'Mon FMDD YYYY'), to_char(p_at, 'Mon FMDD YYYY');
+    end if;
+
+    if v_open.paddock_id = p_paddock_id then
+      -- Same unit: this is the next strip, so it has to move forward.
+      if p_swept_from is null or v_open.swept_to is null then
+        raise exception 'They are already in that paddock. Say where the wire went to cut the next strip.';
+      end if;
+
+      if p_swept_from < v_open.swept_to - c_slack then
+        raise exception 'That strip goes back over ground they have just grazed — the last wire was at %.',
+          round(v_open.swept_to * 100, 1) || '%';
+      end if;
+    end if;
+
+    update grazing_events
+       set exited_at = p_at,
+           residual_height_in_exit = coalesce(p_residual_height_in_exit, residual_height_in_exit),
+           utilization_pct         = coalesce(p_utilization_pct, utilization_pct),
+           updated_by = auth.uid(), updated_at = now(), rev = rev + 1
+     where id = v_open.id;
+  end if;
+
+  insert into grazing_events (
+    farm_id, paddock_id, group_id, entered_at,
+    head_count, avg_weight_lb, forage_height_in_entry, soil_moisture,
+    notes, latitude, longitude, swept_from, swept_to, created_by, updated_by
+  ) values (
+    p_farm_id, p_paddock_id, p_group_id, p_at,
+    p_head_count, p_avg_weight_lb, p_forage_height_in_entry, p_soil_moisture,
+    coalesce(p_notes, ''), p_latitude, p_longitude, p_swept_from, p_swept_to,
+    auth.uid(), auth.uid()
+  )
+  returning id into v_new_id;
+
+  return v_new_id;
+end;
+$$;

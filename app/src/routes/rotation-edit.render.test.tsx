@@ -322,3 +322,124 @@ describe("a wire the edit never touched", () => {
     expect(editMove.mock.calls[0][2]).toMatchObject({ sweptFrom: null, sweptTo: null });
   });
 });
+
+/**
+ * The wire, in yards.
+ *
+ * The record keeps a fraction of the sweep, because that survives a paddock
+ * being remeasured. What anybody actually paced out is yards, so the editor
+ * shows both and lets you type either. The fixture's paddocks sweep 500 ft —
+ * 166.7 yd — end to end.
+ */
+describe("the strip in yards", () => {
+  const openLast = async () => {
+    await mount();
+    openStay("Paddock 2");
+    const edits = screen.getAllByText("Edit");
+    fireEvent.click(edits[edits.length - 1]);
+  };
+  const yd = () => (screen.getByLabelText("Strip, yd") as HTMLInputElement).value;
+  const wireTo = () => (screen.getByLabelText("Wire to, %") as HTMLInputElement).value;
+  const wireFrom = () => (screen.getByLabelText("Wire from, %") as HTMLInputElement).value;
+
+  beforeEach(() => {
+    events = [
+      ev({ id: "e1", paddockId: "p2", enteredAt: "2026-08-01T12:00:00.000Z",
+           exitedAt: null, sweptFrom: 0.2, sweptTo: 0.5 }),
+    ];
+  });
+
+  it("shows how far the wire moved, not just where it sits", async () => {
+    // 0.5 − 0.2 of a 500 ft sweep is 150 ft, which is 50 yards.
+    await openLast();
+    expect(yd()).toBe("50");
+  });
+
+  it("says how long the whole sweep is, so the strip has something to be a part of", async () => {
+    await openLast();
+    expect(screen.getByText(/166.7 yd/)).toBeTruthy();
+  });
+
+  it("follows the percentage when the far wire is typed", async () => {
+    await openLast();
+    fireEvent.change(screen.getByLabelText("Wire to, %"), { target: { value: "80" } });
+    expect(yd()).toBe("100");
+  });
+
+  it("follows the percentage when the near wire is typed", async () => {
+    await openLast();
+    fireEvent.change(screen.getByLabelText("Wire from, %"), { target: { value: "10" } });
+    expect(yd()).toBe("66.7");
+  });
+
+  it("moves the far wire when yards are typed", async () => {
+    // 25 yd is 75 ft of a 500 ft sweep: 15 percentage points on from 20.
+    await openLast();
+    fireEvent.change(screen.getByLabelText("Strip, yd"), { target: { value: "25" } });
+    expect(wireTo()).toBe("35");
+  });
+
+  it("leaves the near wire alone, because the last strip put it there", async () => {
+    await openLast();
+    fireEvent.change(screen.getByLabelText("Strip, yd"), { target: { value: "25" } });
+    expect(wireFrom()).toBe("20");
+  });
+
+  it("keeps what was typed rather than the figure that survives a round trip", async () => {
+    // 23.4 yd is 14.04 percentage points of a 500 ft sweep, and the wire box
+    // holds a tenth — so putting it through and back gives 23.3. The box has
+    // to keep what the hand typed, or a digit disappears while you type it.
+    await openLast();
+    fireEvent.change(screen.getByLabelText("Strip, yd"), { target: { value: "23.4" } });
+    expect(yd()).toBe("23.4");
+    expect(wireTo()).toBe("34");
+  });
+
+  it("saves the wire the yards moved", async () => {
+    await openLast();
+    fireEvent.change(screen.getByLabelText("Strip, yd"), { target: { value: "25" } });
+    fireEvent.click(screen.getByText("Save the correction"));
+    await waitFor(() => expect(editMove).toHaveBeenCalled());
+    expect(editMove.mock.calls[0][2]).toMatchObject({ sweptFrom: 0.2, sweptTo: 0.35 });
+  });
+
+  it("says when the yards run off the end of the paddock", async () => {
+    await openLast();
+    fireEvent.change(screen.getByLabelText("Strip, yd"), { target: { value: "160" } });
+    expect(screen.getByText(/past the end of the paddock/)).toBeTruthy();
+  });
+
+  it("does not leave the yards behind when the paddock changes under them", async () => {
+    // A different paddock is a different sweep, so the same wire is a
+    // different number of yards. P1 here sweeps 300 ft — 100 yd.
+    paddocks[0] = { ...paddocks[0], sweepLengthFt: 300 };
+    await openLast();
+    expect(yd()).toBe("50");
+    fireEvent.change(screen.getByLabelText("Which paddock"), { target: { value: "p1" } });
+    expect(yd()).toBe("30");
+  });
+
+  it("offers no yards at all on a paddock whose sweep is unknown", async () => {
+    // Inventing a length would put a figure on screen that no fence supports.
+    paddocks[1] = { ...paddocks[1], sweepLengthFt: null };
+    await openLast();
+    expect(screen.queryByLabelText("Strip, yd")).toBeNull();
+    expect(screen.getByText(/has not got/)).toBeTruthy();
+  });
+
+  it("still sends an untouched wire back exactly as stored", async () => {
+    // The yards field must not become a third way to coarsen the fraction.
+    events = [
+      ev({ id: "e1", paddockId: "p2", enteredAt: "2026-08-01T12:00:00.000Z",
+           exitedAt: null, sweptFrom: 0.5191121495327102, sweptTo: 0.6745046728971962 }),
+    ];
+    await openLast();
+    fireEvent.change(screen.getByLabelText("They arrived"), { target: { value: "2026-08-01T09:00" } });
+    fireEvent.click(screen.getByText("Save the correction"));
+    await waitFor(() => expect(editMove).toHaveBeenCalled());
+    expect(editMove.mock.calls[0][2]).toMatchObject({
+      sweptFrom: 0.5191121495327102,
+      sweptTo: 0.6745046728971962,
+    });
+  });
+});

@@ -158,5 +158,19 @@ export function moduleForPath(path: string): string | null {
     }
   }
 
-  return best?.module ?? null;
+  if (best) return best.module;
+
+  // Pages routed but not on the rail — /store/schedules, /books/accounts —
+  // still belong to their section. Without this they were reachable by URL
+  // from a business without the module, and now by a helper, whom the
+  // database refuses anyway but who would see a page of empty tables.
+  for (const [prefix, module] of SECTIONS) {
+    if (path === prefix || path.startsWith(`${prefix}/`)) return module;
+  }
+  return null;
 }
+
+const SECTIONS: [string, string][] = [
+  ["/books", "books"],
+  ["/store", "store"],
+];

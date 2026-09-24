@@ -56,6 +56,8 @@ const fetchPeople = vi.fn(async (_businessId: number) => people);
 const renameFarm = vi.fn(async (_i: { businessId: number; farmId: string | null; name: string }) => undefined);
 const setPersonRole = vi.fn(async (_b: number, _u: string, _r: Person["role"]) => undefined);
 const removePerson = vi.fn(async (_b: number, _u: string) => undefined);
+type AddInput = { businessId: number; email: string; role: Person["role"]; firstName: string; lastName: string };
+const addPerson = vi.fn(async (_i: AddInput) => ({ created: true, password: "k7pm-3xqa-hn4t-9wze" as string | null }));
 
 vi.mock("../lib/farm-people", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/farm-people")>()),
@@ -63,6 +65,7 @@ vi.mock("../lib/farm-people", async (importOriginal) => ({
   renameFarm: (i: { businessId: number; farmId: string | null; name: string }) => renameFarm(i),
   setPersonRole: (b: number, u: string, r: Person["role"]) => setPersonRole(b, u, r),
   removePerson: (b: number, u: string) => removePerson(b, u),
+  addPerson: (i: AddInput) => addPerson(i),
 }));
 
 beforeEach(() => {
@@ -198,3 +201,89 @@ describe("the guards", () => {
     expect(screen.getByText(/You are a helper on this farm/)).toBeTruthy();
   });
 });
+
+describe("adding somebody", () => {
+  const fill = (email: string, role?: string) => {
+    fireEvent.change(screen.getByLabelText("Their email"), { target: { value: email } });
+    if (role) fireEvent.change(screen.getByLabelText("What they can do"), { target: { value: role } });
+    fireEvent.change(screen.getByLabelText("Their first name"), { target: { value: "Sam" } });
+    fireEvent.change(screen.getByLabelText("Their last name"), { target: { value: "Reyes" } });
+  };
+
+  it("offers a helper by default, and will not send an empty address", async () => {
+    await mount();
+    expect((screen.getByLabelText("What they can do") as HTMLSelectElement).value).toBe("helper");
+    expect((screen.getByRole("button", { name: "Let them in" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("sends who, as what, to this farm", async () => {
+    await mount();
+    fill("sam@example.com", "vet");
+    fireEvent.click(screen.getByRole("button", { name: "Let them in" }));
+    await waitFor(() => expect(addPerson).toHaveBeenCalled());
+    expect(addPerson.mock.calls[0][0]).toEqual({
+      businessId: 5, email: "sam@example.com", role: "vet", firstName: "Sam", lastName: "Reyes",
+    });
+  });
+
+  it("shows a new login's password once, and forgets it when told it has been handed over", async () => {
+    await mount();
+    fill("sam@example.com");
+    fireEvent.click(screen.getByRole("button", { name: "Let them in" }));
+    await waitFor(() => expect(screen.getByLabelText("Their password").textContent).toBe("k7pm-3xqa-hn4t-9wze"));
+    expect(screen.getByText("A login was made for sam@example.com")).toBeTruthy();
+    // The form empties, so a second person is not added with the first one's address.
+    expect((screen.getByLabelText("Their email") as HTMLInputElement).value).toBe("");
+    // And the list is read again, so the new person shows up.
+    expect(fetchPeople).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "I have handed it over" }));
+    expect(screen.queryByLabelText("Their password")).toBeNull();
+    expect(screen.queryByText("k7pm-3xqa-hn4t-9wze")).toBeNull();
+  });
+
+  it("shows no password for somebody who already had a login, and says why", async () => {
+    addPerson.mockResolvedValueOnce({ created: false, password: null });
+    await mount();
+    fill("dale@example.com");
+    fireEvent.click(screen.getByRole("button", { name: "Let them in" }));
+    await waitFor(() =>
+      expect(screen.getByText("dale@example.com already had a login, and is on the farm now as Helper.")).toBeTruthy(),
+    );
+    expect(screen.queryByLabelText("Their password")).toBeNull();
+  });
+
+  it("keeps what was typed when it is refused, so a typo can be fixed rather than retyped", async () => {
+    addPerson.mockRejectedValueOnce(new Error("sam@example.com can already get in. Change their role instead."));
+    await mount();
+    fill("sam@example.com");
+    fireEvent.click(screen.getByRole("button", { name: "Let them in" }));
+    await waitFor(() => expect(screen.getByText(/can already get in/)).toBeTruthy());
+    expect((screen.getByLabelText("Their email") as HTMLInputElement).value).toBe("sam@example.com");
+    expect(screen.queryByLabelText("Their password")).toBeNull();
+  });
+
+  it("is not offered to anybody but an owner", async () => {
+    role = "helper";
+    await mount();
+    expect(screen.queryByLabelText("Their email")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Let them in" })).toBeNull();
+  });
+});
+
+describe("what each role is told it can do", () => {
+  it("says plainly that only an owner reaches the books and the store", async () => {
+    await mount();
+    const said = screen.getByText(/^Owner: /).textContent ?? "";
+    expect(said).toMatch(/Owner: everything — the books, the store/);
+    expect(said).toMatch(/Helper: [^·]*not the books or the store/);
+    expect(said).toMatch(/Vet: [^·]*not the books or the store/);
+    expect(said).toMatch(/Viewer: [^·]*changes nothing; not the books or the store/);
+  });
+
+  it("owns up to the one thing about money a helper can still see", async () => {
+    await mount();
+    expect(screen.getByText(/what an animal cost, on that animal's own page/)).toBeTruthy();
+  });
+});
+

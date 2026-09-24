@@ -3,6 +3,7 @@ import { Pill, Button, GridRow, Callout, SaveToast } from "../components/ui";
 import { useWorkspace } from "../lib/workspace";
 import {
   FARM_ROLES,
+  addPerson,
   fetchPeople,
   removePerson,
   renameFarm,
@@ -10,7 +11,9 @@ import {
   type FarmRole,
   type Person,
 } from "../lib/farm-people";
+import "./grazing.css";
 import "./ground.css";
+import "./farm-people.css";
 
 /**
  * Settings → Farm & people.
@@ -26,8 +29,12 @@ import "./ground.css";
  *
  * **You cannot demote or remove yourself.** A farm whose last owner made
  * themselves a viewer has nobody who can undo it, and the fix would be a
- * support request. The guard is here rather than in the database because it
- * is about not shooting yourself in the foot, not about tenancy.
+ * support request. The database refuses to leave a farm with no owner as
+ * well (072); this screen just does not offer the move in the first place.
+ *
+ * **Adding somebody makes them a login if they have none**, and shows its
+ * password exactly once. There is no invitation email — signups are closed
+ * and nothing proves who owns an address — so the owner hands it over.
  */
 
 type Load =
@@ -54,6 +61,8 @@ export default function FarmAndPeople() {
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [adding, setAdding] = useState<NewPerson>(BLANK);
+  const [handover, setHandover] = useState<{ email: string; password: string } | null>(null);
 
   const isOwner = role === "owner";
 
@@ -92,6 +101,33 @@ export default function FarmAndPeople() {
   const people = load.state === "ok" ? load.people : EMPTY;
   const owners = people.filter((p) => p.role === "owner").length;
   const changed = business !== null && name.trim() !== business.name;
+  const canAdd = adding.email.trim().includes("@") && !busy;
+
+  // Not run(): a refused add has to leave the form filled in, so the typo can
+  // be fixed rather than retyped, and a successful one has a password to show.
+  const add = async () => {
+    const email = adding.email.trim();
+    const label = FARM_ROLES.find((r) => r.value === adding.role)?.label ?? adding.role;
+    setBusy(true);
+    setError(null);
+    setNote(null);
+    setHandover(null);
+    try {
+      const made = await addPerson({ businessId: business!.id, ...adding });
+      setAdding(BLANK);
+      if (made.created && made.password) setHandover({ email, password: made.password });
+      setNote(
+        made.created
+          ? `${email} can sign in now, as ${label}.`
+          : `${email} already had a login, and is on the farm now as ${label}.`,
+      );
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <>
@@ -263,6 +299,94 @@ export default function FarmAndPeople() {
             );
           })}
 
+          {isOwner && handover && (
+            <div className="fp-handover" role="status">
+              <div className="eyebrow">A login was made for {handover.email}</div>
+              <p style={{ margin: "8px 0 4px", fontSize: 14 }}>Their password is</p>
+              <div className="mono fp-handover__pw" aria-label="Their password">
+                {handover.password}
+              </div>
+              <p style={{ margin: "8px 0 12px", fontSize: 14, color: "var(--ink-soft)" }}>
+                Write it down or hand it over now — it is not kept anywhere and will not be shown
+                again. They sign in with their email and this password, and can change it from
+                their own settings.
+              </p>
+              <Button variant="outline" onClick={() => setHandover(null)}>
+                I have handed it over
+              </Button>
+            </div>
+          )}
+
+          {isOwner && (
+            <>
+              <div className="serif" style={{ fontSize: 19, margin: "26px 0 6px" }}>
+                Add a person
+              </div>
+              <form
+                className="grz-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (canAdd) void add();
+                }}
+              >
+                <div className="grz-form__row">
+                  <label className="grz-field grz-field--wide">
+                    <span className="eyebrow">Email</span>
+                    <input
+                      type="email"
+                      autoComplete="off"
+                      value={adding.email}
+                      onChange={(e) => setAdding({ ...adding, email: e.target.value })}
+                      aria-label="Their email"
+                    />
+                  </label>
+                  <label className="grz-field">
+                    <span className="eyebrow">Can do</span>
+                    <select
+                      value={adding.role}
+                      onChange={(e) => setAdding({ ...adding, role: e.target.value as FarmRole })}
+                      aria-label="What they can do"
+                    >
+                      {FARM_ROLES.map((r) => (
+                        <option key={r.value} value={r.value}>
+                          {r.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="grz-form__row">
+                  <label className="grz-field">
+                    <span className="eyebrow">First name</span>
+                    <input
+                      value={adding.firstName}
+                      onChange={(e) => setAdding({ ...adding, firstName: e.target.value })}
+                      aria-label="Their first name"
+                    />
+                  </label>
+                  <label className="grz-field">
+                    <span className="eyebrow">Last name</span>
+                    <input
+                      value={adding.lastName}
+                      onChange={(e) => setAdding({ ...adding, lastName: e.target.value })}
+                      aria-label="Their last name"
+                    />
+                  </label>
+                </div>
+                <p className="grz-optional">
+                  If they have no login yet, one is made and its password shown here once, for you
+                  to hand over. If they already have one, they keep their own password and the name
+                  is left as they set it.
+                </p>
+                <div className="grz-form__actions">
+                  <Button variant="filled" type="submit" disabled={!canAdd}>
+                    {busy ? "Letting them in…" : "Let them in"}
+                  </Button>
+                </div>
+              </form>
+            </>
+          )}
+
           <div style={{ margin: "18px 0 4px" }}>
             <Callout>
               {FARM_ROLES.map((r) => `${r.label}: ${r.can}`).join(" · ")}
@@ -270,10 +394,9 @@ export default function FarmAndPeople() {
           </div>
 
           <p className="grz-optional" style={{ maxWidth: "68ch" }}>
-            There is no invitation yet — somebody has to have an account before they can be given
-            access, and signups are closed while the subscription side is being built. Removing
-            access takes nothing away from the record: the moves, milkings and weights they entered
-            stay exactly as they are.
+            Removing somebody takes away the herd and the books together. It takes nothing away
+            from the record: the moves, milkings and weights they entered stay exactly as they are.
+            One thing a helper can still see: what an animal cost, on that animal's own page.
           </p>
         </>
       )}
@@ -282,3 +405,12 @@ export default function FarmAndPeople() {
 }
 
 const EMPTY: Person[] = [];
+
+interface NewPerson {
+  email: string;
+  role: FarmRole;
+  firstName: string;
+  lastName: string;
+}
+
+const BLANK: NewPerson = { email: "", role: "helper", firstName: "", lastName: "" };

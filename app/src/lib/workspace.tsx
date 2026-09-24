@@ -44,6 +44,16 @@ const FALLBACK_MODULES: Record<string, string[]> = {
   other: ["books"],
 };
 
+/**
+ * Modules only an owner sees. The database already refuses everybody else
+ * the books and the store (071); this keeps the rail, the routes and the
+ * Settings tabs from offering them pages that would load empty.
+ */
+export const OWNER_ONLY_MODULES = ["books", "store"];
+
+export const modulesForRole = (modules: string[], role: string | null): string[] =>
+  role === "owner" ? modules : modules.filter((m) => !OWNER_ONLY_MODULES.includes(m));
+
 const STORAGE_KEY = "suchomski.businessId";
 
 const WorkspaceContext = createContext<WorkspaceState | null>(null);
@@ -146,14 +156,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         ]);
 
         if (cancelled) return;
+        const role = membership.roleFor(chosen?.id ?? -1);
         setState({
           loading: false,
           error: null,
           businesses,
           business: chosen,
-          modules,
+          modules: modulesForRole(modules, role),
           farmId,
-          role: membership.roleFor(chosen?.id ?? -1),
+          role,
           userId,
           migrated: membership.migrated,
         });

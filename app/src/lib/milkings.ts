@@ -271,15 +271,18 @@ export async function fetchProductionRecords(farmId: string): Promise<RealProduc
 /**
  * Write a day's milkings and put the milk into inventory.
  *
- * The batch is found through the milkings already recorded for that product
- * and day, not by searching inventory_batches for a matching date. Two
- * batches can share a product and date — 15 and 16 already do — and picking
- * one of them by guesswork would add milk to a batch nobody attributed.
- * Following batch_id means we only ever touch a batch this flow created.
+ * One call to `herd.record_milkings` (073), which does both in a single
+ * transaction. It used to be three requests from here — read the batch, move
+ * it, insert the milkings — which had two faults. The batch write went
+ * straight at `inventory_batches`, which since 071 only an owner may touch, so
+ * a helper could not record milk at all. And if the last request failed, the
+ * stock had already moved.
  *
- * Quantity is added to, never recomputed. A batch's quantity can include
- * stock entered by hand on the Store screen, and recomputing it from
- * milkings would silently delete that.
+ * The rules are the same ones this function used to follow, now kept in the
+ * database: the batch is the one this day's milkings already point at, never
+ * one found by date; and it is added to, never recomputed, because it can
+ * hold stock entered by hand. `productName` and `unit` are taken from the
+ * product row there rather than trusted from here.
  */
 export async function recordMilkings(input: {
   farmId: string;
@@ -291,89 +294,19 @@ export async function recordMilkings(input: {
   entries: { animalId: string; quantity: number }[];
   note?: string;
 }): Promise<{ records: RealProductionRecord[]; batchId: number; batchQuantity: number }> {
-  const { farmId, businessId, productId, producedDate } = input;
-  const added = round3(input.entries.reduce((s, e) => s + e.quantity, 0));
+  const { data, error } = await herdSchema().rpc("record_milkings", {
+    p_farm_id: input.farmId,
+    p_product_id: input.productId,
+    p_produced_date: input.producedDate,
+    p_entries: input.entries.map((e) => ({ animal_id: e.animalId, quantity: e.quantity })),
+    p_note: input.note ?? "",
+  });
+  if (error) throw new Error(error.message);
 
-  // An existing batch for this product and day, reached through the
-  // milkings that already point at it.
-  const prior = await herdSchema()
-    .from("production_records")
-    .select("batch_id")
-    .eq("farm_id", farmId)
-    .eq("product_id", productId)
-    .eq("produced_date", producedDate)
-    .not("batch_id", "is", null)
-    .is("deleted_at", null)
-    .limit(1);
-
-  if (prior.error) throw new Error(`herd.production_records: ${prior.error.message}`);
-  const existingId = (prior.data?.[0] as { batch_id: number } | undefined)?.batch_id ?? null;
-
-  let batchId: number;
-  let batchQuantity: number;
-
-  if (existingId !== null) {
-    const current = await supabase
-      .from("inventory_batches")
-      .select("id, quantity")
-      .eq("id", existingId)
-      .maybeSingle();
-    if (current.error) throw new Error(`inventory_batches: ${current.error.message}`);
-
-    const before = Number((current.data as { quantity: number } | null)?.quantity ?? 0);
-    const updated = await supabase
-      .from("inventory_batches")
-      .update({ quantity: round3(before + added) })
-      .eq("id", existingId)
-      .select("id, quantity")
-      .single();
-    if (updated.error) throw new Error(`inventory_batches: ${updated.error.message}`);
-
-    batchId = (updated.data as { id: number }).id;
-    batchQuantity = Number((updated.data as { quantity: number }).quantity);
-  } else {
-    // business_id is required: migration 010's insert policy is
-    // `with check (is_business_member(business_id))`, and
-    // is_business_member(null) is false, so omitting it fails outright.
-    const created = await supabase
-      .from("inventory_batches")
-      .insert({
-        business_id: businessId,
-        product_id: productId,
-        produced_date: producedDate,
-        quantity: added,
-        reserved: 0,
-      })
-      .select("id, quantity")
-      .single();
-    if (created.error) throw new Error(`inventory_batches: ${created.error.message}`);
-
-    batchId = (created.data as { id: number }).id;
-    batchQuantity = Number((created.data as { quantity: number }).quantity);
-  }
-
-  // created_at/created_by/rev come from the herd.touch_row trigger.
-  const rows = input.entries.map((e) => ({
-    farm_id: farmId,
-    animal_id: e.animalId,
-    product_id: productId,
-    product_name: input.productName,
-    quantity: e.quantity,
-    unit: input.unit,
-    produced_date: producedDate,
-    batch_id: batchId,
-    note: input.note ?? "",
-  }));
-
-  const inserted = await herdSchema().from("production_records").insert(rows).select(PRODUCTION_COLUMNS);
-  if (inserted.error) {
-    // The batch was already moved. Say so rather than leaving the person to
-    // discover inventory that no milking accounts for.
-    throw new Error(
-      `${inserted.error.message} — inventory batch ${batchId} was already updated to ${batchQuantity}; ` +
-        `re-check the store before re-entering.`,
-    );
-  }
-
-  return { records: (inserted.data ?? []) as RealProductionRecord[], batchId, batchQuantity };
+  const out = data as { batch_id: number; batch_quantity: number | string; records: RealProductionRecord[] | null };
+  return {
+    records: out.records ?? [],
+    batchId: Number(out.batch_id),
+    batchQuantity: Number(out.batch_quantity),
+  };
 }

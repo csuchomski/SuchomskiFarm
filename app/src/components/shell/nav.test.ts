@@ -92,4 +92,17 @@ describe("moduleForPath", () => {
       }
     }
   });
+
+  it("gates pages that are routed but not on the rail by the section they sit in", () => {
+    // Without this a helper, or a business without the module, could reach
+    // the standing orders or the chart of accounts by typing the URL.
+    expect(moduleForPath("/store/schedules")).toBe("store");
+    expect(moduleForPath("/books/accounts")).toBe("books");
+    expect(moduleForPath("/books")).toBe("books");
+  });
+
+  it("does not take a section's prefix for a word that starts with it", () => {
+    expect(moduleForPath("/bookshelf")).toBeNull();
+    expect(moduleForPath("/storefront")).toBeNull();
+  });
 });

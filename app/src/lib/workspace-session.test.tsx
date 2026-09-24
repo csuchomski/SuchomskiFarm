@@ -34,7 +34,7 @@ vi.mock("./supabase", () => ({
 const sessionFor = (id: string) => ({ user: { id } }) as unknown as Session;
 
 /** Minimal stand-in for the PostgREST builder, per table. */
-function stubTables(userId: string) {
+function stubTables(userId: string, role = "owner") {
   from.mockImplementation((table: string) => {
     const result = (data: unknown) => {
       const b: Record<string, unknown> = {};
@@ -46,11 +46,13 @@ function stubTables(userId: string) {
 
     if (table === "business_members") {
       return result([
-        { role: "owner", business_id: 5, businesses: { id: 5, name: "Suchomski Family Farm", type: "farm" } },
+        { role, business_id: 5, businesses: { id: 5, name: "Suchomski Family Farm", type: "farm" } },
         { role: "owner", business_id: 4, businesses: { id: 4, name: "5553 N Lydell Ave", type: "rental" } },
       ]);
     }
-    if (table === "business_type_modules") return result([{ module_code: "books" }, { module_code: "herd" }]);
+    if (table === "business_type_modules" || table === "business_modules") {
+      return result([{ module_code: "books" }, { module_code: "herd" }, { module_code: "store" }]);
+    }
     return result([]);
   });
   return userId;
@@ -78,9 +80,11 @@ afterEach(() => {
 });
 
 function Probe() {
-  const { businesses, business, loading } = useWorkspace();
+  const { businesses, business, loading, modules, role } = useWorkspace();
   return (
     <div>
+      <span data-testid="modules">{[...modules].sort().join(",")}</span>
+      <span data-testid="role">{role ?? "none"}</span>
       <span data-testid="loading">{String(loading)}</span>
       <span data-testid="count">{businesses.length}</span>
       <span data-testid="current">{business?.name ?? "none"}</span>
@@ -157,5 +161,27 @@ describe("WorkspaceProvider follows the session", () => {
 
     await waitFor(() => expect(screen.getByTestId("count").textContent).toBe("0"));
     expect(screen.getByTestId("current").textContent).toBe("none");
+  });
+});
+
+describe("what the rail offers depends on the role, not only the farm", () => {
+  it("gives an owner the books and the store", async () => {
+    stubTables("u1", "owner");
+    authState.session = sessionFor("u1");
+    authState.loading = false;
+    renderProvider();
+    await waitFor(() => expect(screen.getByTestId("role").textContent).toBe("owner"));
+    expect(screen.getByTestId("modules").textContent).toBe("books,herd,store");
+  });
+
+  it.each(["helper", "vet", "viewer"])("gives a %s the herd and nothing with money in it", async (role) => {
+    // The database already refuses them the books and the store (071). This
+    // is what stops the rail offering pages that would load empty.
+    stubTables("u1", role);
+    authState.session = sessionFor("u1");
+    authState.loading = false;
+    renderProvider();
+    await waitFor(() => expect(screen.getByTestId("role").textContent).toBe(role));
+    expect(screen.getByTestId("modules").textContent).toBe("herd");
   });
 });

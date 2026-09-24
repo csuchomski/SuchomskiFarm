@@ -9,10 +9,12 @@ import { supabase, herdSchema } from "./supabase";
  * that takes on a helper had no way to let them in, and a farm that spelled
  * its own name wrong had to live with it.
  *
- * Nothing here needed new permissions. `businesses` already allows an owner
- * to update, `business_members` already allows an owner to write and any
- * member to read, and `profiles` already lets a farmer read the rest. This is
- * the screen those policies were waiting for.
+ * Who gets in is kept twice — `public.business_members`, which the app and
+ * the books read, and `herd.farm_members`, which every herd table checks —
+ * so nothing here writes either table directly. Three database functions
+ * (072) change both together and check the caller owns the farm; the tables
+ * no longer take writes from a signed-in user at all. Before that, taking
+ * somebody off here left them able to log moves on the herd side.
  *
  * **The farm and the business are renamed together.** They are two rows —
  * `public.businesses` is what the app shows, `herd.farms` is what the grazing
@@ -20,15 +22,16 @@ import { supabase, herdSchema } from "./supabase";
  * one name while the rail shows another.
  */
 
-/** What `business_members.role` may be. `can_write_farm` allows the first
- *  three; a viewer reads and nothing more. */
+/** What `business_members.role` may be. On the herd side the first three
+ *  write and a viewer reads; the books and the store are the owner's alone
+ *  (071). */
 export type FarmRole = "owner" | "helper" | "vet" | "viewer";
 
 export const FARM_ROLES: { value: FarmRole; label: string; can: string }[] = [
-  { value: "owner", label: "Owner", can: "everything, including who else gets in" },
-  { value: "helper", label: "Helper", can: "log moves, milkings and the rest of the day's work" },
-  { value: "vet", label: "Vet", can: "the same records a helper writes" },
-  { value: "viewer", label: "Viewer", can: "read only" },
+  { value: "owner", label: "Owner", can: "everything — the books, the store, and who else gets in" },
+  { value: "helper", label: "Helper", can: "log moves, milkings, treatments and the rest of the day's work; not the books or the store" },
+  { value: "vet", label: "Vet", can: "the same herd records a helper writes; not the books or the store" },
+  { value: "viewer", label: "Viewer", can: "reads the herd and the grazing, changes nothing; not the books or the store" },
 ];
 
 export interface Person {
@@ -112,26 +115,83 @@ export async function renameFarm(input: {
   }
 }
 
-/** Change what someone may do. Owners only, by policy. */
+/** Change what someone may do, on both lists at once. Owners only; a farm
+ *  keeps at least one owner. Both are the database's rules, not this file's. */
 export async function setPersonRole(
   businessId: number,
   userId: string,
   role: FarmRole,
 ): Promise<void> {
-  const { error } = await supabase
-    .from("business_members")
-    .update({ role })
-    .eq("business_id", businessId)
-    .eq("user_id", userId);
-  if (error) throw new Error(`business_members: ${error.message}`);
+  const { error } = await supabase.rpc("set_member_role", {
+    p_business_id: businessId,
+    p_user_id: userId,
+    p_role: role,
+  });
+  if (error) throw new Error(error.message);
 }
 
-/** Take somebody's access away. The rows they wrote stay theirs. */
+/** Take somebody's access away — the books and the herd both. The rows they
+ *  wrote stay theirs. */
 export async function removePerson(businessId: number, userId: string): Promise<void> {
-  const { error } = await supabase
-    .from("business_members")
-    .delete()
-    .eq("business_id", businessId)
-    .eq("user_id", userId);
-  if (error) throw new Error(`business_members: ${error.message}`);
+  const { error } = await supabase.rpc("remove_member", {
+    p_business_id: businessId,
+    p_user_id: userId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export interface Added {
+  /** True when they had no login and one was made for them. */
+  created: boolean;
+  /** The password that login was made with. Shown once and never stored. */
+  password: string | null;
+}
+
+/**
+ * Let somebody in by their email address.
+ *
+ * Goes through the `add-person` Edge Function rather than the database,
+ * because making a login needs the service-role key, and that key does not
+ * belong in anything shipped to a browser. The function makes the login if
+ * there is none, then lets them in *as you* — so the database's owner check
+ * is still the one that decides.
+ *
+ * Somebody who already has a login keeps their own password; `password` comes
+ * back null.
+ */
+export async function addPerson(input: {
+  businessId: number;
+  email: string;
+  role: FarmRole;
+  firstName: string;
+  lastName: string;
+}): Promise<Added> {
+  const { data, error } = await supabase.functions.invoke("add-person", {
+    body: {
+      businessId: input.businessId,
+      email: input.email.trim(),
+      role: input.role,
+      firstName: input.firstName.trim(),
+      lastName: input.lastName.trim(),
+    },
+  });
+  if (error) throw new Error(await reasonFrom(error));
+  const out = (data ?? {}) as Partial<Added>;
+  return { created: out.created === true, password: out.password ?? null };
+}
+
+/** The function answers a refusal with `{ error }` and a 4xx; supabase-js
+ *  hands that back as a generic "non-2xx status" unless the body is read. */
+async function reasonFrom(error: unknown): Promise<string> {
+  const context = (error as { context?: unknown }).context;
+  if (context instanceof Response) {
+    try {
+      const body = (await context.clone().json()) as { error?: unknown; message?: unknown };
+      if (typeof body.error === "string") return body.error;
+      if (typeof body.message === "string") return body.message;
+    } catch {
+      /* not JSON — fall through */
+    }
+  }
+  return error instanceof Error ? error.message : String(error);
 }

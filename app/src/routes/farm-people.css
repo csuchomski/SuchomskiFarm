@@ -1,0 +1,18 @@
+/* Settings → Farm & people. The form is grazing.css's; this is the one
+   thing it has that nothing else does — a password shown once. */
+
+.fp-handover {
+  margin: 18px 0 6px;
+  padding: 16px 18px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  max-width: 560px;
+}
+
+/* Big enough to read off a phone held out to somebody else. */
+.fp-handover__pw {
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  user-select: all;
+  overflow-wrap: anywhere;
+}

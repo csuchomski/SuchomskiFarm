@@ -236,9 +236,6 @@
   color: var(--ink);
 }
 
-.relative-row:hover {
-  background: var(--page);
-}
 
 .link-button {
   background: none;

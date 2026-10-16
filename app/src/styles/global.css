@@ -115,3 +115,51 @@ svg {
     min-height: 0;
   }
 }
+
+/* ── the row under the pointer ──────────────────────────────────────────
+   Every line of every list says so when it is pointed at: the row darkens
+   and a rule runs down its left edge, so the eye can follow it across the
+   columns to the figure at the far end.
+
+   One rule for the whole app rather than one per page. Four pages had their
+   own, each a different strength, and every other list had none.
+
+   Drawn with inset shadows rather than a background, so it lays over
+   whatever background a row already has — a tinted highlight row darkens
+   further instead of losing its tint. Table rows get it on their cells,
+   because a shadow on a <tr> is not drawn in a collapsed-border table.
+
+   Only where there is a real pointer. On a phone a tap leaves "hover" stuck
+   on the last row touched, which looks like a selection that isn't one.
+
+   Header and total rows are left alone: they are not lines of the list. */
+@media (hover: hover) {
+  :is(
+    .grid-row--body,
+    .grid-row--tap,
+    .alert-row,
+    .sire-row,
+    .relative-row,
+    .breed-row,
+    .wt-row,
+    .pairing-row,
+    .condition-row,
+    .money-book__row,
+    .per-animal__row
+  ):hover {
+    box-shadow:
+      inset 3px 0 0 var(--row-hover-edge),
+      inset 0 0 0 100vmax var(--row-hover);
+  }
+
+  tbody tr:hover > :is(td, th) {
+    box-shadow: inset 0 0 0 100vmax var(--row-hover);
+  }
+
+  tbody tr:hover > :is(td, th):first-child {
+    box-shadow:
+      inset 3px 0 0 var(--row-hover-edge),
+      inset 0 0 0 100vmax var(--row-hover);
+  }
+}
+

@@ -14,7 +14,7 @@
   border: 1px solid var(--hairline);
   background: var(--paper);
   color: var(--ink);
-  font: 400 14px/1 "IBM Plex Sans", sans-serif;
+  font: 400 14px/1 var(--font-sans);
 }
 
 .animals-search:focus-visible {
@@ -32,7 +32,7 @@
   border: 1px solid var(--hairline);
   background: transparent;
   color: var(--ink-soft);
-  font: 500 11px/1 "IBM Plex Sans", sans-serif;
+  font: 500 11px/1 var(--font-sans);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 10px 12px;
@@ -54,7 +54,7 @@
   border: 1px solid var(--hairline);
   background: var(--paper);
   color: var(--ink);
-  font: 400 13px/1 "IBM Plex Sans", sans-serif;
+  font: 400 13px/1 var(--font-sans);
 }
 
 .animals-toggle {
@@ -190,7 +190,7 @@
 .animals-mob__pick {
   /* 16px, like every other select on a page a farmer opens on a phone —
      anything smaller and Safari zooms the whole page to meet it. */
-  font: 400 16px/1.2 "IBM Plex Sans", sans-serif;
+  font: 400 16px/1.2 var(--font-sans);
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--hairline);

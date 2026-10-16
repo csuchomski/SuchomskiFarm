@@ -68,7 +68,7 @@
   display: block;
   margin-top: 32px;
   padding: 12px 4px;
-  font: 500 13px/1 "IBM Plex Sans", sans-serif;
+  font: 500 13px/1 var(--font-sans);
   color: var(--ink-muted);
   background: none;
   border: none;

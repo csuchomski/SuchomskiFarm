@@ -28,7 +28,7 @@
   border: 1px solid var(--hairline);
   background: transparent;
   color: var(--ink-muted);
-  font: 500 11px/1 "IBM Plex Mono", monospace;
+  font: 500 11px/1 var(--font-mono);
   cursor: pointer;
 }
 
@@ -71,7 +71,7 @@
   max-width: min(360px, calc(100vw - 24px));
   background: var(--paper);
   color: var(--ink);
-  font: 400 13px/1.5 "IBM Plex Sans", sans-serif;
+  font: 400 13px/1.5 var(--font-sans);
   text-align: left;
   /* These labels sit inside `.eyebrow`, which is uppercase and letter-spaced.
      Without resetting them the whole working reads as a shouted headline. */
@@ -128,7 +128,7 @@
 /* ── the working itself ──────────────────────────────────────────────── */
 
 .tip-title {
-  font: 500 11px/1 "IBM Plex Sans", sans-serif;
+  font: 500 11px/1 var(--font-sans);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-muted);
@@ -167,7 +167,7 @@
 }
 
 .tip-rows__value {
-  font-family: "IBM Plex Mono", monospace;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   text-align: right;
   white-space: nowrap;
@@ -200,7 +200,7 @@
   margin-top: 12px;
   padding: 10px 12px;
   background: var(--paper-tint);
-  font-family: "IBM Plex Mono", monospace;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 

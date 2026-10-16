@@ -39,7 +39,7 @@
       "x": 0,
       "y": -230,
       "w": 460,
-      "text": "Direction: the site wears the app's own \"Herd\" system \u2014 flat paper, no shadows, no rounded corners, hairline rules, Newsreader over IBM Plex. Colours and type lifted from app/src/styles/tokens.css, not approximated.\n\nThe hero map is Golden Acres' Home pasture, projected from the farm's own GeoJSON: five real paddocks, 9.6 acres, with the wire, the mob and the round where they actually stood on 4 September 2026."
+      "text": "Direction: the site wears the app's own \"Herd\" system \u2014 flat paper, no shadows, no rounded corners, hairline rules, Barlow Semi Condensed headings over Atkinson Hyperlegible, DM Mono for figures. Colours and type lifted from app/src/styles/tokens.css, not approximated.\n\nThe hero map is Golden Acres' Home pasture, projected from the farm's own GeoJSON: five real paddocks, 9.6 acres, with the wire, the mob and the round where they actually stood on 4 September 2026."
     },
     {
       "id": "placeholders",

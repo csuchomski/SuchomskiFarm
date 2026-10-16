@@ -42,9 +42,9 @@ button {
 
 /* type utilities, shared with the mockups */
 .serif {
-  font-family: var(--font-serif);
-  font-weight: 400;
-  letter-spacing: -0.01em;
+  font-family: var(--font-heading);
+  font-weight: var(--heading-weight);
+  letter-spacing: 0;
   line-height: 1.15;
 }
 

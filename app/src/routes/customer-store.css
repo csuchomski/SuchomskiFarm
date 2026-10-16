@@ -68,7 +68,7 @@
   padding: 0 12px;
   border: 1px solid var(--hairline);
   background: var(--paper);
-  font: 400 15px/1 "IBM Plex Mono", monospace;
+  font: 400 15px/1 var(--font-mono);
   color: var(--ink);
 }
 
@@ -94,7 +94,7 @@
   border: 1px solid var(--ink);
   background: var(--ink);
   color: var(--paper);
-  font: 500 13px/1 "IBM Plex Sans", sans-serif;
+  font: 500 13px/1 var(--font-sans);
   letter-spacing: 0.02em;
   cursor: pointer;
 }

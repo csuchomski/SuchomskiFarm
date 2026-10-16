@@ -26,10 +26,22 @@
   --hazard-yellow-wash: rgba(242, 194, 48, 0.16);
   --hazard-yellow-wash-strong: rgba(242, 194, 48, 0.22);
 
-  /* type */
-  --font-serif: "Newsreader", serif;
-  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", monospace;
+  /* type
+   *
+   * Every font in the app comes from these lines and the one Google Fonts
+   * link in index.html — no stylesheet names a family directly, so changing
+   * a face is a change here and there only.
+   *
+   * Headings are a semibold semi-condensed sans rather than a book serif:
+   * the narrower face fits long paddock and animal names on a phone, and
+   * the weight carries the hierarchy the serifs used to. The text face was
+   * drawn so that no two letters can be mistaken for each other, which is
+   * the job outdoors on a phone. The class is still called `.serif` in the
+   * markup; it means "heading face". */
+  --font-heading: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --heading-weight: 600;
+  --font-sans: "Atkinson Hyperlegible Next", system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, monospace;
 
   /* metrics */
   --rail-width: 208px;

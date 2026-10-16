@@ -2,7 +2,7 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 7px;
-  font: 500 11px/1.4 "IBM Plex Sans", sans-serif;
+  font: 500 11px/1.4 var(--font-sans);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: nowrap;

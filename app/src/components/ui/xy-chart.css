@@ -32,11 +32,11 @@
 .xy-hair { stroke: var(--ink-faint); stroke-width: 1; }
 .xy-dot { stroke: var(--paper); stroke-width: 2; }
 
-.xy-axis { font: 400 11px/1 "IBM Plex Mono", monospace; fill: var(--ink-muted); }
+.xy-axis { font: 400 11px/1 var(--font-mono); fill: var(--ink-muted); }
 
 /* What the numbers are numbers of. Sans, because it is a label and not a
    figure, and faint enough to stay behind the ticks it explains. */
-.xy-axis--title { font: 400 11px/1 "IBM Plex Sans", sans-serif; fill: var(--ink-faint); }
+.xy-axis--title { font: 400 11px/1 var(--font-sans); fill: var(--ink-faint); }
 
 .xy-empty { font-size: 13px; color: var(--ink-muted); margin: 0; padding: 20px 0; }
 

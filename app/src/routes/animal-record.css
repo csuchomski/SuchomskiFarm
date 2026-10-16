@@ -379,7 +379,7 @@
   border: 1px solid var(--hairline);
   background: var(--paper);
   color: var(--ink);
-  font: 400 14px/1 "IBM Plex Sans", sans-serif;
+  font: 400 14px/1 var(--font-sans);
   padding: 0 8px;
 }
 

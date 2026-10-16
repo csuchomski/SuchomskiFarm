@@ -61,7 +61,7 @@
   border: 0;
   background: transparent;
   color: var(--ink);
-  font: 400 14px/1 var(--font-mono, "IBM Plex Mono"), monospace;
+  font: 400 14px/1 var(--font-mono);
   padding: 0;
 }
 

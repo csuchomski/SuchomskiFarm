@@ -213,7 +213,7 @@
 }
 
 .kml-lede code {
-  font-family: "IBM Plex Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   color: var(--ink-muted);
 }
@@ -226,7 +226,7 @@
 }
 
 .kml-file input {
-  font: 400 14px/1.4 "IBM Plex Sans", sans-serif;
+  font: 400 14px/1.4 var(--font-sans);
   color: var(--ink);
   padding: 10px 0;
   min-height: 44px;
@@ -244,7 +244,7 @@
   border: 1px solid var(--hairline);
   background: var(--paper);
   color: var(--ink);
-  font: 400 15px/1.2 "IBM Plex Serif", Georgia, serif;
+  font: var(--heading-weight) 15px/1.2 var(--font-heading);
   padding: 0 8px;
 }
 
@@ -261,7 +261,7 @@
   border: 1px solid var(--hairline);
   background: var(--paper);
   color: var(--ink);
-  font: 400 14px/1 "IBM Plex Mono", monospace;
+  font: 400 14px/1 var(--font-mono);
   padding: 0 8px;
 }
 
@@ -292,7 +292,7 @@
   border: 1px solid var(--hairline);
   background: var(--paper);
   color: var(--ink);
-  font: 400 14px/1 "IBM Plex Sans", sans-serif;
+  font: 400 14px/1 var(--font-sans);
   padding: 0 8px;
   max-width: 100%;
 }

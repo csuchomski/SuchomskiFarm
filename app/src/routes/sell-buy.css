@@ -31,7 +31,7 @@
    second — and every one of these is a caveat. */
 .sb-h__note {
   margin-left: auto;
-  font: 400 11.5px/1.3 "IBM Plex Sans", sans-serif;
+  font: 400 11.5px/1.3 var(--font-sans);
   color: var(--ink-faint);
 }
 
@@ -63,7 +63,7 @@
 
 .sb-table th {
   text-align: left;
-  font: 500 10px/1 "IBM Plex Sans", sans-serif;
+  font: 500 10px/1 var(--font-sans);
   letter-spacing: .09em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -78,7 +78,7 @@
 }
 
 .sb-table input {
-  font: 400 14px/1.2 "IBM Plex Mono", monospace;
+  font: 400 14px/1.2 var(--font-mono);
   color: var(--ink);
   background: var(--paper-tint);
   border: 1px solid var(--hairline);
@@ -143,7 +143,7 @@
 .sb-rung { display: flex; flex-direction: column; gap: 4px; }
 
 .sb-rung input {
-  font: 400 14px/1.2 "IBM Plex Mono", monospace;
+  font: 400 14px/1.2 var(--font-mono);
   color: var(--ink);
   background: var(--paper-tint);
   border: 1px solid var(--hairline);
@@ -193,14 +193,14 @@
 .sb-zero { stroke: var(--ink-faint); stroke-width: 1; }
 
 .sb-axis {
-  font: 400 11px/1 "IBM Plex Mono", monospace;
+  font: 400 11px/1 var(--font-mono);
   fill: var(--ink-muted);
 }
 
 /* What the numbers are dollars of. Sans, because it is a label and not a
    figure, and faint enough to stay behind the ticks it explains. */
 .sb-axis--title {
-  font: 400 11px/1 "IBM Plex Sans", sans-serif;
+  font: 400 11px/1 var(--font-sans);
   fill: var(--ink-faint);
 }
 
@@ -215,7 +215,7 @@
 .sb-mark { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 4 3; }
 
 .sb-mark__label {
-  font: 500 11px/1 "IBM Plex Mono", monospace;
+  font: 500 11px/1 var(--font-mono);
   fill: var(--ink);
 }
 
@@ -365,7 +365,7 @@
 /* The row header is a weight, not a column name: it should not inherit the
    small-caps treatment the header row wears. */
 .sb-table--read th[scope="row"] {
-  font-family: "IBM Plex Mono", monospace;
+  font-family: var(--font-mono);
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;

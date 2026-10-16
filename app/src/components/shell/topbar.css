@@ -42,7 +42,7 @@
   border: 1px solid var(--hairline);
   background: var(--paper);
   color: var(--ink);
-  font: 500 11px/1 "IBM Plex Sans", sans-serif;
+  font: 500 11px/1 var(--font-sans);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 7px 8px;
@@ -66,7 +66,7 @@
 }
 
 .topbar__search-placeholder {
-  font: 400 13px/1 "IBM Plex Sans", sans-serif;
+  font: 400 13px/1 var(--font-sans);
   color: var(--ink-faint);
   overflow: hidden;
   text-overflow: ellipsis;

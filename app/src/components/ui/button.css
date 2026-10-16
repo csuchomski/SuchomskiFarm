@@ -6,7 +6,7 @@
   border: 1px solid var(--ink);
   background: transparent;
   color: var(--ink);
-  font: 500 13px/1 "IBM Plex Sans", sans-serif;
+  font: 500 13px/1 var(--font-sans);
   letter-spacing: 0.02em;
   white-space: nowrap;
 }

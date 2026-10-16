@@ -7,8 +7,8 @@
  * would make the page look borrowed. So the *layout* is the mockup's — a
  * 150px / 1fr / 168px grid, one shared axis, hollow-versus-filled markers,
  * hatched voluntary wait, a today line — and everything visual is Herd's:
- * oatmeal paper, hairlines, green where the mockup used gold, Newsreader
- * over IBM Plex, no shadows and no corner radius.
+ * oatmeal paper, hairlines, green where the mockup used gold, the app's
+ * own heading and text faces, no shadows and no corner radius.
  *
  * The one radius kept is 50% on the service markers. That's a mark, not a
  * box — the system's "no rounded corners" rule is about panels and buttons,
@@ -51,7 +51,8 @@
    future, so it gets the weight. */
 
 .rt-outstanding {
-  font-family: var(--font-serif);
+  font-family: var(--font-heading);
+  font-weight: var(--heading-weight);
   font-size: 17px;
   line-height: 1.35;
   padding: 10px 0 14px;
@@ -185,7 +186,8 @@
 }
 
 .rt-figures__big {
-  font-family: var(--font-serif);
+  font-family: var(--font-heading);
+  font-weight: var(--heading-weight);
   font-size: 24px;
   line-height: 1.1;
 }
@@ -526,7 +528,7 @@
 }
 
 .rt-untied strong {
-  font-family: var(--font-serif);
+  font-family: var(--font-heading);
   font-size: 15px;
-  font-weight: 400;
+  font-weight: var(--heading-weight);
 }

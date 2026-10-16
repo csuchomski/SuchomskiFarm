@@ -20,7 +20,7 @@
   border: 1px solid var(--hairline);
   background: var(--paper);
   color: var(--ink);
-  font: 400 15px/1 "IBM Plex Sans", sans-serif;
+  font: 400 15px/1 var(--font-sans);
 }
 
 .sign-in-field:focus-visible {
@@ -60,7 +60,7 @@
   width: 100%;
   margin-top: 16px;
   padding: 12px 4px;
-  font: 500 13px/1 "IBM Plex Sans", sans-serif;
+  font: 500 13px/1 var(--font-sans);
   color: var(--ink-muted);
   background: none;
   border: none;

@@ -132,7 +132,7 @@
 
 .mc-table th {
   text-align: left;
-  font: 500 10px/1.3 "IBM Plex Sans", sans-serif;
+  font: 500 10px/1.3 var(--font-sans);
   letter-spacing: .09em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -154,7 +154,7 @@
 
 /* A date is a value, not a column name. */
 .mc-table th[scope="row"] {
-  font-family: "IBM Plex Mono", monospace;
+  font-family: var(--font-mono);
   font-weight: 400;
   font-size: 13px;
   letter-spacing: 0;

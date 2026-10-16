@@ -41,7 +41,7 @@
   border-left: 3px solid var(--ochre);
   background: var(--ink);
   color: var(--paper);
-  font: 400 14px/1.45 "IBM Plex Sans", sans-serif;
+  font: 400 14px/1.45 var(--font-sans);
   box-shadow: 0 6px 24px rgba(25, 26, 22, 0.28);
   cursor: pointer;
 

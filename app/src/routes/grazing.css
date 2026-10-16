@@ -59,7 +59,7 @@
   border: 1px solid var(--hairline);
   background: var(--paper);
   color: var(--ink);
-  font: 400 14px/1 "IBM Plex Sans", sans-serif;
+  font: 400 14px/1 var(--font-sans);
   padding: 0 8px;
 }
 
@@ -160,7 +160,7 @@
 .grz-wire__presets { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; }
 
 .grz-preset {
-  font: 500 11px/1 "IBM Plex Sans", sans-serif;
+  font: 500 11px/1 var(--font-sans);
   letter-spacing: .06em; text-transform: uppercase;
   padding: 9px 11px; border: 1px solid var(--hairline);
   background: transparent; color: var(--ink-muted); cursor: pointer;
@@ -252,13 +252,13 @@
 .pm-svg { display: block; width: 100%; height: auto; }
 
 .pm-label {
-  font: 500 13px/1 "IBM Plex Sans", sans-serif;
+  font: 500 13px/1 var(--font-sans);
   fill: var(--ink);
   letter-spacing: .04em;
 }
 
 .pm-sub {
-  font: 400 10px/1 "IBM Plex Mono", monospace;
+  font: 400 10px/1 var(--font-mono);
   fill: var(--ink-muted);
 }
 
@@ -437,7 +437,7 @@
 .rec-n { font-size: 13px; color: var(--ink-faint); margin-right: 6px; }
 
 .rec-h3 {
-  font: 500 12px/1 "IBM Plex Sans", sans-serif;
+  font: 500 12px/1 var(--font-sans);
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--ink-muted);
@@ -468,7 +468,7 @@
 
 .rec-table th {
   text-align: left;
-  font: 500 11px/1.4 "IBM Plex Sans", sans-serif;
+  font: 500 11px/1.4 var(--font-sans);
   letter-spacing: .07em;
   text-transform: uppercase;
   color: var(--ink-muted);
@@ -552,7 +552,7 @@
 }
 
 .mv-mob {
-  font: 400 13px/1.3 "IBM Plex Sans", sans-serif;
+  font: 400 13px/1.3 var(--font-sans);
   text-align: left;
   background: transparent;
   border: 1px solid var(--hairline);
@@ -573,7 +573,7 @@
 
 .mv-mob__where {
   display: block;
-  font: 400 11px/1.35 "IBM Plex Mono", monospace;
+  font: 400 11px/1.35 var(--font-mono);
   color: var(--ink-muted);
   margin-top: 2px;
 }
@@ -602,7 +602,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font: 400 15px/1.2 "IBM Plex Sans", sans-serif;
+  font: 400 15px/1.2 var(--font-sans);
   background: transparent;
   border: 0;
   color: var(--ink);
@@ -644,7 +644,7 @@
   gap: 4px 10px;
   width: 100%;
   text-align: left;
-  font: 400 14px/1.35 "IBM Plex Sans", sans-serif;
+  font: 400 14px/1.35 var(--font-sans);
   background: transparent;
   border: 0;
   border-bottom: 1px solid var(--hairline);
@@ -689,7 +689,7 @@
   border: 1px solid var(--ink);
   background: var(--paper);
   color: var(--ink);
-  font: 400 20px/1 "IBM Plex Mono", monospace;
+  font: 400 20px/1 var(--font-mono);
   padding: 0 10px;
 }
 
@@ -802,7 +802,7 @@
   border: 1px solid var(--ink);
   background: var(--paper);
   color: var(--ink);
-  font: 400 20px/1 "IBM Plex Mono", monospace;
+  font: 400 20px/1 var(--font-mono);
   padding: 0 10px;
 }
 
@@ -865,7 +865,7 @@
 }
 
 .mv-elsewhere__head {
-  font: 500 10.5px/1 "IBM Plex Sans", sans-serif;
+  font: 500 10.5px/1 var(--font-sans);
   letter-spacing: .07em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -874,7 +874,7 @@
 }
 
 .mv-cand {
-  font: 400 14px/1.35 "IBM Plex Sans", sans-serif;
+  font: 400 14px/1.35 var(--font-sans);
   background: transparent;
   border: 0;
   border-bottom: 1px solid var(--hairline);
@@ -974,7 +974,7 @@
    ink rather than muted, because it is the key between the drawing and the
    table and has to survive a photocopier. */
 .pr-strip-label {
-  font: 500 9px/1 "IBM Plex Mono", monospace;
+  font: 500 9px/1 var(--font-mono);
   fill: var(--ink);
 }
 
@@ -998,7 +998,7 @@
 
 .pr-table thead th {
   background: var(--paper-tint);
-  font: 500 11px/1.3 "IBM Plex Sans", sans-serif;
+  font: 500 11px/1.3 var(--font-sans);
   letter-spacing: .04em;
   text-transform: uppercase;
   color: var(--ink-soft);
@@ -1101,7 +1101,7 @@
 }
 
 .rot-round__del {
-  font: 500 12px/1 "IBM Plex Sans", sans-serif;
+  font: 500 12px/1 var(--font-sans);
   letter-spacing: .04em;
   text-transform: uppercase;
   color: var(--ink-muted);
@@ -1149,7 +1149,7 @@
 
 .rot-move__edit {
   flex: none;
-  font: 500 12px/1 "IBM Plex Sans", sans-serif;
+  font: 500 12px/1 var(--font-sans);
   letter-spacing: .04em;
   text-transform: uppercase;
   color: var(--herd-green);

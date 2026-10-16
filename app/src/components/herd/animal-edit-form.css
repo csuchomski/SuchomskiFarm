@@ -24,7 +24,7 @@
   border: 1px solid var(--hairline);
   background: var(--paper);
   color: var(--ink);
-  font: 400 15px/1 "IBM Plex Sans", sans-serif;
+  font: 400 15px/1 var(--font-sans);
   width: 100%;
 }
 
@@ -38,7 +38,7 @@
   padding: 10px 12px;
   line-height: 1.5;
   resize: vertical;
-  font-family: "IBM Plex Sans", sans-serif;
+  font-family: var(--font-sans);
 }
 
 /* A parent fixed by where the form was opened from — shown so you can see
@@ -49,7 +49,7 @@
   border: 1px solid var(--hairline);
   background: var(--page);
   color: var(--ink-muted);
-  font: 400 15px/1 "IBM Plex Sans", sans-serif;
+  font: 400 15px/1 var(--font-sans);
   display: flex;
   align-items: center;
   justify-content: space-between;

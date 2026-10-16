@@ -43,7 +43,7 @@
   align-items: center;
   justify-content: center;
   border: 1px solid var(--ink);
-  font: 500 13px/1 "IBM Plex Sans", sans-serif;
+  font: 500 13px/1 var(--font-sans);
 }
 
 .batch-entry__action--filled {
@@ -170,7 +170,8 @@ button.batch-entry__action:disabled {
 }
 
 .per-animal__name {
-  font-family: var(--font-serif);
+  font-family: var(--font-heading);
+  font-weight: var(--heading-weight);
   font-size: 16px;
   min-width: 0;
   overflow: hidden;

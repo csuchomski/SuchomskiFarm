@@ -961,6 +961,35 @@
 
 .pr-range { margin-bottom: 16px; }
 
+/* What the sheet covers, as labelled facts. Side by side where there is room,
+   stacked on a phone; printed, since it is the only place the choice made in
+   the hidden picker survives onto paper. */
+.pr-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 40px;
+  margin: 4px 0 18px;
+}
+.pr-facts > div { min-width: 0; }
+.pr-facts dt {
+  font: 500 11px/1.3 var(--font-sans);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.pr-facts dd {
+  margin: 4px 0 0;
+  font: var(--heading-weight) 20px/1.2 var(--font-heading);
+  overflow-wrap: anywhere;
+}
+.pr-facts dd .mono { font-size: 17px; font-weight: 400; }
+.pr-facts__note {
+  display: block;
+  margin-top: 4px;
+  font: 400 12.5px/1.4 var(--font-sans);
+  color: var(--ink-muted);
+}
+
 .pr-figure { margin: 16px 0 24px; }
 
 .pr-caption {

@@ -447,34 +447,51 @@ export default function PaymentRecord() {
               hidden on paper: a printout headed only by its dates, silently
               covering one pasture out of six, is a worse document than one
               with no filter at all. */}
-          <p className="rec-preamble">
+          {/* Two facts rather than a paragraph: a reviewer reads the sheet's
+              heading for what it covers, and a sentence buried that in prose.
+              A date range has no rotation, so it names its ground instead. */}
+          <dl className="pr-facts">
             {chosen === null ? (
               <>
-                Grazing records for {shortDate(from)} → {shortDate(to)}, covering{" "}
-                <strong>{covering}</strong>, from the moves logged on this farm. A strip counts as
-                in the range if the mob was on it at any point during it.
+                <div>
+                  <dt>Ground</dt>
+                  <dd>{covering}</dd>
+                </div>
+                <div>
+                  <dt>Period</dt>
+                  <dd className="mono">
+                    {shortDate(from)} → {shortDate(to)}
+                  </dd>
+                </div>
               </>
             ) : (
               <>
-                Grazing records for <strong>{roundLabel(chosen)}</strong>
-                {chosen.firstEntryAt !== null && (
-                  <>
-                    {" "}
-                    — {shortDate(chosen.firstEntryAt.slice(0, 10))} →{" "}
-                    {chosen.lastExitAt === null
-                      ? "still running"
-                      : shortDate(chosen.lastExitAt.slice(0, 10))}
-                  </>
-                )}
-                , from the moves logged on this farm. Every strip that mob took on that ground
-                during the round, whether or not it fell in one calendar month.
-                {chosen.round.derived && (
-                  <> This round's start was worked out from the moves, not recorded at the time.</>
-                )}
+                <div>
+                  <dt>Rotation</dt>
+                  <dd>{roundLabel(chosen)}</dd>
+                </div>
+                <div>
+                  <dt>Rotation period</dt>
+                  <dd>
+                    <span className="mono">
+                      {chosen.firstEntryAt === null
+                        ? "No moves yet"
+                        : `${shortDate(chosen.firstEntryAt.slice(0, 10))} → ${
+                            chosen.lastExitAt === null
+                              ? "still running"
+                              : shortDate(chosen.lastExitAt.slice(0, 10))
+                          }`}
+                    </span>
+                    {chosen.round.derived && (
+                      <span className="pr-facts__note">
+                        Start worked out from the moves, not recorded at the time
+                      </span>
+                    )}
+                  </dd>
+                </div>
               </>
-            )}{" "}
-            Whether the record meets the standard is the conservationist's determination.
-          </p>
+            )}
+          </dl>
 
           {rows.length === 0 ? (
             <div style={{ marginTop: 16 }}>

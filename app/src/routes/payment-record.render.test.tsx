@@ -145,6 +145,11 @@ const someGrazing = () => {
   );
 };
 
+
+/** The value printed under a label in the facts at the top of the record. */
+const fact = (label: string): string =>
+  (screen.getByText(label, { selector: "dt" }).nextElementSibling?.textContent ?? "").trim();
+
 describe("the form, filled", () => {
   it("carries the columns the conservationist's form asks for", async () => {
     someGrazing();
@@ -395,9 +400,10 @@ describe("narrowing the record to one pasture", () => {
     onPastures();
     someGrazing();
     await mount();
-    expect(screen.getByText(/Grazing records for/).textContent).toContain("the whole farm");
+    expect(fact("Ground")).toBe("the whole farm");
+    expect(screen.queryByText("Rotation", { selector: "dt" })).toBeNull();
     pick("creek");
-    expect(screen.getByText(/Grazing records for/).textContent).toContain("Creek Pasture");
+    expect(fact("Ground")).toContain("Creek Pasture");
   });
 
   it("retotals the acres over the ground that is left", async () => {
@@ -558,10 +564,12 @@ describe("reporting on a round rather than a month", () => {
     acrossTheMonth();
     await mount();
     pickRound("r2");
-    const said = screen.getByText(/Grazing records for/).textContent!;
-    expect(said).toContain("Main mob · North Pasture · Round 2");
-    expect(said).toContain("Jul 28, 2026");
-    expect(said).toContain("Aug 3, 2026");
+    expect(fact("Rotation")).toBe("Main mob · North Pasture · Round 2");
+    expect(fact("Rotation period")).toBe("Jul 28, 2026 → Aug 3, 2026");
+    // The two replace the paragraph rather than sitting beside it.
+    expect(screen.queryByText(/Grazing records for/)).toBeNull();
+    expect(screen.queryByText(/conservationist's determination/)).toBeNull();
+    expect(screen.queryByText("Ground", { selector: "dt" })).toBeNull();
   });
 
   it("uses the name the farm gave the round", async () => {
@@ -569,7 +577,7 @@ describe("reporting on a round rather than a month", () => {
     rounds = rounds.map((r) => (r.id === "r2" ? { ...r, name: "After the hay" } : r));
     await mount();
     pickRound("r2");
-    expect(screen.getByText(/Grazing records for/).textContent).toContain("After the hay");
+    expect(fact("Rotation")).toContain("After the hay");
   });
 
   it("says when a round's start was guessed rather than recorded", async () => {
@@ -579,7 +587,7 @@ describe("reporting on a round rather than a month", () => {
     rounds = rounds.map((r) => ({ ...r, derived: true }));
     await mount();
     pickRound("r2");
-    expect(screen.getByText(/worked out from the moves, not recorded at the time/)).toBeTruthy();
+    expect(fact("Rotation period")).toMatch(/worked out from the moves, not recorded at the time/);
   });
 
   it("says nothing about guesswork on a round the farm started itself", async () => {

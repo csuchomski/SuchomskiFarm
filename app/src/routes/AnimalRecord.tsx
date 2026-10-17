@@ -10,7 +10,7 @@ import { fetchCalvings } from "../lib/repro";
 import { fetchBreedings } from "../lib/breedings";
 import { fetchWeighings, type Weighing } from "../lib/grazing";
 import { todayLocal } from "../lib/local-time";
-import { Button, Callout, EarTag, Pill, StatTile } from "../components/ui";
+import { Button, Callout, EarTag, Pill, StatTile, Wordmark } from "../components/ui";
 import { AnimalForm } from "../components/herd/AnimalForm";
 import { Pedigree } from "../components/herd/Pedigree";
 import { OffspringEditor } from "../components/herd/OffspringEditor";
@@ -582,8 +582,8 @@ function Frame({
     <div style={{ background: "var(--paper)", minHeight: "100vh" }}>
       <div className="record-topbar">
         <div className="record-topbar__left">
-          <Link to={back.to} className="serif" style={{ fontSize: 22, letterSpacing: "-.02em", color: "var(--ink)" }}>
-            Suchomski<span style={{ color: "var(--herd-green)" }}>.</span>
+          <Link to={back.to} aria-label={back.label}>
+            <Wordmark size={22} />
           </Link>
           {/* An animal's record sits outside OpsShell, so it has no nav rail
               and the wordmark was the only way back — a link that doesn't

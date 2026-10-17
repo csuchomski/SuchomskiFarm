@@ -1,6 +1,7 @@
 import { useWorkspace } from "../../lib/workspace";
 import { signOut } from "../../lib/auth";
 import "./topbar.css";
+import { Wordmark } from "../ui";
 
 export function TopBar({
   searchPlaceholder = "Search everything",
@@ -26,9 +27,7 @@ export function TopBar({
             {navOpen ? "✕" : "☰"}
           </button>
         )}
-        <div className="serif topbar__wordmark">
-          Suchomski<span className="topbar__dot">.</span>
-        </div>
+        <Wordmark className="topbar__wordmark" />
       </div>
       <div className="topbar__right">
         {/* Non-functional placeholder; it's the first thing to go when

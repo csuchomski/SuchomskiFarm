@@ -3,6 +3,7 @@ import { Button } from "../ui";
 import { signInWithPassword } from "../../lib/auth";
 import { signUpFarmer } from "../../lib/onboarding";
 import "./sign-in.css";
+import { Wordmark } from "../ui";
 
 /**
  * The way in, for somebody who has an account and for somebody who does not.
@@ -53,8 +54,8 @@ export function SignIn() {
   return (
     <div className="sign-in-page">
       <form className="sign-in-card" onSubmit={handleSubmit}>
-        <div className="serif" style={{ fontSize: 27, marginBottom: 4 }}>
-          Suchomski<span style={{ color: "var(--herd-green)" }}>.</span>
+        <div style={{ marginBottom: 8 }}>
+          <Wordmark size={27} />
         </div>
         <div className="eyebrow" style={{ marginBottom: 24 }}>
           {joining ? "Start a farm" : "Sign in"}

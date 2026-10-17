@@ -10,11 +10,6 @@
 
 .topbar__wordmark {
   font-size: 22px;
-  letter-spacing: -0.02em;
-}
-
-.topbar__dot {
-  color: var(--herd-green);
 }
 
 .topbar__right {

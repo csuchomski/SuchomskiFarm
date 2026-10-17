@@ -1,0 +1,11 @@
+.hoof-mark { display: block; flex: none; }
+
+/* The mark sits a touch above the baseline so the toes line up with the
+   cap height of the name rather than its descenders. */
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32em;
+  color: var(--ink);
+  white-space: nowrap;
+}

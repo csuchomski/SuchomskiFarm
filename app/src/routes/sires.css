@@ -28,9 +28,6 @@
   color: inherit;
 }
 
-.sire-row:hover {
-  background: color-mix(in srgb, var(--ink) 3%, transparent);
-}
 
 /* A bull with no breeds stops every calf he sires inheriting any. Tinted
    rather than coloured — it's something to fill in, not something wrong. */

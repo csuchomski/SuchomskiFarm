@@ -32,9 +32,6 @@
   color: inherit;
 }
 
-.alert-row:hover {
-  background: color-mix(in srgb, var(--ink) 3%, transparent);
-}
 
 .alert-row__body {
   min-width: 0;

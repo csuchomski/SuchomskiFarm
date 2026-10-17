@@ -76,7 +76,3 @@
 .grid-row--tap.grid-row--highlight {
   background: var(--paper-tint);
 }
-
-.grid-row--tap:hover {
-  background: var(--paper-tint);
-}

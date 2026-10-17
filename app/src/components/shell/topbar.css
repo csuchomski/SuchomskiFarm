@@ -54,6 +54,15 @@
   border: none;
   color: var(--ink-muted);
   padding: 4px 0;
+  white-space: nowrap;
+  flex: none;
+}
+
+.topbar__farm {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .topbar__signout:hover {
@@ -92,8 +101,8 @@
 /* ── phone / small tablet ──────────────────────────────────────────── */
 @media (max-width: 860px) {
   .topbar {
-    padding: 0 12px;
-    gap: 8px;
+    padding: 0 10px;
+    gap: 6px;
   }
 
   .topbar__menu {
@@ -113,16 +122,28 @@
     display: none;
   }
 
+  /* The left side takes what it needs and no more; the right side gets the
+     rest, and inside it the farm switcher stretches and ellipsizes. Sign out
+     never shrinks or wraps — a two-line "SIGN / OUT" cut off at the screen
+     edge is what this used to do. */
+  .topbar__left {
+    flex: none;
+    gap: 8px;
+  }
+
   .topbar__right {
-    gap: 10px;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    gap: 8px;
     min-width: 0;
   }
 
   .topbar__business {
-    /* Long enough to tell "Suchomski Family Farm" from "5553 N Lydell Ave"
-       without pushing Sign out off the edge. */
-    max-width: 44vw;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: none;
     min-height: 40px;
+    padding: 7px 4px 7px 8px;
     /* The 11px eyebrow treatment is deliberate, but under 16px Safari
        zooms the page on focus and doesn't zoom back. The select ellipsizes
        natively, so the larger type costs nothing but the type scale. */
@@ -136,14 +157,13 @@
   }
 }
 
-@media (max-width: 400px) {
-  .topbar__wordmark {
-    /* Below this the wordmark and the switcher can't both fit; the
-       switcher is the one you need. */
+/* On a phone the hoof stands alone. The name and the farm switcher cannot
+   both fit, and the switcher is the one you need; the hoof is 22px and
+   still says whose app this is. Specific enough to beat .wordmark's own
+   display, which an equal-weight rule here lost to — that is how the name
+   ended up underneath the switcher. */
+@media (max-width: 640px) {
+  .topbar .topbar__wordmark .wordmark__name {
     display: none;
-  }
-
-  .topbar__business {
-    max-width: 52vw;
   }
 }

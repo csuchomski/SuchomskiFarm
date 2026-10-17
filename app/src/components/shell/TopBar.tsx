@@ -53,7 +53,7 @@ export function TopBar({
             ))}
           </select>
         ) : (
-          <span className="eyebrow">{business?.name ?? "No business"}</span>
+          <span className="eyebrow topbar__farm">{business?.name ?? "No business"}</span>
         )}
 
         {role && <span className="eyebrow topbar__role">{role}</span>}

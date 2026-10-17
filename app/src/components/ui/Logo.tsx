@@ -51,7 +51,7 @@ export function Wordmark({ size, className = "" }: { size?: number; className?: 
       style={size === undefined ? undefined : { fontSize: size }}
     >
       <HoofMark size="1.15em" />
-      <span>Grazerbook</span>
+      <span className="wordmark__name">Grazerbook</span>
     </span>
   );
 }

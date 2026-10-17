@@ -10,3 +10,4 @@ export { ProgressBar } from "./ProgressBar";
 export { Sparkline, CurveChart } from "./Sparkline";
 export type { SparkBar, CurvePoint } from "./Sparkline";
 export { WithdrawalBanner } from "./WithdrawalBanner";
+export { HoofMark, Wordmark } from "./Logo";

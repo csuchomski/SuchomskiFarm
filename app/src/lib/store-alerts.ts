@@ -9,7 +9,9 @@ import { supabase } from "./supabase";
  * record each time. These are events: a reservation happened, and having
  * happened it stays happened. So they are kept, by the database, as they
  * occur (migration 075), and they go away when the farmer says they've seen
- * them rather than when anything changes.
+ * them rather than when anything changes — all at once, or one at a time
+ * (076). The database works out which are left, in store_events_unseen, so
+ * the list and the menu's count can't disagree about it.
  *
  * Only the customer's own actions are recorded. An order the farmer reserved
  * on someone's behalf, or ticked off as collected on the Orders page, is not
@@ -44,28 +46,14 @@ export interface StoreActivity {
  *  a day, and if it does the list is not the right tool any more. */
 const LIMIT = 50;
 
-/** When the farmer last cleared these, for this farm. Null when never. */
-async function seenThrough(businessId: number): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("store_event_reads")
-    .select("seen_through")
-    .eq("business_id", businessId)
-    .maybeSingle();
-  if (error) throw new Error(`store_event_reads: ${error.message}`);
-  return (data as { seen_through: string } | null)?.seen_through ?? null;
-}
-
 export async function fetchStoreActivity(businessId: number): Promise<StoreActivity> {
-  const since = await seenThrough(businessId);
-  let q = supabase
-    .from("store_events")
+  const { data, error } = await supabase
+    .from("store_events_unseen")
     .select("id, kind, customer_id, product_id, order_id, schedule_id, quantity, weekday, at")
     .eq("business_id", businessId)
     .order("at", { ascending: false })
     .limit(LIMIT);
-  if (since) q = q.gt("at", since);
-  const { data, error } = await q;
-  if (error) throw new Error(`store_events: ${error.message}`);
+  if (error) throw new Error(`store_events_unseen: ${error.message}`);
   const rows = (data ?? []) as {
     id: number;
     kind: StoreEventKind;
@@ -129,13 +117,20 @@ export async function markStoreActivitySeen(businessId: number, through: string)
   notifyChanged();
 }
 
+/** Clear one, leaving the rest. */
+export async function markStoreEventSeen(eventId: number): Promise<void> {
+  const { error } = await supabase.rpc("mark_store_event_seen", { p_event_id: eventId });
+  if (error) throw new Error(error.message);
+  notifyChanged();
+}
+
 /** How many are waiting, for the count beside Alerts in the menu. */
 export async function countUnseenStoreEvents(businessId: number): Promise<number> {
-  const since = await seenThrough(businessId);
-  let q = supabase.from("store_events").select("id", { count: "exact", head: true }).eq("business_id", businessId);
-  if (since) q = q.gt("at", since);
-  const { count, error } = await q;
-  if (error) throw new Error(`store_events: ${error.message}`);
+  const { count, error } = await supabase
+    .from("store_events_unseen")
+    .select("id", { count: "exact", head: true })
+    .eq("business_id", businessId);
+  if (error) throw new Error(`store_events_unseen: ${error.message}`);
   return count ?? 0;
 }
 

@@ -48,7 +48,25 @@
 }
 
 .alert-row--store {
-  grid-template-columns: minmax(0, 1fr) 190px;
+  grid-template-columns: minmax(0, 1fr) 150px auto;
+  position: relative;
+}
+
+/* The text is the link, and its ::after covers the row, so a click anywhere
+   but the button goes where the row says. */
+.alert-row__link {
+  color: inherit;
+}
+
+.alert-row__link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.alert-row__seen {
+  position: relative;
+  z-index: 1;
 }
 
 .alert-store-empty {
@@ -113,12 +131,23 @@
     row-gap: 6px;
   }
 
+  /* Text across the top; the kind, the time and "Seen" on one line under it,
+     the button at the right where a thumb finds it. */
   .alert-row--store {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .alert-row--store .alert-row__body {
+    grid-column: 1 / -1;
   }
 
   .alert-row--store .alert-row__when {
     grid-column: 1;
+  }
+
+  .alert-row--store .alert-row__seen {
+    grid-column: 2;
+    min-height: 36px;
   }
 
   .alert-row__when {

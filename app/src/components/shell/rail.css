@@ -11,6 +11,18 @@
   padding: 24px 16px 8px;
 }
 
+/* A section's name on a band of its own. Set in the same faint small caps as
+   the items' details, the names read as one more row and the sections ran
+   together; on a band they divide the menu into its groups. Full width of
+   the rail, so the band is the division rather than a label floating in it. */
+.rail__section {
+  margin-top: 18px;
+  padding: 8px 16px;
+  background: var(--section-band);
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .rail-row {
   padding: 12px 16px;
   font-size: 13px;
@@ -114,6 +126,11 @@
 
   .rail__heading {
     padding: 20px 18px 6px;
+  }
+
+  .rail__section {
+    margin-top: 14px;
+    padding: 10px 18px;
   }
 }
 

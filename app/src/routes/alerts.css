@@ -1,88 +1,74 @@
 /**
- * Alerts. Deliberately plain: a list of rows, one per thing, with the date it
- * was due on the right.
+ * Alerts. Two groups with one shape: a band naming the group with its count,
+ * then rows that each read kind · what · when · action, in the same columns.
  *
  * No red band down the side and no hazard yellow anywhere. Yellow is reserved
  * for withdrawal, and a cow who is a fortnight past her waiting period is not
- * a milk-safety hazard — she's a job for Thursday. The urgency is carried by
- * the heading the row sits under and by the words in it.
+ * a milk-safety hazard — she's a job for Thursday. Urgency is the colour of
+ * the "when", and the words in it.
  */
 
-.alert-band {
-  margin-top: 32px;
+/* A list of sentences reads badly at 2000px — the "when" ends up a screen's
+   width from the thing it's about. */
+.alerts {
+  max-width: 920px;
 }
 
-.alert-band__head {
-  font-size: 21px;
+.alert-group {
+  margin-top: 28px;
 }
 
-.alert-band__blurb {
+.alert-group__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 8px 6px 12px;
+  background: var(--section-band);
+}
+
+.alert-group__title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--heading-weight);
+  font-size: 18px;
+}
+
+.alert-group__count {
   font-size: 13px;
   color: var(--ink-muted);
-  margin: 2px 0 12px;
 }
 
-.alert-row {
-  display: grid;
-  grid-template-columns: 60px minmax(0, 1fr) 190px;
-  gap: 12px;
-  align-items: center;
-  padding: 12px 8px;
-  border-bottom: 1px solid var(--hairline);
-  color: inherit;
+.alert-group__action {
+  margin-left: auto;
 }
 
-
-/* The farm store's news, above the herd. Its rows have no ear tag, so no
-   left-hand column. */
-.alert-band--store {
-  margin-top: 24px;
-}
-
-.alert-band__top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.alert-row--store {
-  grid-template-columns: minmax(0, 1fr) 150px auto;
-  position: relative;
-}
-
-/* The text is the link, and its ::after covers the row, so a click anywhere
-   but the button goes where the row says. */
-.alert-row__link {
-  color: inherit;
-}
-
-.alert-row__link::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-}
-
-.alert-row__seen {
-  position: relative;
-  z-index: 1;
-}
-
-.alert-store-empty {
+.alert-group__note {
+  margin: 0;
+  padding: 14px 12px;
   font-size: 14px;
   color: var(--ink-muted);
-  padding: 12px 8px;
-  border-top: 1px solid var(--hairline);
   border-bottom: 1px solid var(--hairline);
 }
 
-/* "The herd" — the page's second part, once the store's is above it. */
-.alert-part {
-  margin-top: 40px;
-  padding: 8px 12px;
-  background: var(--section-band);
-  font-size: 15px;
+.alert-group__note--error {
+  color: var(--red);
+}
+
+/* kind | what | when | action. Fixed outer columns, so the kinds, the times
+   and the buttons line up across both groups. */
+.alert-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 124px minmax(0, 1fr) 104px 80px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 8px 12px 12px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.alert-row__kind {
+  display: flex;
 }
 
 .alert-row__body {
@@ -90,10 +76,18 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  color: inherit;
+}
+
+.alert-row__body::after {
+  content: "";
+  position: absolute;
+  inset: 0;
 }
 
 .alert-row__title {
-  font-size: 17px;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .alert-row__detail {
@@ -102,60 +96,94 @@
 }
 
 .alert-row__when {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+  font-size: 13px;
   text-align: right;
 }
 
-.alert-row__days {
-  font-size: 13px;
+.alert-row__when--ink {
+  color: var(--ink-soft);
+}
+
+.alert-row__when--red {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.alert-row__when--ochre {
+  color: var(--ochre);
+}
+
+.alert-row__when--muted {
   color: var(--ink-muted);
 }
 
-.alert-rules {
-  font-size: 13px;
-  color: var(--ink-muted);
-  margin-top: 32px;
-  padding-top: 12px;
-  border-top: 1px solid var(--hairline);
-  max-width: 70ch;
+.alert-row__action {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
 }
 
 @media (max-width: 640px) {
-  /* The kind and the "11 days late" go under the text rather than beside it —
-     190px of right-hand column leaves 60px for a sentence at 320px. */
+  /* Kind and when across the top, the sentence under them, the button beside
+     the sentence where a thumb finds it. */
   .alert-row {
-    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "kind when"
+      "body action";
     row-gap: 6px;
   }
 
-  /* Text across the top; the kind, the time and "Seen" on one line under it,
-     the button at the right where a thumb finds it. */
-  .alert-row--store {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .alert-row--store .alert-row__body {
-    grid-column: 1 / -1;
-  }
-
-  .alert-row--store .alert-row__when {
-    grid-column: 1;
-  }
-
-  .alert-row--store .alert-row__seen {
-    grid-column: 2;
-    min-height: 36px;
+  .alert-row__kind {
+    grid-area: kind;
   }
 
   .alert-row__when {
-    grid-column: 2;
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 8px;
-    text-align: left;
+    grid-area: when;
   }
+
+  .alert-row__body {
+    grid-area: body;
+  }
+
+  .alert-row__action {
+    grid-area: action;
+  }
+
+  /* A herd row has nothing to press, so its sentence takes the full width. */
+  .alert-row:has(> .alert-row__action:empty) {
+    grid-template-areas:
+      "kind when"
+      "body body";
+  }
+
+  .alert-row__action:empty {
+    display: none;
+  }
+}
+
+/* "Show seen" — quiet, under the list it belongs to. */
+.alert-group__more {
+  display: block;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--herd-green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.alert-group__seen {
+  border-top: 1px solid var(--hairline);
+}
+
+/* A seen alert, shown for looking back over: the same row, a step back. */
+.alert-row--faded .alert-row__title,
+.alert-row--faded .alert-row__kind {
+  opacity: 0.7;
 }

@@ -10,8 +10,9 @@ import { supabase } from "./supabase";
  * happened it stays happened. So they are kept, by the database, as they
  * occur (migration 075), and they go away when the farmer says they've seen
  * them rather than when anything changes — all at once, or one at a time
- * (076). The database works out which are left, in store_events_unseen, so
- * the list and the menu's count can't disagree about it.
+ * (076). Seen ones can be looked back over and made unseen again (077). The
+ * database works out which is which, in store_events_unseen and
+ * store_events_seen, so the list and the menu's count can't disagree.
  *
  * Only the customer's own actions are recorded. An order the farmer reserved
  * on someone's behalf, or ticked off as collected on the Orders page, is not
@@ -35,6 +36,8 @@ export interface StoreEvent {
   customerName: string | null;
   productName: string | null;
   unit: string | null;
+  /** When it was marked seen. Only on the seen ones. */
+  seenAt?: string | null;
 }
 
 export interface StoreActivity {
@@ -46,15 +49,31 @@ export interface StoreActivity {
  *  a day, and if it does the list is not the right tool any more. */
 const LIMIT = 50;
 
-export async function fetchStoreActivity(businessId: number): Promise<StoreActivity> {
+const COLUMNS = "id, kind, customer_id, product_id, order_id, schedule_id, quantity, weekday, at";
+
+/** The ones waiting, newest first. */
+export const fetchStoreActivity = (businessId: number): Promise<StoreActivity> =>
+  fetchEvents(businessId, "store_events_unseen", COLUMNS, "at");
+
+/** The ones already marked seen, most recently seen first — for looking back
+ *  over, and making one unseen again. */
+export const fetchSeenStoreActivity = (businessId: number): Promise<StoreActivity> =>
+  fetchEvents(businessId, "store_events_seen", `${COLUMNS}, seen_at`, "seen_at");
+
+async function fetchEvents(
+  businessId: number,
+  view: "store_events_unseen" | "store_events_seen",
+  columns: string,
+  newestBy: "at" | "seen_at",
+): Promise<StoreActivity> {
   const { data, error } = await supabase
-    .from("store_events_unseen")
-    .select("id, kind, customer_id, product_id, order_id, schedule_id, quantity, weekday, at")
+    .from(view)
+    .select(columns)
     .eq("business_id", businessId)
-    .order("at", { ascending: false })
+    .order(newestBy, { ascending: false })
     .limit(LIMIT);
-  if (error) throw new Error(`store_events_unseen: ${error.message}`);
-  const rows = (data ?? []) as {
+  if (error) throw new Error(`${view}: ${error.message}`);
+  const rows = (data ?? []) as unknown as {
     id: number;
     kind: StoreEventKind;
     customer_id: string | null;
@@ -64,6 +83,7 @@ export async function fetchStoreActivity(businessId: number): Promise<StoreActiv
     quantity: number | string | null;
     weekday: string | null;
     at: string;
+    seen_at?: string | null;
   }[];
   if (rows.length === 0) return { events: [] };
 
@@ -102,6 +122,7 @@ export async function fetchStoreActivity(businessId: number): Promise<StoreActiv
       customerName: r.customer_id ? (personName.get(r.customer_id) ?? null) : null,
       productName: r.product_id ? (product.get(r.product_id)?.name ?? null) : null,
       unit: r.product_id ? (product.get(r.product_id)?.unit ?? null) : null,
+      ...(r.seen_at !== undefined && { seenAt: r.seen_at }),
     })),
   };
 }
@@ -120,6 +141,13 @@ export async function markStoreActivitySeen(businessId: number, through: string)
 /** Clear one, leaving the rest. */
 export async function markStoreEventSeen(eventId: number): Promise<void> {
   const { error } = await supabase.rpc("mark_store_event_seen", { p_event_id: eventId });
+  if (error) throw new Error(error.message);
+  notifyChanged();
+}
+
+/** Bring one back onto the list, as though it had never been seen. */
+export async function markStoreEventUnseen(eventId: number): Promise<void> {
+  const { error } = await supabase.rpc("mark_store_event_unseen", { p_event_id: eventId });
   if (error) throw new Error(error.message);
   notifyChanged();
 }

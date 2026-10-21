@@ -54,27 +54,34 @@ afterAll(() => vi.useRealTimers());
 type Row = Record<string, unknown>;
 const db: {
   store_events: Row[];
-  store_event_reads: Row[];
-  store_event_dismissals: Row[];
+  store_event_marks: Row[];
   profiles: Row[];
   products: Row[];
 } = {
   store_events: [],
-  store_event_reads: [],
-  store_event_dismissals: [],
+  store_event_marks: [],
   profiles: [],
   products: [],
 };
 
-/** The view from 076, worked out the same way: newer than this person's
- *  moment for the farm, and not cleared on its own. */
-const unseen = () =>
-  db.store_events.filter((e) => {
-    const read = db.store_event_reads.find((r) => r.business_id === e.business_id);
-    if (read && String(e.at) <= String(read.seen_through)) return false;
-    return !db.store_event_dismissals.some((d) => d.event_id === e.id);
-  });
+const seenMark = (e: Row) => db.store_event_marks.find((m) => m.event_id === e.id && m.seen_at !== null);
+type View = keyof typeof db | "store_events_unseen" | "store_events_seen";
+
+/** The views from 077, worked out the same way, for this one person. */
+const view = (v: View): Row[] => {
+  if (v === "store_events_unseen") return db.store_events.filter((e) => !seenMark(e));
+  if (v === "store_events_seen")
+    return db.store_events.filter(seenMark).map((e) => ({ ...e, seen_at: seenMark(e)!.seen_at }));
+  return db[v];
+};
+
+/** As if "Mark all as seen" had been pressed at some earlier time. */
+const seenUpTo = (at: string, seenAt = at) => {
+  for (const e of db.store_events) if (String(e.at) <= at) db.store_event_marks.push({ event_id: e.id, seen_at: seenAt });
+};
+
 const rpcCalls: { fn: string; args: Row }[] = [];
+const viewsRead: string[] = [];
 
 const minsAgo = (m: number) => new Date(NOW.getTime() - m * 60000).toISOString();
 
@@ -82,8 +89,8 @@ beforeEach(() => {
   role = "owner";
   modules = ["herd", "store", "books"];
   rpcCalls.length = 0;
-  db.store_event_reads = [];
-  db.store_event_dismissals = [];
+  viewsRead.length = 0;
+  db.store_event_marks = [];
   db.profiles = [
     { id: "meg", first_name: "Meghan", last_name: "Suchomski", email: "meg@example.com" },
     { id: "tom", first_name: "", last_name: "", email: "tom@example.com" },
@@ -107,15 +114,14 @@ beforeEach(() => {
 
 /** Enough of PostgREST's builder for these reads: eq, gt, in, order, limit,
  *  maybeSingle, and a head count. */
-function query(table: keyof typeof db | "store_events_unseen") {
+function query(table: View) {
   const filters: ((r: Row) => boolean)[] = [];
   let desc: string | null = null;
   let limit = Infinity;
   let head = false;
   let single = false;
   const run = () => {
-    const source = table === "store_events_unseen" ? unseen() : db[table];
-    let rows = source.filter((r) => filters.every((f) => f(r)));
+    let rows = view(table).filter((r) => filters.every((f) => f(r)));
     if (desc) rows = [...rows].sort((a, b) => String(b[desc!]).localeCompare(String(a[desc!])));
     rows = rows.slice(0, limit);
     if (head) return { data: null, count: rows.length, error: null };
@@ -137,15 +143,20 @@ function query(table: keyof typeof db | "store_events_unseen") {
 
 vi.mock("../lib/supabase", () => {
   const client = {
-    from: (t: keyof typeof db | "store_events_unseen") => query(t),
+    from: (t: View) => (viewsRead.push(t), query(t)),
     rpc: async (fn: string, args: Row) => {
       rpcCalls.push({ fn, args });
-      if (fn === "mark_store_events_seen") {
-        const existing = db.store_event_reads.find((r) => r.business_id === args.p_business_id);
-        if (existing) existing.seen_through = [existing.seen_through, args.p_through].sort().pop();
-        else db.store_event_reads.push({ business_id: args.p_business_id, seen_through: args.p_through });
-      }
-      if (fn === "mark_store_event_seen") db.store_event_dismissals.push({ event_id: args.p_event_id });
+      const mark = (id: unknown, seen_at: string | null) => {
+        const m = db.store_event_marks.find((x) => x.event_id === id);
+        if (m) m.seen_at = seen_at;
+        else db.store_event_marks.push({ event_id: id, seen_at });
+      };
+      if (fn === "mark_store_events_seen")
+        for (const e of db.store_events)
+          if (e.business_id === args.p_business_id && String(e.at) <= String(args.p_through) && !seenMark(e))
+            mark(e.id, NOW.toISOString());
+      if (fn === "mark_store_event_seen") mark(args.p_event_id, NOW.toISOString());
+      if (fn === "mark_store_event_unseen") mark(args.p_event_id, null);
       return { data: null, error: null };
     },
   };
@@ -163,7 +174,7 @@ const mountAlerts = async () => {
   );
 };
 
-const storeSection = () => screen.getByRole("region", { name: "From the farm store" });
+const storeSection = () => screen.getByRole("region", { name: "Farm store" });
 
 describe("Alerts · from the farm store", () => {
   it("lists what customers did, newest first, in words", async () => {
@@ -206,7 +217,7 @@ describe("Alerts · from the farm store", () => {
   });
 
   it("shows only what came after the last clearing", async () => {
-    db.store_event_reads = [{ business_id: 5, seen_through: minsAgo(10) }];
+    seenUpTo(minsAgo(10));
     await mountAlerts();
     await screen.findByText(/started a weekly pickup/);
     expect(screen.queryByText(/reserved 2 gallon/)).toBeNull();
@@ -216,7 +227,7 @@ describe("Alerts · from the farm store", () => {
   it("clears through the newest one listed, not through now", async () => {
     await mountAlerts();
     fireEvent.click(await screen.findByRole("button", { name: "Mark all as seen" }));
-    await screen.findByText("Nothing new from the farm store since you last looked.");
+    await screen.findByText("Nothing new since you last looked.");
     expect(rpcCalls).toEqual([
       { fn: "mark_store_events_seen", args: { p_business_id: 5, p_through: minsAgo(5) } },
     ]);
@@ -272,30 +283,125 @@ describe("Alerts · from the farm store", () => {
       fireEvent.click(await screen.findByRole("button", { name }));
       await waitFor(() => expect(screen.queryByRole("button", { name })).toBeNull());
     }
-    expect(screen.getByText("Nothing new from the farm store since you last looked.")).toBeTruthy();
+    expect(screen.getByText("Nothing new since you last looked.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Mark all as seen" })).toBeNull();
+  });
+
+  it("reads the same as the herd's: kind first, then what, when, and the button", async () => {
+    await mountAlerts();
+    const row = (await screen.findByText(/reserved 2 gallon/)).closest<HTMLElement>(".alert-row")!;
+    expect([...row.children].map((c) => c.className.split(" ").find((k) => k.startsWith("alert-row__")))).toEqual([
+      "alert-row__kind",
+      "alert-row__body",
+      "alert-row__when",
+      "alert-row__action",
+    ]);
+    expect(row.querySelector(".alert-row__kind")!.textContent).toBe("Reserved");
+    expect(within(storeSection()).getByText("3", { selector: ".alert-group__count" })).toBeTruthy();
+  });
+
+  it("comes before the herd", async () => {
+    await mountAlerts();
+    await screen.findByText(/reserved 2 gallon/);
+    const groups = [...document.querySelectorAll("section.alert-group")].map((g) => g.getAttribute("aria-label"));
+    expect(groups).toEqual(["Farm store", "Herd"]);
   });
 
   it("is quiet when there's nothing, with no button to press", async () => {
     db.store_events = [];
     await mountAlerts();
-    await screen.findByText("Nothing new from the farm store since you last looked.");
+    await screen.findByText("Nothing new since you last looked.");
     expect(screen.queryByRole("button", { name: "Mark all as seen" })).toBeNull();
   });
 
   it("isn't shown to a helper — the store is the owner's", async () => {
     role = "member";
     await mountAlerts();
-    await screen.findByText(/Nothing outstanding/);
-    expect(screen.queryByRole("region", { name: "From the farm store" })).toBeNull();
+    await screen.findByText("Nothing needs doing.");
+    expect(screen.queryByRole("region", { name: "Farm store" })).toBeNull();
     expect(screen.queryByLabelText(/new from the farm store/)).toBeNull();
   });
 
   it("isn't shown on a farm with no store", async () => {
     modules = ["herd", "books"];
     await mountAlerts();
-    await screen.findByText(/Nothing outstanding/);
-    expect(screen.queryByRole("region", { name: "From the farm store" })).toBeNull();
+    await screen.findByText("Nothing needs doing.");
+    expect(screen.queryByRole("region", { name: "Farm store" })).toBeNull();
+  });
+});
+
+describe("Alerts · looking back over the seen ones", () => {
+  // Seen in the other order from the one they happened in: her pickup
+  // (yesterday) looked at three minutes ago, her reservation half an hour ago.
+  beforeEach(() => {
+    db.store_event_marks = [
+      { event_id: 11, seen_at: minsAgo(30) },
+      { event_id: 13, seen_at: minsAgo(3) },
+    ];
+  });
+
+  const seenGroup = () => screen.getByRole("group", { name: "Seen" });
+
+  it("keeps them out of the way until asked for", async () => {
+    await mountAlerts();
+    await screen.findByText(/started a weekly pickup/);
+    expect(screen.queryByRole("group", { name: "Seen" })).toBeNull();
+    expect(screen.queryByText(/reserved 2 gallon/)).toBeNull();
+    // Not even read: most visits don't want them.
+    expect(viewsRead).not.toContain("store_events_seen");
+    expect(screen.getByRole("button", { name: "Show seen" }).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("lists them, most recently seen first, saying when", async () => {
+    await mountAlerts();
+    fireEvent.click(await screen.findByRole("button", { name: "Show seen" }));
+    await within(await screen.findByRole("group", { name: "Seen" })).findByText(/reserved 2 gallon/);
+    const titles = [...seenGroup().querySelectorAll(".alert-row__title")].map((t) => t.textContent);
+    expect(titles).toEqual([
+      "Meghan Suchomski picked up 1 gallon of raw milk",
+      "Meghan Suchomski reserved 2 gallon of raw milk",
+    ]);
+    expect(within(seenGroup()).getByText("This week of a weekly pickup · seen 3 min ago")).toBeTruthy();
+    expect(within(seenGroup()).getByText("Waiting to be picked up · seen 30 min ago")).toBeTruthy();
+    expect(within(seenGroup()).getAllByRole("button", { name: /^Mark unseen: / })).toHaveLength(2);
+  });
+
+  it("puts one back on the list when it's made unseen", async () => {
+    await mountAlerts();
+    const alertsLink = await screen.findByRole("link", { name: /^Alerts/ });
+    await waitFor(() => expect(within(alertsLink).getByLabelText("1 new from the farm store")).toBeTruthy());
+    fireEvent.click(await screen.findByRole("button", { name: "Show seen" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Mark unseen: Meghan Suchomski reserved/ }));
+    // Back among the new ones, with a "Seen" button again...
+    expect(await screen.findByRole("button", { name: /^Mark seen: Meghan Suchomski reserved/ })).toBeTruthy();
+    // ...gone from the seen ones, and counted in the menu.
+    await waitFor(() => expect(within(seenGroup()).queryByText(/reserved 2 gallon/)).toBeNull());
+    await waitFor(() => expect(within(alertsLink).getByLabelText("2 new from the farm store")).toBeTruthy());
+    expect(rpcCalls).toEqual([{ fn: "mark_store_event_unseen", args: { p_event_id: 11 } }]);
+  });
+
+  it("moves one marked seen into the seen list while it's open", async () => {
+    await mountAlerts();
+    fireEvent.click(await screen.findByRole("button", { name: "Show seen" }));
+    await within(await screen.findByRole("group", { name: "Seen" })).findByText(/reserved 2 gallon/);
+    fireEvent.click(screen.getByRole("button", { name: /^Mark seen: tom@example.com/ }));
+    await within(seenGroup()).findByText(/started a weekly pickup/);
+    expect(screen.getByText("Nothing new since you last looked.")).toBeTruthy();
+  });
+
+  it("says so when nothing has been seen yet", async () => {
+    db.store_event_marks = [];
+    await mountAlerts();
+    fireEvent.click(await screen.findByRole("button", { name: "Show seen" }));
+    expect(await within(await screen.findByRole("group", { name: "Seen" })).findByText("Nothing marked seen yet.")).toBeTruthy();
+  });
+
+  it("folds away again", async () => {
+    await mountAlerts();
+    fireEvent.click(await screen.findByRole("button", { name: "Show seen" }));
+    await screen.findByRole("group", { name: "Seen" });
+    fireEvent.click(screen.getByRole("button", { name: "Hide seen" }));
+    expect(screen.queryByRole("group", { name: "Seen" })).toBeNull();
   });
 });
 
@@ -317,7 +423,7 @@ describe("Today · from the farm store", () => {
   });
 
   it("says nothing once it's been seen", async () => {
-    db.store_event_reads = [{ business_id: 5, seen_through: minsAgo(0) }];
+    seenUpTo(minsAgo(0));
     await mountToday();
     await screen.findByText("Needs you");
     await waitFor(() => expect(screen.queryByText(/new from the farm store/)).toBeNull());

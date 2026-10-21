@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import type { RealAnimal } from "../lib/herd";
@@ -124,9 +124,7 @@ describe("Alerts page", () => {
         <Alerts />
       </MemoryRouter>,
     );
-    // "Now" is both a stat tile's label and a band heading, so wait on the
-    // band's own blurb instead.
-    await screen.findByText(/Past the day it should have happened/);
+    await screen.findByText("Martha is 11 days past due");
   };
 
   it("leads with the cow who is past due", async () => {
@@ -146,7 +144,7 @@ describe("Alerts page", () => {
     expect(screen.getByText("Vera hasn't been checked")).toBeTruthy();
   });
 
-  it("puts a waiting period that hasn't finished under Coming up", async () => {
+  it("leaves out a waiting period that hasn't finished", async () => {
     await mount();
     // Patience calved 6 Aug; 60 days puts her at 5 Oct, which is far enough
     // out to be quiet — so she should NOT be here at all.
@@ -159,8 +157,44 @@ describe("Alerts page", () => {
     expect(row.getAttribute("href")).toBe("/animals/1");
   });
 
+  it("puts the most urgent first, and says how urgent in the colour of its time", async () => {
+    await mount();
+    const herd = screen.getByRole("region", { name: "Herd" });
+    const rows = [...herd.querySelectorAll<HTMLElement>(".alert-row")];
+    const when = rows.map((r) => r.querySelector(".alert-row__when")!.className);
+    // Ordered now → soon → coming up, so the red ones lead.
+    const rank = (c: string) => (c.includes("--red") ? 0 : c.includes("--ochre") ? 1 : 2);
+    expect(when.map(rank)).toEqual([...when.map(rank)].sort());
+    const martha = screen.getByText("Martha is 11 days past due").closest<HTMLElement>(".alert-row")!;
+    expect(within(martha).getByText("11 days late").className).toContain("alert-row__when--red");
+  });
+
+  it("names the cow's tag in the row, and the kind of alert at its start", async () => {
+    await mount();
+    const martha = screen.getByText("Martha is 11 days past due").closest<HTMLElement>(".alert-row")!;
+    expect(within(martha).getByText(/^Tag 1 · /)).toBeTruthy();
+    expect(martha.querySelector(".alert-row__kind")!.textContent).toBe("Past due");
+    // The same four columns as a store row, the last left empty — there's
+    // nothing to press; it goes when the calving is recorded.
+    expect([...martha.children].map((c) => c.className.split(" ").find((k) => k.startsWith("alert-row__")))).toEqual([
+      "alert-row__kind",
+      "alert-row__body",
+      "alert-row__when",
+      "alert-row__action",
+    ]);
+    expect(martha.querySelector(".alert-row__action")!.childElementCount).toBe(0);
+  });
+
+  it("counts the herd's alerts in its heading", async () => {
+    await mount();
+    const herd = screen.getByRole("region", { name: "Herd" });
+    const n = herd.querySelectorAll(".alert-row").length;
+    expect(herd.querySelector(".alert-group__count")!.textContent).toBe(String(n));
+  });
+
   it("says where the thresholds come from rather than hiding them", async () => {
     await mount();
+    fireEvent.click(screen.getByRole("button", { name: "How the herd's dates are worked out" }));
     expect(screen.getByText(/voluntary waiting period/)).toBeTruthy();
     expect(screen.getByText(/not a number written into the code/)).toBeTruthy();
   });

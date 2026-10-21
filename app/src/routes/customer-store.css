@@ -8,6 +8,30 @@
   margin-top: 4px;
 }
 
+/* Which farm's shelves these are. A select only when there is a choice;
+   otherwise just the name, so a customer of one farm still sees whose shop
+   they are in. 16px on the select, or Safari zooms the page on focus. */
+.shop-farm {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  max-width: 360px;
+}
+
+.shop-farm select {
+  font: 500 16px/1.2 var(--font-sans);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  padding: 9px 10px;
+  min-height: 44px;
+}
+
+.shop-farm select:focus-visible {
+  outline: 2px solid var(--herd-green);
+  outline-offset: 1px;
+}
+
 .shop-hero__lede {
   font-size: 15px;
   color: var(--ink-muted);

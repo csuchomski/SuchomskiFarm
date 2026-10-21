@@ -3,11 +3,15 @@ import { CustomerShell, type CustomerTab } from "../components/shell/CustomerShe
 import { CustomerAuth } from "../components/auth/CustomerAuth";
 import { Button, Callout, Pill } from "../components/ui";
 import { useAuth, signOut } from "../lib/auth";
+import { useOptionalWorkspace } from "../lib/workspace";
 import {
   cancelOrder,
+  chooseShopFarm,
   fetchMyOrders,
   fetchProfile,
   fetchShop,
+  fetchShopFarmNames,
+  shopFarms,
   groupByDate,
   outstanding,
   reserve,
@@ -47,6 +51,8 @@ type Fetch =
   | {
       state: "ok";
       products: ShopProduct[];
+      /** Farm names for the products above, by business id. */
+      farmNames: Map<number, string>;
       orders: CustomerOrder[];
       schedules: Schedule[];
       profile: CustomerProfile | null;
@@ -111,6 +117,33 @@ export default function CustomerStore() {
   const [collecting, setCollecting] = useState<Collecting>(null);
   const [collectQty, setCollectQty] = useState("");
   const [collectMethod, setCollectMethod] = useState("");
+  // Which farm's shelves are showing. One at a time: an owner of three farms
+  // sees all three farms' products, and in one list nothing said whose was
+  // whose. Remembered per person, so the shop opens where it was left.
+  const workspace = useOptionalWorkspace();
+  const farmKey = userId ? `suchomski.shopFarm.${userId}` : null;
+  const [farmChoice, setFarmChoice] = useState<number | null>(null);
+  const remembered = (() => {
+    if (farmChoice !== null || !farmKey) return farmChoice;
+    try {
+      const v = localStorage.getItem(farmKey);
+      return v === null ? null : Number(v);
+    } catch {
+      return null;
+    }
+  })();
+  const pickFarm = (id: number) => {
+    setFarmChoice(id);
+    setSubscribing(null);
+    setCollecting(null);
+    setNotice(null);
+    setActionError(null);
+    try {
+      if (farmKey) localStorage.setItem(farmKey, String(id));
+    } catch {
+      /* a private window: the choice lasts until the page is closed */
+    }
+  };
 
   const load = useCallback(async () => {
     if (!userId) return;
@@ -123,7 +156,8 @@ export default function CustomerStore() {
       fetchProfile(userId).catch(() => null),
       fetchShopPaymentMethods(),
     ]);
-    setResult({ state: "ok", products, orders, schedules, profile, methods });
+    const farmNames = await fetchShopFarmNames([...new Set(products.map((p) => p.business_id))]);
+    setResult({ state: "ok", products, farmNames, orders, schedules, profile, methods });
   }, [userId]);
 
   useEffect(() => {
@@ -277,12 +311,22 @@ export default function CustomerStore() {
     }
   };
 
+  // Every product the shop can see, across farms — kept whole so an order
+  // from another farm still has a name in the history.
   const products = result.state === "ok" ? result.products : [];
+  const farms = shopFarms(products, result.state === "ok" ? result.farmNames : new Map());
+  const farmId = chooseShopFarm(farms, remembered, workspace?.business?.id ?? null);
+  const farmName = farms.find((f) => f.id === farmId)?.name ?? null;
+  const onThisFarm = (productId: number) =>
+    products.find((p) => p.id === productId)?.business_id === farmId;
+  // What the Store and Pickup tabs show: this farm only.
+  const shelf = products.filter((p) => p.business_id === farmId);
   const methods = result.state === "ok" ? result.methods : [];
+  const methodsHereFarm = methodsFor(methods, farmId);
   const orders = result.state === "ok" ? result.orders : [];
-  const open = orders.filter((o) => !o.cancelled_date && !o.picked_up_date);
+  const open = orders.filter((o) => !o.cancelled_date && !o.picked_up_date && onThisFarm(o.product_id));
   const schedules = result.state === "ok" ? result.schedules : [];
-  const activeSchedules = schedules.filter((s) => s.cancelled_at === null);
+  const activeSchedules = schedules.filter((s) => s.cancelled_at === null && onThisFarm(s.product_id));
   const today = new Date().toISOString().slice(0, 10);
   const past = orders.filter((o) => o.cancelled_date || o.picked_up_date);
   const profile = result.state === "ok" ? result.profile : null;
@@ -385,6 +429,7 @@ export default function CustomerStore() {
 
   return (
     <CustomerShell
+      farmName={farmName}
       activeTab={tab}
       onTabChange={setTab}
       counts={{ Pickup: open.length + activeSchedules.length }}
@@ -396,12 +441,29 @@ export default function CustomerStore() {
           {new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}
         </div>
         <div className="serif shop-hero__title">Fresh today</div>
+        {farms.length > 1 ? (
+          <label className="shop-farm">
+            <span className="eyebrow">Shopping at</span>
+            <select
+              value={farmId ?? ""}
+              onChange={(e) => pickFarm(Number(e.target.value))}
+              aria-label="Farm"
+            >
+              {farms.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         {/* The methods come off the table rather than being written into the
-            sentence, so adding one doesn't leave this line lying. */}
+            sentence, so adding one doesn't leave this line lying — and they
+            are this farm's, since each farm takes its own. */}
         <p className="shop-hero__lede text-wrap-pretty">
           Reserve what you want and pick it up at the farm.
-          {methods.length > 0 &&
-            ` Pay by ${orList([...new Set(methods.map((m) => m.label))])} when you collect.`}
+          {methodsHereFarm.length > 0 &&
+            ` Pay by ${orList([...new Set(methodsHereFarm.map((m) => m.label))])} when you collect.`}
         </p>
       </div>
 
@@ -426,7 +488,7 @@ export default function CustomerStore() {
       )}
 
       {result.state === "ok" &&
-        products.map((p) => {
+        shelf.map((p) => {
           const soldOut = p.available <= 0;
           return (
             <div className={`shop-product ${soldOut ? "shop-product--muted" : ""}`} key={p.id}>
@@ -550,7 +612,7 @@ export default function CustomerStore() {
           );
         })}
 
-      {result.state === "ok" && products.length === 0 && (
+      {result.state === "ok" && shelf.length === 0 && (
         <p style={{ padding: 24, fontSize: 14, color: "var(--ink-muted)" }}>Nothing in the store just now.</p>
       )}
         </>

@@ -153,6 +153,52 @@ export async function fetchShop(): Promise<ShopProduct[]> {
   });
 }
 
+/** One farm whose products are on the shop's shelves. */
+export interface ShopFarm {
+  id: number;
+  name: string;
+}
+
+/**
+ * Names for the farms the shop is showing products from.
+ *
+ * `businesses` is readable only by a farm's own people, so a customer could
+ * see a product's business_id and never its farm's name. shop_farm_names
+ * (migration 074) answers only for farms whose products the shop may show
+ * anyway — store switched on, or the caller is one of the farm's people.
+ */
+export async function fetchShopFarmNames(ids: number[]): Promise<Map<number, string>> {
+  if (ids.length === 0) return new Map();
+  const { data, error } = await supabase.rpc("shop_farm_names", { p_ids: ids });
+  if (error) throw new Error(`shop_farm_names: ${error.message}`);
+  return new Map(((data ?? []) as ShopFarm[]).map((f) => [Number(f.id), f.name]));
+}
+
+/** The farms on the shelves, by name. A farm the lookup didn't name still
+ *  gets a line rather than vanishing along with its products. */
+export function shopFarms(products: Pick<ShopProduct, "business_id">[], names: Map<number, string>): ShopFarm[] {
+  const ids = [...new Set(products.map((p) => p.business_id))];
+  return ids
+    .map((id) => ({ id, name: names.get(id) ?? `Farm ${id}` }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Which farm's shelves to show. The one picked here last time, if it is
+ * still on offer; otherwise the farm chosen in the app's top bar; otherwise
+ * the first by name. Null only when there are no farms at all.
+ */
+export function chooseShopFarm(
+  farms: ShopFarm[],
+  remembered: number | null,
+  preferred: number | null,
+): number | null {
+  const has = (id: number | null) => id !== null && farms.some((f) => f.id === id);
+  if (has(remembered)) return remembered;
+  if (has(preferred)) return preferred;
+  return farms[0]?.id ?? null;
+}
+
 export async function fetchMyOrders(userId: string): Promise<CustomerOrder[]> {
   const { data, error } = await supabase
     .from("orders")

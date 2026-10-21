@@ -22,8 +22,22 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 0 16px;
   border-bottom: 1px solid var(--hairline);
+}
+
+/* A long farm name ends in an ellipsis rather than pushing "Farm store"
+   off the edge of a phone. */
+.customer-shell__farm {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-shell__header .eyebrow {
+  flex: none;
 }
 
 .customer-shell__body {

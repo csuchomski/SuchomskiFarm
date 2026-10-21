@@ -19,6 +19,10 @@ export function CustomerShell({
   activeTab,
   onTabChange,
   headerEyebrow = "Farm store",
+  /** Whose shop this is. The header used to say "Suchomski." whatever farm
+   * was on the shelves; it names the farm being shopped now. Left out on the
+   * sign-in screen, before anyone knows which farm. */
+  farmName,
   /** Per-tab counts, shown beside the label. Omitted keys show nothing —
    * a zero is not worth the ink. */
   counts,
@@ -27,14 +31,16 @@ export function CustomerShell({
   activeTab?: CustomerTab;
   onTabChange?: (tab: CustomerTab) => void;
   headerEyebrow?: string;
+  farmName?: string | null;
   counts?: Partial<Record<CustomerTab, number>>;
 }) {
   return (
     <div className="customer-shell-page">
       <div className="customer-shell">
         <header className="customer-shell__header">
-          <div className="serif" style={{ fontSize: 22, letterSpacing: "-.02em" }}>
-            Suchomski<span style={{ color: "var(--herd-green)" }}>.</span>
+          <div className="serif customer-shell__farm" style={{ fontSize: 22, letterSpacing: "-.02em" }}>
+            {farmName ?? "Suchomski"}
+            <span style={{ color: "var(--herd-green)" }}>.</span>
           </div>
           <div className="eyebrow">{headerEyebrow}</div>
         </header>

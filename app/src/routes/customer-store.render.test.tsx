@@ -137,9 +137,18 @@ const orders = [
   },
 ];
 
+/** Other farms' products, for the tests that need more than one farm. */
+let otherFarms: typeof products = [];
+const FARM_NAMES: [number, string][] = [
+  [5, "Suchomski Family Farm"],
+  [13, "Rocky Ridge Farm"],
+  [31, "Grassway Organics"],
+];
+
 vi.mock("../lib/customer", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/customer")>()),
-  fetchShop: vi.fn(async () => products),
+  fetchShop: vi.fn(async () => [...products, ...otherFarms]),
+  fetchShopFarmNames: vi.fn(async (ids: number[]) => new Map(FARM_NAMES.filter(([id]) => ids.includes(id)))),
   fetchMyOrders: vi.fn(async () => orders),
   fetchProfile: vi.fn(async () => ({
     id: "u1",
@@ -208,8 +217,19 @@ vi.mock("../lib/payment-methods", async (importOriginal) => ({
   ]),
 }));
 
+/** The farm picked in the app's top bar, when there is a workspace at all. */
+let topBarFarm: number | null = null;
+vi.mock("../lib/workspace", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/workspace")>()),
+  useOptionalWorkspace: () =>
+    topBarFarm === null ? null : ({ business: { id: topBarFarm, name: "", type: "farm" } } as never),
+}));
+
 afterEach(() => {
   cleanup();
+  otherFarms = [];
+  topBarFarm = null;
+  localStorage.clear();
   completePickup.mockClear();
   fulfilPickup.mockClear();
   createSchedule.mockClear();
@@ -537,3 +557,93 @@ describe("Starting a weekly pickup", () => {
     expect(createSchedule.mock.calls[0][0]).toMatchObject({ productId: 1, quantity: 2.5, day: "Monday" });
   });
 });
+
+describe("One farm at a time", () => {
+  const beef = { id: 41, name: "Ground beef", unit: "pound", price: 8, business_id: 31, available: 12, type_code: "meat" };
+  const honey = { id: 51, name: "Honey", unit: "jar", price: 12, business_id: 13, available: 6, type_code: "honey" };
+
+  it("names the farm, and offers no choice, when there is only one", async () => {
+    await mount();
+    expect(document.querySelector(".customer-shell__farm")?.textContent).toBe("Suchomski Family Farm.");
+    expect(screen.queryByLabelText("Farm")).toBeNull();
+  });
+
+  it("puts the farm being shopped in the header, not one name for every farm", async () => {
+    otherFarms = [beef];
+    await mount();
+    expect(document.querySelector(".customer-shell__farm")?.textContent).toBe("Grassway Organics.");
+    fireEvent.change(screen.getByLabelText("Farm"), { target: { value: "5" } });
+    expect(document.querySelector(".customer-shell__farm")?.textContent).toBe("Suchomski Family Farm.");
+  });
+
+  it("shows one farm's shelves, not every farm's products in one list", async () => {
+    // The owner of three farms opened the shop and got all of them mixed.
+    otherFarms = [beef];
+    await mount();
+    const picker = screen.getByLabelText("Farm") as HTMLSelectElement;
+    expect([...picker.options].map((o) => o.textContent)).toEqual(["Grassway Organics", "Suchomski Family Farm"]);
+    // First by name, with nothing else to go on.
+    expect(picker.value).toBe("31");
+    expect(screen.getByText("Ground beef")).toBeTruthy();
+    expect(screen.queryByText("Milk")).toBeNull();
+
+    fireEvent.change(picker, { target: { value: "5" } });
+    expect(screen.getAllByText("Milk").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Ground beef")).toBeNull();
+  });
+
+  it("opens on the farm picked in the app's top bar", async () => {
+    otherFarms = [beef];
+    topBarFarm = 5;
+    await mount();
+    expect((screen.getByLabelText("Farm") as HTMLSelectElement).value).toBe("5");
+    expect(screen.queryByText("Ground beef")).toBeNull();
+  });
+
+  it("remembers the farm picked here over the top bar's", async () => {
+    otherFarms = [beef];
+    topBarFarm = 5;
+    await mount();
+    fireEvent.change(screen.getByLabelText("Farm"), { target: { value: "31" } });
+    cleanup();
+    await mount();
+    expect((screen.getByLabelText("Farm") as HTMLSelectElement).value).toBe("31");
+    expect(screen.getByText("Ground beef")).toBeTruthy();
+  });
+
+  it("counts and lists only this farm's pickups", async () => {
+    // The open order and both standing orders are Suchomski milk.
+    otherFarms = [beef];
+    await mount();
+    expect(screen.getByRole("button", { name: /Pickup/ }).textContent).not.toMatch(/\d/);
+    fireEvent.click(screen.getByRole("button", { name: /Pickup/ }));
+    expect(document.querySelectorAll(".shop-pickup").length).toBe(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /Store/ }));
+    fireEvent.change(screen.getByLabelText("Farm"), { target: { value: "5" } });
+    expect(screen.getByRole("button", { name: /Pickup/ }).textContent).toContain("3");
+    fireEvent.click(screen.getByRole("button", { name: /Pickup/ }));
+    expect(document.querySelectorAll(".shop-pickup").length).toBeGreaterThan(0);
+  });
+
+  it("says how this farm takes payment, not every farm's ways together", async () => {
+    otherFarms = [honey];
+    await mount();
+    fireEvent.change(screen.getByLabelText("Farm"), { target: { value: "13" } });
+    expect(screen.getByText(/Pay by Zelle when you collect/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Farm"), { target: { value: "5" } });
+    expect(screen.getByText(/Pay by Cash, Venmo or Check when you collect/)).toBeTruthy();
+  });
+
+  it("keeps the order history whole, across farms", async () => {
+    otherFarms = [beef];
+    await mount();
+    // Grassway is showing, and every order on file is Suchomski's — the
+    // account still counts all of them, because it is the person's, not the farm's.
+    expect((screen.getByLabelText("Farm") as HTMLSelectElement).value).toBe("31");
+    fireEvent.click(screen.getByRole("button", { name: /Account/ }));
+    expect(screen.getByText(/4 orders · \$42\.00/)).toBeTruthy();
+    expect(document.querySelectorAll(".shop-pickup").length).toBeGreaterThan(0);
+  });
+});
+

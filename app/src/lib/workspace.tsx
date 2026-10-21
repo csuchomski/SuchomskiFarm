@@ -194,6 +194,12 @@ export function useWorkspace() {
   return ctx;
 }
 
+/** The workspace where there is one, null where there is not — for a page
+ *  like the shop that a customer reaches with no business at all. */
+export function useOptionalWorkspace(): WorkspaceState | null {
+  return useContext(WorkspaceContext);
+}
+
 export function useHasModule(code: string) {
   const { modules } = useWorkspace();
   return modules.includes(code);

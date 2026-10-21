@@ -26,6 +26,11 @@
   --hazard-yellow-wash: rgba(242, 194, 48, 0.16);
   --hazard-yellow-wash-strong: rgba(242, 194, 48, 0.22);
 
+  /* The band behind a section name in the left-hand menu: a step darker
+   * than the menu, leaning toward the herd green, so Herd, Grazing, Store
+   * and Books each read as the start of a group. */
+  --section-band: color-mix(in srgb, var(--herd-green) 16%, var(--paper));
+
   /* The row under the pointer: a darker wash, and a rule down its left
    * edge. A wash that works over any background — plain paper, a tinted
    * "highlight" row, a coloured warning row — so it is a translucent ink

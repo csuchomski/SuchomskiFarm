@@ -41,7 +41,7 @@ export function Rail() {
 
       {groups.map((group) => (
         <div key={group.heading}>
-          <div className="eyebrow rail__heading">{group.heading}</div>
+          <div className="eyebrow rail__heading rail__section">{group.heading}</div>
           {group.items.map((item) => (
             <RailRow key={item.label} item={item} />
           ))}

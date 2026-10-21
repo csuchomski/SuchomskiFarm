@@ -52,6 +52,19 @@
   color: var(--ochre);
 }
 
+/* How many things are waiting behind a row — the store's news beside Alerts.
+   Filled, so it is seen from across the menu; ochre, because it wants a look
+   rather than signalling anything wrong. */
+.rail-row__badge {
+  min-width: 20px;
+  padding: 1px 6px;
+  background: var(--ochre);
+  color: var(--paper);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+
 .rail-row__dot {
   width: 9px;
   height: 9px;

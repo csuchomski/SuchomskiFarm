@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
-import { Callout, EarTag, Pill, StatTile } from "../components/ui";
+import { Button, Callout, EarTag, Pill, StatTile } from "../components/ui";
 import {
   buildAlerts,
   fetchAlertInputs,
@@ -11,6 +11,15 @@ import {
   type Alert,
   type Urgency,
 } from "../lib/alerts";
+import {
+  agoInWords,
+  describeStoreEvent,
+  fetchStoreActivity,
+  markStoreActivitySeen,
+  markStoreEventSeen,
+  STORE_KIND_LABEL,
+  type StoreEvent,
+} from "../lib/store-alerts";
 import { useWorkspace } from "../lib/workspace";
 import "./alerts.css";
 
@@ -36,8 +45,9 @@ const BANDS: { urgency: Urgency; heading: string; blurb: string }[] = [
 ];
 
 export default function Alerts() {
-  const { business, farmId } = useWorkspace();
+  const { business, farmId, role, modules } = useWorkspace();
   const [load, setLoad] = useState<Load>({ state: "loading" });
+  const hearsFromStore = !!business && role === "owner" && modules.includes("store");
 
   const refresh = useCallback(async () => {
     if (!farmId) {
@@ -64,7 +74,11 @@ export default function Alerts() {
 
   return (
     <OpsShell searchPlaceholder="A cow, a date…">
-      <PageHeader eyebrow={business ? `${business.name} · herd` : "Herd"} title="Alerts" />
+      <PageHeader eyebrow={business ? business.name : "Herd"} title="Alerts" />
+
+      {hearsFromStore && business && <StoreActivity businessId={business.id} />}
+
+      {hearsFromStore && <div className="serif alert-part">The herd</div>}
 
       {load.state === "loading" && (
         <p style={{ fontSize: 14, color: "var(--ink-muted)", padding: "16px 8px" }}>Reading the herd…</p>
@@ -137,3 +151,124 @@ function AlertRow({ alert }: { alert: Alert }) {
 }
 
 const EMPTY: Alert[] = [];
+
+type StoreLoad = { state: "loading" } | { state: "error"; message: string } | { state: "ok"; events: StoreEvent[] };
+
+/**
+ * What customers did in the farm store since the farmer last looked: a
+ * reservation, a new weekly pickup, a pickup they confirmed. Unlike the herd's
+ * alerts these don't resolve themselves, so they stay until cleared — one at
+ * a time from its own row, or the lot.
+ */
+function StoreActivity({ businessId }: { businessId: number }) {
+  const [load, setLoad] = useState<StoreLoad>({ state: "loading" });
+  const [clearing, setClearing] = useState(false);
+  const [clearError, setClearError] = useState<string | null>(null);
+  // The rows whose own "Seen" is on its way, so a second tap does nothing.
+  const [clearingOne, setClearingOne] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoad({ state: "loading" });
+    fetchStoreActivity(businessId)
+      .then((a) => !cancelled && setLoad({ state: "ok", events: a.events }))
+      .catch(
+        (err) => !cancelled && setLoad({ state: "error", message: err instanceof Error ? err.message : String(err) }),
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
+  const events = load.state === "ok" ? load.events : [];
+
+  const clear = async () => {
+    if (events.length === 0) return;
+    setClearing(true);
+    setClearError(null);
+    try {
+      // Through the newest one listed, so anything arriving meanwhile stays.
+      await markStoreActivitySeen(businessId, events[0].at);
+      setLoad({ state: "ok", events: [] });
+    } catch (err) {
+      setClearError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  const clearOne = async (id: number) => {
+    setClearingOne((s) => new Set(s).add(id));
+    setClearError(null);
+    try {
+      await markStoreEventSeen(id);
+      setLoad((l) => (l.state === "ok" ? { state: "ok", events: l.events.filter((e) => e.id !== id) } : l));
+    } catch (err) {
+      setClearError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setClearingOne((s) => {
+        const next = new Set(s);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
+  return (
+    <section className="alert-band alert-band--store" aria-label="From the farm store">
+      <div className="alert-band__top">
+        <div>
+          <div className="serif alert-band__head">From the farm store</div>
+          <p className="alert-band__blurb">
+            Customers' reservations, new weekly pickups, and pickups they confirmed — since you last cleared them.
+          </p>
+        </div>
+        {events.length > 0 && (
+          <Button size="sm" onClick={clear} disabled={clearing}>
+            {clearing ? "Clearing…" : "Mark all as seen"}
+          </Button>
+        )}
+      </div>
+
+      {load.state === "loading" && <p className="alert-band__blurb">Reading the store…</p>}
+      {load.state === "error" && (
+        <p className="alert-band__blurb" style={{ color: "var(--red)" }}>
+          Couldn't read the store: {load.message}
+        </p>
+      )}
+      {clearError && (
+        <p className="alert-band__blurb" style={{ color: "var(--red)" }}>
+          Couldn't clear these: {clearError}
+        </p>
+      )}
+      {load.state === "ok" && events.length === 0 && (
+        <p className="alert-store-empty">Nothing new from the farm store since you last looked.</p>
+      )}
+      {events.map((e) => (
+        <StoreRow key={e.id} event={e} onSeen={() => clearOne(e.id)} busy={clearing || clearingOne.has(e.id)} />
+      ))}
+    </section>
+  );
+}
+
+function StoreRow({ event, onSeen, busy }: { event: StoreEvent; onSeen: () => void; busy: boolean }) {
+  const { title, detail, href } = describeStoreEvent(event);
+  // The row is a link as the herd's are, but it holds a button too, and a
+  // button can't sit inside a link. So the link is the text, stretched over
+  // the whole row, and the button sits above it.
+  return (
+    <div className="alert-row alert-row--store">
+      <Link to={href} className="alert-row__body alert-row__link">
+        <span className="serif alert-row__title">{title}</span>
+        <span className="alert-row__detail">{detail}</span>
+      </Link>
+      <span className="alert-row__when">
+        <Pill variant="outline">{STORE_KIND_LABEL[event.kind]}</Pill>
+        <span className="mono alert-row__days">{agoInWords(event.at)}</span>
+      </span>
+      <Button size="sm" className="alert-row__seen" onClick={onSeen} disabled={busy} aria-label={`Mark seen: ${title}`}>
+        Seen
+      </Button>
+    </div>
+  );
+}

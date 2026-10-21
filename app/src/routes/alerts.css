@@ -33,6 +33,58 @@
 }
 
 
+/* The farm store's news, above the herd. Its rows have no ear tag, so no
+   left-hand column. */
+.alert-band--store {
+  margin-top: 24px;
+}
+
+.alert-band__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.alert-row--store {
+  grid-template-columns: minmax(0, 1fr) 150px auto;
+  position: relative;
+}
+
+/* The text is the link, and its ::after covers the row, so a click anywhere
+   but the button goes where the row says. */
+.alert-row__link {
+  color: inherit;
+}
+
+.alert-row__link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.alert-row__seen {
+  position: relative;
+  z-index: 1;
+}
+
+.alert-store-empty {
+  font-size: 14px;
+  color: var(--ink-muted);
+  padding: 12px 8px;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+}
+
+/* "The herd" — the page's second part, once the store's is above it. */
+.alert-part {
+  margin-top: 40px;
+  padding: 8px 12px;
+  background: var(--section-band);
+  font-size: 15px;
+}
+
 .alert-row__body {
   min-width: 0;
   display: flex;
@@ -77,6 +129,25 @@
   .alert-row {
     grid-template-columns: 44px minmax(0, 1fr);
     row-gap: 6px;
+  }
+
+  /* Text across the top; the kind, the time and "Seen" on one line under it,
+     the button at the right where a thumb finds it. */
+  .alert-row--store {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .alert-row--store .alert-row__body {
+    grid-column: 1 / -1;
+  }
+
+  .alert-row--store .alert-row__when {
+    grid-column: 1;
+  }
+
+  .alert-row--store .alert-row__seen {
+    grid-column: 2;
+    min-height: 36px;
   }
 
   .alert-row__when {

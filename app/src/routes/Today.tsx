@@ -6,6 +6,7 @@ import { fetchDashboardData, type DashboardData } from "../lib/dashboard-data";
 import { useWorkspace } from "../lib/workspace";
 import { animalPath, formatAge } from "../lib/herd";
 import { buildAlerts, fetchAlertInputs, whenInWords, type Alert } from "../lib/alerts";
+import { fetchStoreActivity, summarize, type StoreEvent } from "../lib/store-alerts";
 import "./today.css";
 
 type Fetch = { state: "loading" } | { state: "error"; message: string } | { state: "ok"; data: DashboardData };
@@ -29,8 +30,26 @@ const longDate = (iso: string) =>
 
 export default function Today() {
   const navigate = useNavigate();
-  const { business, farmId } = useWorkspace();
+  const { business, farmId, role, modules } = useWorkspace();
   const businessId = business?.id ?? null;
+  // What customers did in the store since the owner last cleared it.
+  const [storeNews, setStoreNews] = useState<StoreEvent[]>([]);
+  const hearsFromStore = role === "owner" && modules.includes("store");
+
+  useEffect(() => {
+    if (businessId === null || !hearsFromStore) {
+      setStoreNews([]);
+      return;
+    }
+    let cancelled = false;
+    fetchStoreActivity(businessId)
+      .then((a) => !cancelled && setStoreNews(a.events))
+      // As with the herd's: a summary of the Alerts page, which says what failed.
+      .catch(() => !cancelled && setStoreNews([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId, hearsFromStore]);
   const [result, setResult] = useState<Fetch>({ state: "loading" });
   // The herd's outstanding jobs, worked out from the breeding record. Kept in
   // its own state so a slow read of the whole repro history doesn't hold up
@@ -238,7 +257,7 @@ export default function Today() {
                   </Link>
                 )}
               </div>
-              <NeedsList data={data} alerts={alerts} />
+              <NeedsList data={data} alerts={alerts} storeNews={storeNews} />
             </div>
           </div>
         </>
@@ -273,7 +292,7 @@ function ChainCell({
 
 /** Alerts derived from what's actually in the database, rather than a fixed
  * list. An empty list here is a real answer — nothing needs attention. */
-function NeedsList({ data, alerts }: { data: DashboardData; alerts: Alert[] }) {
+function NeedsList({ data, alerts, storeNews }: { data: DashboardData; alerts: Alert[]; storeNews: StoreEvent[] }) {
   const items: { tone: "ochre" | "red" | "herd"; title: string; detail: string; to?: string }[] = [];
 
   // The herd's own jobs first — a cow past her due date outranks an order
@@ -285,6 +304,17 @@ function NeedsList({ data, alerts }: { data: DashboardData; alerts: Alert[] }) {
       title: alert.title,
       detail: `${alert.detail.split(". ")[0]} · ${whenInWords(alert.daysLate)}`,
       to: alert.href,
+    });
+  }
+
+  // Customers' own doings in the store — one line, however many there are;
+  // the Alerts page lists them.
+  if (storeNews.length > 0) {
+    items.push({
+      tone: "ochre",
+      title: `${storeNews.length} new from the farm store`,
+      detail: summarize(storeNews),
+      to: "/alerts",
     });
   }
 

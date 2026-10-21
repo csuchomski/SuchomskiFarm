@@ -1,9 +1,10 @@
 import { NavLink } from "react-router-dom";
 import { alerts, groupsForModules, settings, topLevel, type NavItem } from "./nav";
 import { useWorkspace } from "../../lib/workspace";
+import { useStoreAlertCount } from "../../lib/store-alerts";
 import "./rail.css";
 
-function RailRow({ item }: { item: NavItem }) {
+function RailRow({ item, count }: { item: NavItem; count?: { n: number; label: string } }) {
   if (!item.to) {
     return (
       <div className="rail-row rail-row--inert" title="Not built yet">
@@ -18,20 +19,31 @@ function RailRow({ item }: { item: NavItem }) {
       className={({ isActive }) => `rail-row ${isActive ? "rail-row--active" : ""}`}
     >
       <span>{item.label}</span>
+      {count && count.n > 0 && (
+        <span className="mono rail-row__badge" aria-label={count.label}>
+          {count.n}
+        </span>
+      )}
     </NavLink>
   );
 }
 
 export function Rail() {
-  const { modules, loading } = useWorkspace();
+  const { modules, loading, business, role } = useWorkspace();
   const groups = groupsForModules(modules);
+  // What customers did in the store, waiting beside Alerts — the owner's
+  // only, as the store is (071).
+  const storeNews = useStoreAlertCount(business?.id ?? null, role === "owner" && modules.includes("store"));
 
   return (
     <aside className="rail">
       <RailRow item={topLevel} />
       {/* Beside Today rather than inside Herd: both answer "what does today
           need", which is a different question from what a subject holds. */}
-      <RailRow item={alerts} />
+      <RailRow
+        item={alerts}
+        count={storeNews ? { n: storeNews, label: `${storeNews} new from the farm store` } : undefined}
+      />
 
       {loading && (
         <div className="eyebrow rail__heading" style={{ color: "var(--ink-faint)" }}>

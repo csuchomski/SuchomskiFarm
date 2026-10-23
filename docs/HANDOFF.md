@@ -4,6 +4,19 @@ Written at the end of a session that had no network route to Supabase. The
 environment has since been given one. This is what the next session needs to
 know.
 
+> **Picked up 2026-08-06.** The route works and the token authenticates.
+> Findings from that session are folded in below; the sections it settled are
+> marked. Short version: Batch A turned out to be already applied and its
+> checkpoints pass, 007 is next and is the owner's to run, and the inventory
+> drift was larger and differently shaped than this note assumed — fixed in
+> migration 014.
+>
+> One practical note for whoever is next: the Management API sits behind
+> Cloudflare, which rejects a bare Python `urllib` request with `403 error
+> code: 1010` while accepting the identical request from `curl`. That's a
+> client-signature block, not an auth or allowlist problem, and it looks
+> alarmingly like the `host_not_allowed` failure described below. Use `curl`.
+
 ## First, verify the connection
 
 ```bash
@@ -38,6 +51,9 @@ ordered batches. Its README has the full detail; the short version:
 
 1. **Batch A** (008, 013, 004, 005, 006) — additive. New tables, nullable
    columns, backfills. Nothing changes who can see what. Safe to run.
+   **✅ Already applied** — found in place on 2026-08-06. Every object it
+   creates exists; `is_business_member` (from 010, a later batch) does not,
+   so no later batch has run ahead of it.
 
 2. **Checkpoint.** Run this and show the owner the output before going on:
 
@@ -53,7 +69,16 @@ ordered batches. Its README has the full detail; the short version:
    007 then makes that farm invisible to everyone including its owner.
    Also confirm every business has at least one member, for the same reason.
 
-3. **Batch B (007) — the owner runs this**, not the agent. It changes what
+   **✅ Both pass.** The farm is in fact named `Suchomski Family Farm` and
+   links to business 5; all three businesses have one member each. The
+   membership carries across with the same role — user
+   `c3bec7a2-9b0d-4ec6-8994-accd67660e1f` is `owner` in both
+   `herd.farm_members` and `public.business_members`, and `owner` is in
+   007's write list. Full output is recorded at the top of
+   `docs/migrations/runbook/batch-B-membership.sql`.
+
+3. **Batch B (007) — the owner runs this**, not the agent. Confirmed again
+   on 2026-08-06: asked, and the answer was still the dashboard. It changes what
    every RLS policy in the `herd` schema means, in two statements, and it's
    the one that can lock them out. It should be run from the dashboard with
    the app open in another tab so the herd can be checked immediately after.
@@ -66,26 +91,57 @@ ordered batches. Its README has the full detail; the short version:
 
 ## Also outstanding
 
-**Inventory drift.** Order 12 reserved 2 gallons before migration 011 made
-`reserve_product` decrement inventory, so `batches.reserved` is short by
-that much. Now diagnosable directly instead of by asking for query output:
+**Inventory drift. ✅ Diagnosed and fixed 2026-08-06 — migration 014.**
+
+The note above was wrong in three ways, all of which came from guessing at a
+schema instead of reading it. Recorded because the shape of the mistake is
+more useful than the fix:
+
+- **There is no `order_items` table.** An order carries a single
+  `product_id` and `quantity`. Batches are allocated inside
+  `reserve_product` and never recorded per line, so there is no
+  `batch_id` anywhere to join on and no way to attribute a reservation to a
+  batch after the fact. The query above cannot run at all.
+- **The drift was 5 gallons, not 2.** Orders 12 (2 gal) *and* 14 (3 gal)
+  both predate the fix; only order 15 reserved correctly.
+- **It is only visible per product**, not per batch — which is why the
+  per-batch query would have found nothing even had it parsed.
+
+Consequence while it was live: `quantity - reserved` reported 6 gallons of
+milk available when 1 was, so the store would have sold five gallons twice.
+
+The check that does work:
 
 ```sql
-select b.id, b.product_id, b.quantity, b.reserved,
-       coalesce(o.claimed, 0) as claimed_by_open_orders
-  from public.inventory_batches b
-  left join (
-    select oi.batch_id, sum(oi.quantity) as claimed
-      from public.order_items oi
-      join public.orders o on o.id = oi.order_id
-     where o.picked_up_date is null and o.cancelled_date is null
-     group by oi.batch_id
-  ) o on o.batch_id = b.id
- where b.reserved is distinct from coalesce(o.claimed, 0);
+select p.id, p.name,
+       coalesce(b.reserved_total, 0) as batches_reserved,
+       coalesce(o.open_qty, 0)       as open_order_qty
+  from public.products p
+  left join (select product_id, sum(reserved) reserved_total
+               from public.inventory_batches group by product_id) b
+         on b.product_id = p.id
+  left join (select product_id, sum(quantity) open_qty
+               from public.orders
+              where picked_up_date is null and cancelled_date is null
+              group by product_id) o
+         on o.product_id = p.id
+ where coalesce(b.reserved_total, 0) <> coalesce(o.open_qty, 0);
 ```
 
-Confirm the shape of `order_items` first — this query assumes a `batch_id`
-on it, which hasn't been verified against the live schema.
+No rows is correct. It returns none as of 2026-08-06.
+
+**Worth knowing:** nothing in the schema enforces this invariant — it is
+reconciled, not guaranteed. `reserve_product` is the only thing that keeps
+`reserved` in step with `orders`, and any path that writes one without the
+other reopens the gap silently. A constraint can't express it (it spans two
+tables), so it wants either a trigger or this query run periodically.
+
+**Untyped product.** Product 5 (`Cheese`) has a null `type_code`. 008's
+backfill leaves what it can't place confidently as null rather than guessing,
+which is why it's visible rather than wrong. `other` is the right code —
+`milk` would fold cheese into milk production totals, the exact failure 008
+exists to prevent. One statement, in the runbook README, left for the owner
+because it's a naming judgement and not a correctness fix.
 
 **Not built, flagged but never authorized:** breed composition editing,
 animal photos via Supabase Storage, archive/soft-delete UI, inline pedigree
@@ -103,6 +159,16 @@ editing on the chart.
 - **Don't verify permissions from the SQL editor or the Management API.**
   Both run as superuser. A column-privilege or RLS check there is
   meaningless.
+- **A rollback copied by hand is not verbatim.** 007's rollback block was
+  labelled "dumped from `pg_proc`, verbatim" and had lost the
+  `set search_path` clause both functions carry. On a `SECURITY DEFINER`
+  function that clause is a security control, so running it would have
+  restored the functions quietly weakened — and it would have looked like a
+  clean recovery. Re-dumped and corrected 2026-08-06. When a file claims to
+  quote the database, diff it against the database.
+- **Don't guess a schema you can now read.** Every error in the inventory
+  section below came from describing tables from memory rather than
+  querying them. The route exists now; use it.
 - The app works before and after every migration here, falling back where a
   table doesn't exist yet and saying on screen which mode it's in. Nothing
   has to be run on a schedule.

@@ -4,8 +4,8 @@
 
 -- 007 — Answer herd access through business membership.
 --
--- STATUS: PROPOSAL. Not run.
--- Depends on: 005 (farms.business_id) and 006 (business_members).
+-- STATUS: NOT RUN. Dependencies verified against the live database 2026-08-06.
+-- Depends on: 005 (farms.business_id) and 006 (business_members) — both applied.
 --
 -- ⚠️ THIS IS THE SHARP EDGE. Isolated in its own file for that reason.
 --
@@ -30,8 +30,28 @@
 -- Before running:
 --   1. Restore a backup somewhere else and run it there first. Not a
 --      "backup exists" check — an actual restore you queried afterwards.
+--      Still not done, and still the one unmet precondition: pg_dump needs
+--      raw 5432, which the agent's HTTP proxy cannot tunnel. The rollback at
+--      the bottom of this file is a real recovery but not a rehearsal.
 --   2. Confirm every farm has a business_id (see 005's check query).
 --   3. Confirm every business has at least one member (see 006's).
+--
+-- 2 and 3 were checked against the live database on 2026-08-06 and both pass:
+--
+--   farm 309fcb68-7a38-456e-bc81-fd212ea50d10 'Suchomski Family Farm'
+--     -> business 5 'Suchomski Family Farm' (type 'farm')
+--   businesses 3 'Meghan's Realtor', 4 '5553 N Lydell Ave', 5 — 1 member each
+--
+-- The membership carries across, which is the thing that decides whether this
+-- migration locks you out. The same user is present on both sides with the
+-- same role:
+--
+--   herd.farm_members         c3bec7a2-9b0d-4ec6-8994-accd67660e1f  owner
+--   public.business_members   c3bec7a2-9b0d-4ec6-8994-accd67660e1f  owner  (business 5)
+--
+-- 'owner' is in the write list below, so read and write both survive. Re-run
+-- the two checkpoint queries in runbook/README.md before pasting this, in
+-- case anything moved in between.
 
 begin;
 
@@ -98,8 +118,19 @@ commit;
 -- ---------------------------------------------------------------------------
 -- ROLLBACK — the live definitions as dumped from pg_proc, verbatim.
 --
+-- Re-dumped 2026-08-06 with database access. An earlier copy of this block
+-- dropped the `set search_path` clause both functions carry, which would have
+-- restored them subtly weakened rather than unchanged: search_path is a
+-- security control on a SECURITY DEFINER function, and a rollback that
+-- silently relaxes one is not a rollback. Kept exact below.
+--
 --   create or replace function herd.is_farm_member(f uuid)
---   returns boolean language sql stable security definer as $$
+--   returns boolean
+--   language sql
+--   stable
+--   security definer
+--   set search_path to 'herd'
+--   as $$
 --     select exists (
 --       select 1 from herd.farm_members m
 --       where m.farm_id = f and m.user_id = auth.uid()
@@ -107,7 +138,12 @@ commit;
 --   $$;
 --
 --   create or replace function herd.can_write_farm(f uuid)
---   returns boolean language sql stable security definer as $$
+--   returns boolean
+--   language sql
+--   stable
+--   security definer
+--   set search_path to 'herd'
+--   as $$
 --     select exists (
 --       select 1 from herd.farm_members m
 --       where m.farm_id = f

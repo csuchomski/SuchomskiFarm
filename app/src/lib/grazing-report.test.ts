@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gaps, livestockType, overlaps, reportRows, stripNumbers, totalAcres } from "./grazing-report";
+import { gaps, livestockType, nextStripNumber, overlaps, reportRows, stripNumbers, totalAcres } from "./grazing-report";
 import type { GrazingEvent, GrazingGroup, Paddock } from "./grazing";
 import { REAL_ACRES, REAL_BOUNDARIES, REAL_SWEEP } from "./__fixtures__/farm-geometry";
 
@@ -82,6 +82,41 @@ describe("numbering a strip", () => {
     const named = [{ ...unit(1), code: null }];
     const n = stripNumbers([ev({ id: "a", paddockId: "p1", enteredAt: "2026-06-01T12:00:00.000Z" })], named);
     expect(n.get("a")).toBe("Paddock 1-1");
+  });
+});
+
+describe("the number a strip is about to get", () => {
+  const p4 = farm[3];
+  const taken = [
+    ev({ id: "a", paddockId: "p4", enteredAt: "2026-06-01T12:00:00.000Z" }),
+    ev({ id: "b", paddockId: "p3", enteredAt: "2026-06-05T12:00:00.000Z" }),
+    ev({ id: "c", paddockId: "p4", enteredAt: "2026-06-10T12:00:00.000Z" }),
+  ];
+
+  it("is the one the record prints for it once it is logged", () => {
+    const at = "2026-06-20T12:00:00.000Z";
+    const promised = nextStripNumber(taken, p4, at);
+    expect(promised).toBe("P4-3");
+    const after = [...taken, ev({ id: "new", paddockId: "p4", enteredAt: at })];
+    expect(stripNumbers(after, farm).get("new")).toBe(promised);
+  });
+
+  it("starts at one in a paddock never grazed", () => {
+    expect(nextStripNumber(taken, farm[0], "2026-06-20T12:00:00.000Z")).toBe("P1-1");
+  });
+
+  it("goes by when the move is entered for, not by how many strips there are", () => {
+    // Entered late, for the 3rd: it sits between the two already on file,
+    // and the record numbers by time.
+    const at = "2026-06-03T12:00:00.000Z";
+    const promised = nextStripNumber(taken, p4, at);
+    expect(promised).toBe("P4-2");
+    const after = [...taken, ev({ id: "new", paddockId: "p4", enteredAt: at })];
+    expect(stripNumbers(after, farm).get("new")).toBe(promised);
+  });
+
+  it("falls back to the paddock's name when it has no code", () => {
+    expect(nextStripNumber([], { ...farm[0], code: null }, "2026-06-20T12:00:00.000Z")).toBe("Paddock 1-1");
   });
 });
 

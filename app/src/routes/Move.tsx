@@ -70,6 +70,8 @@ import {
   type LonLat,
 } from "../lib/pasture-map";
 import { useMapScale } from "../lib/use-map-scale";
+import { fromLocalInput, toLocalInput } from "../lib/local-time";
+import { nextStripNumber, stripNumbers } from "../lib/grazing-report";
 import "./grazing.css";
 
 /**
@@ -163,6 +165,12 @@ function restWords(r: BoardRow): string {
 const nowIso = () => new Date().toISOString();
 const today = () => new Date().toISOString().slice(0, 10);
 
+/** "Sat, Nov 7, 6:30 AM" — a moment, as the farmer would say it. */
+const momentWords = (iso: string) =>
+  new Date(iso).toLocaleString(undefined, {
+    weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  });
+
 /** Feet or yards, remembered between mornings. Same storage this app already
  * uses for the picked business — per browser, and no worse than losing it. */
 const WIDTH_UNIT_KEY = "grazer.wireWidthUnit";
@@ -204,6 +212,11 @@ export default function Move() {
   const [height, setHeight] = useState("");
   const [grazeTo, setGrazeTo] = useState("");
   const [ateTo, setAteTo] = useState("");
+  // When the move happened, as the date-time box holds it. Null is "now" —
+  // the usual case, and deliberately not a time captured when the page
+  // opened: a page left open over breakfast would otherwise log the move for
+  // when it was opened rather than when it was made.
+  const [movedAt, setMovedAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -432,6 +445,19 @@ export default function Move() {
 
   /** The strip they are on, which the move is about to close. */
   const openStrip = standing?.open ?? null;
+
+  /** The strips' numbers, as the grazing record prints them — "P2-3" is the
+   *  third strip taken out of Paddock 2. The one being left has its number
+   *  already; the one being opened gets the number it will have once logged,
+   *  which depends on when the move is entered for. */
+  const leavingNumber =
+    openStrip !== null && load.state === "ok"
+      ? (stripNumbers(load.events, load.paddocks).get(openStrip.id) ?? null)
+      : null;
+  const openingNumber =
+    dest && load.state === "ok"
+      ? nextStripNumber(load.events, dest, (movedAt === null ? null : fromLocalInput(movedAt)) ?? nowIso())
+      : null;
 
   /** What that works out to as a share of the sward they went in on. Recorded
    *  beside the height so the figure survives if the entry height is later
@@ -719,6 +745,7 @@ export default function Move() {
     setHeight("");
     setGrazeTo("");
     setAteTo("");
+    setMovedAt(null);
     setError(null);
   };
 
@@ -739,14 +766,33 @@ export default function Move() {
 
   const send = async () => {
     if (!dest || !group || !farmId) return;
+    setNote(null);
+    // The time is checked here, in words, before the database is asked: its
+    // own refusal names only the day, which reads as nonsense when the two
+    // times are on the same one.
+    const at = movedAt === null ? nowIso() : fromLocalInput(movedAt);
+    if (at === null) {
+      setError("The move needs a full date and time, or leave it as now.");
+      return;
+    }
+    if (new Date(at).getTime() > Date.now() + 60_000) {
+      setError("That time hasn't happened yet. A move can be logged for now or earlier.");
+      return;
+    }
+    if (openStrip !== null && new Date(at).getTime() < new Date(openStrip.enteredAt).getTime()) {
+      setError(
+        `${group.name} went onto ${standing?.paddock?.name ?? "where they are"} at ` +
+          `${momentWords(openStrip.enteredAt)}, so the move off it can't be before that.`,
+      );
+      return;
+    }
     setBusy(true);
     setError(null);
-    setNote(null);
     try {
       await logMove(farmId, {
         paddockId: dest.id,
         groupId: group.id,
-        at: nowIso(),
+        at,
         headCount: head,
         avgWeightLb: avgWeight,
         forageHeightInEntry: heightIn,
@@ -773,12 +819,14 @@ export default function Move() {
               : ` — about ${Math.round(strip.lbDmOnOffer).toLocaleString()} lb of dry matter eaten,` +
                 ` down to ${assumed.grazeDown.residualIn}″.`)
           : `${group.name} moved to ${dest.name}.`) +
-          (ateToIn === null ? "" : ` The strip they left is recorded at ${ateToIn}″.`),
+          (ateToIn === null ? "" : ` The strip they left is recorded at ${ateToIn}″.`) +
+          (movedAt === null ? "" : ` Logged for ${momentWords(at)}.`),
       );
       goTo(null);
       setHeight("");
       setGrazeTo("");
       setAteTo("");
+      setMovedAt(null);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -1000,103 +1048,107 @@ export default function Move() {
           {/* On a phone this is one column in the order written. On a wide
               screen the stylesheet puts the drawing beside the readings, so
               the wire and the acres it is changing are in view together. */}
-          {/* ── what they actually did to the strip they are on ────────
-              First, because it is the first thing you look at: you walk out,
-              see what they left, and only then decide what to give them next.
-              It is also the one measurement on this page — everything below
-              is a forecast. */}
-          {openStrip !== null && (
-            <div className="mv-ate">
-              <label className="mv-field">
-                <span className="eyebrow">
-                  They ate {standing?.paddock?.name ?? "the last strip"} down to, inches
-                </span>
-                <input
-                  value={ateTo}
-                  onChange={(e) => setAteTo(e.target.value)}
-                  inputMode="decimal"
-                  aria-label="They ate it down to, inches"
-                  placeholder="—"
-                />
-              </label>
-              <p className="mv-height__note">
-                {ateToIn === null ? (
-                  <>
-                    Measured off the strip behind the wire. Left blank, the record keeps
-                    what the strip was sized for and nothing more.
-                  </>
-                ) : atePct === null ? (
-                  <>
-                    Recorded against that strip. No entry height was taken for it, so
-                    there is nothing to work a share of the sward out from.
-                  </>
-                ) : (
-                  <>
-                    {atePct}% of the {openStrip.forageHeightInEntry}″ they went in on
-                    {" "}— recorded against that strip, not this one.
-                  </>
-                )}
-              </p>
-            </div>
-          )}
-
           <div className="mv-layout">
 
-          {/* ── the grass, before the wire, because it sets the figures ── */}
-          {dest && (
-            <div className="mv-height">
-              <label className="mv-field">
-                <span className="eyebrow">Grass height in {dest.name}, inches</span>
-                <input
-                  value={height}
-                  onChange={(e) => setHeight(e.target.value)}
-                  inputMode="decimal"
-                  aria-label="Grass height, inches"
-                  placeholder="—"
-                />
-              </label>
-              {/* The graze-down. Beside the height because the figures below
-                  are built on the difference between the two, not on either
-                  one. Blank falls back to the paddock's target, then the
-                  plan's — the placeholder says which is standing in. */}
-              <label className="mv-field">
-                <span className="eyebrow">Graze it down to, inches</span>
-                <input
-                  value={grazeTo}
-                  onChange={(e) => setGrazeTo(e.target.value)}
-                  inputMode="decimal"
-                  aria-label="Graze it down to, inches"
-                  placeholder={fallbackGrazeTo === null ? "—" : String(fallbackGrazeTo)}
-                />
-              </label>
-              <p className="mv-height__note">
-                {load.plan?.lbDmPerAcreInch == null ? (
+          {/* ── the three heights, in one row ──────────────────────────
+              Residual first, because it is the first thing you look at: you
+              walk out, see what they left, and only then decide what to give
+              them next. It is also the one measurement here that is about the
+              ground behind the wire — the other two are about the ground
+              ahead, and the figures below are built on the difference between
+              them. Each box names its strip by the number the grazing record
+              prints for it, since the first is about a different strip from
+              the other two.
+
+              The residual box is only there when there is a strip to close;
+              the row keeps three columns either way, so the other two don't
+              change size when it comes and goes. */}
+          {(openStrip !== null || dest) && (
+            <div className="mv-heights">
+              <div className="mv-heights__row">
+                {openStrip !== null && (
+                  <HeightField
+                    label="Residual"
+                    where={leavingNumber === null ? "Last strip" : `Strip ${leavingNumber}`}
+                    ariaLabel="Residual, inches"
+                    value={ateTo}
+                    onChange={setAteTo}
+                    placeholder="—"
+                  />
+                )}
+                {dest && (
                   <>
-                    Set <Link to="/grazing/plan">pounds per acre-inch</Link> in the plan and this
-                    reading becomes the standing forage behind every figure below.
-                  </>
-                ) : heightIn === null ? (
-                  <>At {load.plan.lbDmPerAcreInch} lb DM per acre-inch, from your plan.</>
-                ) : assumed.grazeDown.residualIn !== null ? (
-                  // What the height drop is worth, which is not what a cow
-                  // gets: some of it goes under a hoof. Rendered beside the
-                  // panel's lower figure this read as a contradiction, so it
-                  // says which of the two it is and where the other lives.
-                  <>
-                    {Math.round(
-                      (heightIn - assumed.grazeDown.residualIn) * load.plan.lbDmPerAcreInch,
-                    ).toLocaleString()}{" "}
-                    lb DM/acre comes off the plant — the{" "}
-                    {(heightIn - assumed.grazeDown.residualIn).toFixed(1)}″ between them, at{" "}
-                    {load.plan.lbDmPerAcreInch} lb an acre-inch. What they eat of it is below.
-                  </>
-                ) : (
-                  <>
-                    {(heightIn * load.plan.lbDmPerAcreInch).toLocaleString()} lb DM/acre standing —{" "}
-                    {heightIn}″ × {load.plan.lbDmPerAcreInch} lb, your figures.
+                    <HeightField
+                      label="Entry height"
+                      where={`Strip ${openingNumber}`}
+                      ariaLabel="Entry height, inches"
+                      value={height}
+                      onChange={setHeight}
+                      placeholder="—"
+                    />
+                    {/* Blank falls back to the paddock's target, then the
+                        plan's — the placeholder says which is standing in. */}
+                    <HeightField
+                      label="Target residual"
+                      where={`Strip ${openingNumber}`}
+                      ariaLabel="Target residual, inches"
+                      value={grazeTo}
+                      onChange={setGrazeTo}
+                      placeholder={fallbackGrazeTo === null ? "—" : String(fallbackGrazeTo)}
+                    />
                   </>
                 )}
-              </p>
+              </div>
+              {openStrip !== null && (
+                <p className="mv-height__note">
+                  {ateToIn === null ? (
+                    <>
+                      Residual is measured off the strip behind the wire. Leave it blank if you
+                      didn't measure.
+                    </>
+                  ) : atePct === null ? (
+                    <>
+                      Recorded against that strip. No entry height was taken for it, so
+                      there is nothing to work a share of the sward out from.
+                    </>
+                  ) : (
+                    <>
+                      {atePct}% of the {openStrip.forageHeightInEntry}″ they went in on
+                      {" "}— recorded against that strip, not this one.
+                    </>
+                  )}
+                </p>
+              )}
+              {dest && (
+                <p className="mv-height__note">
+                  {load.plan?.lbDmPerAcreInch == null ? (
+                    <>
+                      Set <Link to="/grazing/plan">pounds per acre-inch</Link> in the plan and this
+                      reading becomes the standing forage behind every figure below.
+                    </>
+                  ) : heightIn === null ? (
+                    <>At {load.plan.lbDmPerAcreInch} lb DM per acre-inch, from your plan.</>
+                  ) : assumed.grazeDown.residualIn !== null ? (
+                    // What the height drop is worth, which is not what a cow
+                    // gets: some of it goes under a hoof. Rendered beside the
+                    // panel's lower figure this read as a contradiction, so it
+                    // says which of the two it is and where the other lives.
+                    <>
+                      {Math.round(
+                        (heightIn - assumed.grazeDown.residualIn) * load.plan.lbDmPerAcreInch,
+                      ).toLocaleString()}{" "}
+                      lb DM/acre comes off the plant — the{" "}
+                      {(heightIn - assumed.grazeDown.residualIn).toFixed(1)}″ between them, at{" "}
+                      {load.plan.lbDmPerAcreInch} lb an acre-inch. What they eat of it is below.
+                    </>
+                  ) : (
+                    <>
+                      {(heightIn * load.plan.lbDmPerAcreInch).toLocaleString()} lb DM/acre standing —{" "}
+                      {heightIn}″ × {load.plan.lbDmPerAcreInch} lb, your figures.
+                    </>
+                  )}
+                </p>
+              )}
             </div>
           )}
 
@@ -1392,6 +1444,36 @@ export default function Move() {
                 </p>
               )}
 
+              {/* When it happened. Now unless changed — for a move made in the
+                  morning and entered at night, or the next day. Directly above
+                  the button, because it is the last thing to check before
+                  pressing it. */}
+              <div className="mv-when">
+                <label className="mv-when__field">
+                  <span className="eyebrow">Moved at</span>
+                  <input
+                    type="datetime-local"
+                    value={movedAt ?? toLocalInput(nowIso())}
+                    max={toLocalInput(nowIso())}
+                    // Cleared is "now" again, not a move with no time.
+                    onChange={(e) => setMovedAt(e.target.value === "" ? null : e.target.value)}
+                    aria-label="Date and time of the move"
+                  />
+                </label>
+                <p className="mv-when__note">
+                  {movedAt === null ? (
+                    <>Now, unless you change it — for a move you're entering later.</>
+                  ) : (
+                    <>
+                      Not now — this move will be logged for the time shown.{" "}
+                      <button type="button" className="link-button mv-when__now" onClick={() => setMovedAt(null)}>
+                        Use now
+                      </button>
+                    </>
+                  )}
+                </p>
+              </div>
+
               <div className="grz-form__actions">
                 <Button disabled={busy} onClick={() => setCutting(!cutting)}>
                   {cutting ? "Not hay" : "Cut for hay"}
@@ -1618,3 +1700,43 @@ function ScaleBar({
 /** Re-exported for the tests, which check the acreage the page will show
  * matches what the boundary says. */
 export { drawnSliceAcres, stripWidthFt };
+
+/**
+ * One of the three heights on the move: what it is, which strip it is about,
+ * and the number, in inches. The unit sits in the box rather than in
+ * the label, so the label stays two words and three fit across a phone.
+ */
+function HeightField({
+  label,
+  where,
+  ariaLabel,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  where: string;
+  ariaLabel: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <label className="mv-field">
+      <span className="eyebrow">{label}</span>
+      <span className="mv-field__where">{where}</span>
+      <span className="mv-field__box">
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          inputMode="decimal"
+          aria-label={ariaLabel}
+          placeholder={placeholder}
+        />
+        <span className="mv-field__unit" aria-hidden="true">
+          in
+        </span>
+      </span>
+    </label>
+  );
+}

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { toLocalInput } from "../lib/local-time";
 import { MemoryRouter } from "react-router-dom";
 import type {
   ForageAvailability,
@@ -1684,5 +1685,92 @@ describe("the place above the pasture", () => {
     // The Yearlings are in P5, on the Vollmer's ridge — and the page is
     // there because the mob decided it, not a leftover override.
     expect(locator()).toBe("The Vollmer Lease Ridge Paddock 5");
+  });
+});
+
+describe("when the move happened", () => {
+  // The clock is held at noon UTC on the 13th; they went onto the strip they
+  // are on at noon UTC on the 12th.
+  const NOW = "2026-08-13T12:00:00.000Z";
+  const onStrip = () => events.push(strip("s1", "p3", 0, 0.2, null));
+  const when = () => screen.getByLabelText("Date and time of the move") as HTMLInputElement;
+  const setWhen = (iso: string) => fireEvent.change(when(), { target: { value: toLocalInput(iso) } });
+  const log = () => fireEvent.click(screen.getByText("Log the move"));
+
+  it("is now unless changed, and shows it", async () => {
+    onStrip();
+    await mount();
+    expect(when().value).toBe(toLocalInput(NOW));
+    log();
+    await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
+    expect(moved.mock.calls[0][1].at).toBe(NOW);
+  });
+
+  it("means now when the button is pressed, not when the page was opened", async () => {
+    onStrip();
+    await mount();
+    vi.setSystemTime(new Date("2026-08-13T14:30:00.000Z"));
+    log();
+    await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
+    expect(moved.mock.calls[0][1].at).toBe("2026-08-13T14:30:00.000Z");
+  });
+
+  it("logs the move for an earlier time when one is entered", async () => {
+    onStrip();
+    await mount();
+    setWhen("2026-08-13T06:15:00.000Z");
+    expect(screen.getByText(/this move will be logged for the time shown/)).toBeTruthy();
+    log();
+    await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
+    expect(moved.mock.calls[0][1].at).toBe("2026-08-13T06:15:00.000Z");
+    // ...says so afterwards, and is back to now for the next one.
+    expect(await screen.findByText(/Logged for /)).toBeTruthy();
+  });
+
+  it("goes back to now on request, or when the box is cleared", async () => {
+    onStrip();
+    await mount();
+    setWhen("2026-08-13T06:15:00.000Z");
+    fireEvent.click(screen.getByRole("button", { name: "Use now" }));
+    expect(when().value).toBe(toLocalInput(NOW));
+    expect(screen.queryByRole("button", { name: "Use now" })).toBeNull();
+
+    setWhen("2026-08-13T06:15:00.000Z");
+    fireEvent.change(when(), { target: { value: "" } });
+    log();
+    await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
+    expect(moved.mock.calls[0][1].at).toBe(NOW);
+  });
+
+  it("refuses a time that hasn't happened yet", async () => {
+    onStrip();
+    await mount();
+    setWhen("2026-08-13T13:00:00.000Z");
+    log();
+    expect(await screen.findByText(/hasn't happened yet/)).toBeTruthy();
+    expect(moved).not.toHaveBeenCalled();
+  });
+
+  it("refuses a time before they arrived where they are, and says when that was", async () => {
+    onStrip();
+    await mount();
+    setWhen("2026-08-12T10:00:00.000Z");
+    log();
+    expect(await screen.findByText(/went onto Paddock 3 at .*can't be before that/)).toBeTruthy();
+    expect(moved).not.toHaveBeenCalled();
+    // The moment they arrived is itself allowed.
+    setWhen("2026-08-12T12:00:00.000Z");
+    log();
+    await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
+  });
+
+  it("starts from now again for a different mob", async () => {
+    groups = [mob("a", "Main mob"), mob("b", "Yearlings")];
+    events.push({ ...strip("s1", "p3", 0, 0.2, null), groupId: "a" });
+    await mount();
+    setWhen("2026-08-13T06:15:00.000Z");
+    fireEvent.click([...document.querySelectorAll("button.mv-mob")].find((b) => b.textContent!.startsWith("Yearlings"))!);
+    fireEvent.click([...document.querySelectorAll("button.mv-mob")].find((b) => b.textContent!.startsWith("Main mob"))!);
+    expect(when().value).toBe(toLocalInput(NOW));
   });
 });

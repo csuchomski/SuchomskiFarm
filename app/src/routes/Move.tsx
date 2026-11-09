@@ -70,6 +70,7 @@ import {
   type LonLat,
 } from "../lib/pasture-map";
 import { useMapScale } from "../lib/use-map-scale";
+import { fromLocalInput, toLocalInput } from "../lib/local-time";
 import "./grazing.css";
 
 /**
@@ -163,6 +164,12 @@ function restWords(r: BoardRow): string {
 const nowIso = () => new Date().toISOString();
 const today = () => new Date().toISOString().slice(0, 10);
 
+/** "Sat, Nov 7, 6:30 AM" — a moment, as the farmer would say it. */
+const momentWords = (iso: string) =>
+  new Date(iso).toLocaleString(undefined, {
+    weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  });
+
 /** Feet or yards, remembered between mornings. Same storage this app already
  * uses for the picked business — per browser, and no worse than losing it. */
 const WIDTH_UNIT_KEY = "grazer.wireWidthUnit";
@@ -204,6 +211,11 @@ export default function Move() {
   const [height, setHeight] = useState("");
   const [grazeTo, setGrazeTo] = useState("");
   const [ateTo, setAteTo] = useState("");
+  // When the move happened, as the date-time box holds it. Null is "now" —
+  // the usual case, and deliberately not a time captured when the page
+  // opened: a page left open over breakfast would otherwise log the move for
+  // when it was opened rather than when it was made.
+  const [movedAt, setMovedAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -719,6 +731,7 @@ export default function Move() {
     setHeight("");
     setGrazeTo("");
     setAteTo("");
+    setMovedAt(null);
     setError(null);
   };
 
@@ -739,14 +752,33 @@ export default function Move() {
 
   const send = async () => {
     if (!dest || !group || !farmId) return;
+    setNote(null);
+    // The time is checked here, in words, before the database is asked: its
+    // own refusal names only the day, which reads as nonsense when the two
+    // times are on the same one.
+    const at = movedAt === null ? nowIso() : fromLocalInput(movedAt);
+    if (at === null) {
+      setError("The move needs a full date and time, or leave it as now.");
+      return;
+    }
+    if (new Date(at).getTime() > Date.now() + 60_000) {
+      setError("That time hasn't happened yet. A move can be logged for now or earlier.");
+      return;
+    }
+    if (openStrip !== null && new Date(at).getTime() < new Date(openStrip.enteredAt).getTime()) {
+      setError(
+        `${group.name} went onto ${standing?.paddock?.name ?? "where they are"} at ` +
+          `${momentWords(openStrip.enteredAt)}, so the move off it can't be before that.`,
+      );
+      return;
+    }
     setBusy(true);
     setError(null);
-    setNote(null);
     try {
       await logMove(farmId, {
         paddockId: dest.id,
         groupId: group.id,
-        at: nowIso(),
+        at,
         headCount: head,
         avgWeightLb: avgWeight,
         forageHeightInEntry: heightIn,
@@ -773,12 +805,14 @@ export default function Move() {
               : ` — about ${Math.round(strip.lbDmOnOffer).toLocaleString()} lb of dry matter eaten,` +
                 ` down to ${assumed.grazeDown.residualIn}″.`)
           : `${group.name} moved to ${dest.name}.`) +
-          (ateToIn === null ? "" : ` The strip they left is recorded at ${ateToIn}″.`),
+          (ateToIn === null ? "" : ` The strip they left is recorded at ${ateToIn}″.`) +
+          (movedAt === null ? "" : ` Logged for ${momentWords(at)}.`),
       );
       goTo(null);
       setHeight("");
       setGrazeTo("");
       setAteTo("");
+      setMovedAt(null);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -1394,6 +1428,36 @@ export default function Move() {
                   A forecast, not a measurement.
                 </p>
               )}
+
+              {/* When it happened. Now unless changed — for a move made in the
+                  morning and entered at night, or the next day. Directly above
+                  the button, because it is the last thing to check before
+                  pressing it. */}
+              <div className="mv-when">
+                <label className="mv-when__field">
+                  <span className="eyebrow">Moved at</span>
+                  <input
+                    type="datetime-local"
+                    value={movedAt ?? toLocalInput(nowIso())}
+                    max={toLocalInput(nowIso())}
+                    // Cleared is "now" again, not a move with no time.
+                    onChange={(e) => setMovedAt(e.target.value === "" ? null : e.target.value)}
+                    aria-label="Date and time of the move"
+                  />
+                </label>
+                <p className="mv-when__note">
+                  {movedAt === null ? (
+                    <>Now, unless you change it — for a move you're entering later.</>
+                  ) : (
+                    <>
+                      Not now — this move will be logged for the time shown.{" "}
+                      <button type="button" className="link-button mv-when__now" onClick={() => setMovedAt(null)}>
+                        Use now
+                      </button>
+                    </>
+                  )}
+                </p>
+              </div>
 
               <div className="grz-form__actions">
                 <Button disabled={busy} onClick={() => setCutting(!cutting)}>

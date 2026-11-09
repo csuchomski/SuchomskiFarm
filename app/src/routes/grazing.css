@@ -672,7 +672,7 @@
 
    Always three columns, also when the residual box is absent (nothing to
    close), so a box is the same size whichever are showing. Each field's
-   label, paddock and box sit on shared rows, so a label that wraps on a
+   label, strip number and box sit on shared rows, so a label that wraps on a
    phone pushes all three boxes down together rather than one out of line. */
 .mv-heights { padding: 10px 0 14px; }
 

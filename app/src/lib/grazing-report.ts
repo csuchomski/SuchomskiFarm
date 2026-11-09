@@ -73,6 +73,22 @@ export function stripNumbers(
 }
 
 /**
+ * The number a strip would get if it were opened in this paddock at `at`.
+ *
+ * The same count `stripNumbers` makes, asked ahead of time — so the number
+ * shown while a move is being entered is the one the report prints for it
+ * afterwards. Position by time rather than "one more than there are",
+ * because a move can be entered for an earlier moment than now.
+ */
+export function nextStripNumber(events: GrazingEvent[], paddock: Paddock, at: string): string {
+  const moment = new Date(at).getTime();
+  const before = events.filter(
+    (e) => e.paddockId === paddock.id && new Date(e.enteredAt).getTime() <= moment,
+  ).length;
+  return `${paddock.code ?? paddock.name}-${before + 1}`;
+}
+
+/**
  * Whether a strip belongs in a window.
  *
  * Overlap, not "went in during". A mob that walked onto a strip in March and

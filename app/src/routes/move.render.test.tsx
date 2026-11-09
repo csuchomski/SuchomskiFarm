@@ -695,18 +695,43 @@ describe("what they actually ate it down to", () => {
     expect(document.querySelectorAll(".mv-heights__row")).toHaveLength(1);
   });
 
-  it("says which paddock each height is about, and that it's in inches", async () => {
+  const field = (label: string) => screen.getByLabelText(label).closest<HTMLElement>(".mv-field")!;
+  const where = (label: string) => field(label).querySelector(".mv-field__where")!.textContent;
+
+  it("says which strip each height is about, by the record's own number, and that it's in inches", async () => {
     inP3();
     await mount();
-    const field = (label: string) => screen.getByLabelText(label).closest<HTMLElement>(".mv-field")!;
-    const where = (label: string) => field(label).querySelector(".mv-field__where")!.textContent;
-    // The strip behind them is in the paddock they're standing in...
-    expect(where("Residual, inches")).toBe("Paddock 3");
-    // ...and the two ahead are about wherever the wire is going.
-    expect(where("Entry height, inches")).toBe(where("Target residual, inches"));
-    expect(where("Entry height, inches")).not.toBe("");
+    // The strip behind them is the first ever taken out of Paddock 3...
+    expect(where("Residual, inches")).toBe("Strip P3-1");
+    // ...and the two ahead are about the one the wire is about to open.
+    expect(where("Entry height, inches")).toBe("Strip P3-2");
+    expect(where("Target residual, inches")).toBe("Strip P3-2");
     for (const l of ["Residual, inches", "Entry height, inches", "Target residual, inches"])
       expect(field(l).querySelector(".mv-field__unit")!.textContent).toBe("in");
+    // The paddock's name is no longer under the labels.
+    expect(document.querySelector(".mv-heights__row")!.textContent).not.toContain("Paddock");
+  });
+
+  it("counts every strip the paddock has ever had, not only this mob's stay", async () => {
+    events.push(
+      strip("old1", "p3", 0, 0.5, "2026-07-02T12:00:00.000Z"),
+      strip("old2", "p3", 0.5, 1, "2026-07-03T12:00:00.000Z"),
+    );
+    events[0].enteredAt = "2026-07-01T12:00:00.000Z";
+    events[1].enteredAt = "2026-07-02T12:00:00.000Z";
+    inP3();
+    await mount();
+    expect(where("Residual, inches")).toBe("Strip P3-3");
+    expect(where("Entry height, inches")).toBe("Strip P3-4");
+  });
+
+  it("numbers the strip ahead in the paddock they are going to", async () => {
+    events.push(strip("s1", "p3", 0, 1, null));
+    await mount();
+    fireEvent.click(screen.getByText(/^On to Paddock 4/i));
+    expect(where("Residual, inches")).toBe("Strip P3-1");
+    expect(where("Entry height, inches")).toBe("Strip P4-1");
+    expect(where("Target residual, inches")).toBe("Strip P4-1");
   });
 
   it("records it against the strip they are leaving", async () => {

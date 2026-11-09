@@ -71,6 +71,7 @@ import {
 } from "../lib/pasture-map";
 import { useMapScale } from "../lib/use-map-scale";
 import { fromLocalInput, toLocalInput } from "../lib/local-time";
+import { nextStripNumber, stripNumbers } from "../lib/grazing-report";
 import "./grazing.css";
 
 /**
@@ -444,6 +445,19 @@ export default function Move() {
 
   /** The strip they are on, which the move is about to close. */
   const openStrip = standing?.open ?? null;
+
+  /** The strips' numbers, as the grazing record prints them — "P2-3" is the
+   *  third strip taken out of Paddock 2. The one being left has its number
+   *  already; the one being opened gets the number it will have once logged,
+   *  which depends on when the move is entered for. */
+  const leavingNumber =
+    openStrip !== null && load.state === "ok"
+      ? (stripNumbers(load.events, load.paddocks).get(openStrip.id) ?? null)
+      : null;
+  const openingNumber =
+    dest && load.state === "ok"
+      ? nextStripNumber(load.events, dest, (movedAt === null ? null : fromLocalInput(movedAt)) ?? nowIso())
+      : null;
 
   /** What that works out to as a share of the sward they went in on. Recorded
    *  beside the height so the figure survives if the entry height is later
@@ -1042,8 +1056,9 @@ export default function Move() {
               them next. It is also the one measurement here that is about the
               ground behind the wire — the other two are about the ground
               ahead, and the figures below are built on the difference between
-              them. Each box names its paddock, since on a move to new ground
-              the first is about a different one from the other two.
+              them. Each box names its strip by the number the grazing record
+              prints for it, since the first is about a different strip from
+              the other two.
 
               The residual box is only there when there is a strip to close;
               the row keeps three columns either way, so the other two don't
@@ -1054,7 +1069,7 @@ export default function Move() {
                 {openStrip !== null && (
                   <HeightField
                     label="Residual"
-                    where={standing?.paddock?.name ?? "Last strip"}
+                    where={leavingNumber === null ? "Last strip" : `Strip ${leavingNumber}`}
                     ariaLabel="Residual, inches"
                     value={ateTo}
                     onChange={setAteTo}
@@ -1065,7 +1080,7 @@ export default function Move() {
                   <>
                     <HeightField
                       label="Entry height"
-                      where={dest.name}
+                      where={`Strip ${openingNumber}`}
                       ariaLabel="Entry height, inches"
                       value={height}
                       onChange={setHeight}
@@ -1075,7 +1090,7 @@ export default function Move() {
                         plan's — the placeholder says which is standing in. */}
                     <HeightField
                       label="Target residual"
-                      where={dest.name}
+                      where={`Strip ${openingNumber}`}
                       ariaLabel="Target residual, inches"
                       value={grazeTo}
                       onChange={setGrazeTo}
@@ -1687,8 +1702,8 @@ function ScaleBar({
 export { drawnSliceAcres, stripWidthFt };
 
 /**
- * One of the three heights on the move: what it is, which paddock it is
- * about, and the number, in inches. The unit sits in the box rather than in
+ * One of the three heights on the move: what it is, which strip it is about,
+ * and the number, in inches. The unit sits in the box rather than in
  * the label, so the label stays two words and three fit across a phone.
  */
 function HeightField({

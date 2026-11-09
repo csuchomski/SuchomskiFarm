@@ -298,7 +298,7 @@ describe("grass height drives the figures", () => {
     plan = withPlan();
     events.push(strip("s1", "p3", 0, 0.2, null));
     await mount();
-    fireEvent.change(screen.getByLabelText("Grass height, inches"), { target: { value: "8" } });
+    fireEvent.change(screen.getByLabelText("Entry height, inches"), { target: { value: "8" } });
     expect(screen.getByText(/2,400 lb DM\/acre standing — 8″ × 300 lb, your figures/)).toBeTruthy();
   });
 
@@ -307,7 +307,7 @@ describe("grass height drives the figures", () => {
     weighEveryone();
     events.push(strip("s1", "p3", 0, 0.2, null));
     await mount();
-    fireEvent.change(screen.getByLabelText("Grass height, inches"), { target: { value: "6" } });
+    fireEvent.change(screen.getByLabelText("Entry height, inches"), { target: { value: "6" } });
     expect(screen.getByText(/from this morning's height/)).toBeTruthy();
     // Once under the height field, once in the assumptions line.
     expect(screen.getAllByText(/1,800 lb DM\/acre standing/).length).toBe(2);
@@ -317,7 +317,7 @@ describe("grass height drives the figures", () => {
     plan = withPlan();
     events.push(strip("s1", "p3", 0, 0.2, null));
     await mount();
-    fireEvent.change(screen.getByLabelText("Grass height, inches"), { target: { value: "7.5" } });
+    fireEvent.change(screen.getByLabelText("Entry height, inches"), { target: { value: "7.5" } });
     fireEvent.click(screen.getByText("Log the move"));
     await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
     expect(moved.mock.calls[0][1].forageHeightInEntry).toBe(7.5);
@@ -509,8 +509,8 @@ describe("the graze-down, on the page", () => {
   it("asks what to graze it down to, beside the height it comes off", async () => {
     inP3();
     await mount();
-    expect(screen.getByLabelText("Grass height, inches")).toBeTruthy();
-    expect(screen.getByLabelText("Graze it down to, inches")).toBeTruthy();
+    expect(screen.getByLabelText("Entry height, inches")).toBeTruthy();
+    expect(screen.getByLabelText("Target residual, inches")).toBeTruthy();
   });
 
   it("shows the paddock's own target as the figure standing in", async () => {
@@ -525,7 +525,7 @@ describe("the graze-down, on the page", () => {
     });
     await mount();
     expect(
-      (screen.getByLabelText("Graze it down to, inches") as HTMLInputElement).placeholder,
+      (screen.getByLabelText("Target residual, inches") as HTMLInputElement).placeholder,
     ).toBe("3");
   });
 
@@ -534,8 +534,8 @@ describe("the graze-down, on the page", () => {
     weighEveryone();
     plan = withPlan();
     await mount();
-    fireEvent.change(screen.getByLabelText("Grass height, inches"), { target: { value: "8" } });
-    fireEvent.change(screen.getByLabelText("Graze it down to, inches"), { target: { value: "4" } });
+    fireEvent.change(screen.getByLabelText("Entry height, inches"), { target: { value: "8" } });
+    fireEvent.change(screen.getByLabelText("Target residual, inches"), { target: { value: "4" } });
 
     // 8″ − 4″ = 4″ at 300 lb an acre-inch = 1,200 lb an acre off the plant —
     // but that is what *disappeared*, not what an animal ate. This plan sets
@@ -556,8 +556,8 @@ describe("the graze-down, on the page", () => {
     weighEveryone();
     plan = withPlan();
     await mount();
-    fireEvent.change(screen.getByLabelText("Grass height, inches"), { target: { value: "8" } });
-    fireEvent.change(screen.getByLabelText("Graze it down to, inches"), { target: { value: "4" } });
+    fireEvent.change(screen.getByLabelText("Entry height, inches"), { target: { value: "8" } });
+    fireEvent.change(screen.getByLabelText("Target residual, inches"), { target: { value: "4" } });
     fireEvent.click(screen.getByRole("button", { name: "How days of feed is worked out" }));
 
     const panel = screen.getByRole("note");
@@ -575,8 +575,8 @@ describe("the graze-down, on the page", () => {
     weighEveryone();
     plan = withPlan({ defaultUtilizationPct: 60 });
     await mount();
-    fireEvent.change(screen.getByLabelText("Grass height, inches"), { target: { value: "8" } });
-    fireEvent.change(screen.getByLabelText("Graze it down to, inches"), { target: { value: "4" } });
+    fireEvent.change(screen.getByLabelText("Entry height, inches"), { target: { value: "8" } });
+    fireEvent.change(screen.getByLabelText("Target residual, inches"), { target: { value: "4" } });
 
     // 1,200 off the plant, 60% of it eaten = 720.
     expect(screen.getByText(/720 lb DM an acre eaten/)).toBeTruthy();
@@ -592,14 +592,14 @@ describe("the graze-down, on the page", () => {
     weighEveryone();
     plan = withPlan();
     await mount();
-    fireEvent.change(screen.getByLabelText("Grass height, inches"), { target: { value: "8" } });
+    fireEvent.change(screen.getByLabelText("Entry height, inches"), { target: { value: "8" } });
 
     // The wire opens at a day's width and follows the assumptions, so taking
     // them further down means less ground for the same day's feed — which is
     // the whole point of setting the graze-down before placing the wire.
-    fireEvent.change(screen.getByLabelText("Graze it down to, inches"), { target: { value: "6" } });
+    fireEvent.change(screen.getByLabelText("Target residual, inches"), { target: { value: "6" } });
     const soft = wirePct().wire;
-    fireEvent.change(screen.getByLabelText("Graze it down to, inches"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("Target residual, inches"), { target: { value: "3" } });
     expect(wirePct().wire).toBeLessThan(soft);
   });
 
@@ -608,7 +608,7 @@ describe("the graze-down, on the page", () => {
     weighEveryone();
     plan = withPlan();
     await mount();
-    fireEvent.change(screen.getByLabelText("Grass height, inches"), { target: { value: "8" } });
+    fireEvent.change(screen.getByLabelText("Entry height, inches"), { target: { value: "8" } });
 
     // 5,000 lb of mob at 3% is 150 lb of dry matter a day, whatever height it
     // is taken off at.
@@ -617,7 +617,7 @@ describe("the graze-down, on the page", () => {
         .match(/([\d,]+)lb they'll eat/)![1].replace(/,/g, ""));
 
     for (const to of ["6", "4", "3"]) {
-      fireEvent.change(screen.getByLabelText("Graze it down to, inches"), { target: { value: to } });
+      fireEvent.change(screen.getByLabelText("Target residual, inches"), { target: { value: to } });
       expect(eaten()).toBe(150);
     }
   });
@@ -627,8 +627,8 @@ describe("the graze-down, on the page", () => {
     weighEveryone();
     plan = withPlan();
     await mount();
-    fireEvent.change(screen.getByLabelText("Grass height, inches"), { target: { value: "8" } });
-    fireEvent.change(screen.getByLabelText("Graze it down to, inches"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Entry height, inches"), { target: { value: "8" } });
+    fireEvent.change(screen.getByLabelText("Target residual, inches"), { target: { value: "2" } });
     fireEvent.click(screen.getByText("Log the move"));
 
     await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
@@ -645,8 +645,8 @@ describe("the graze-down, on the page", () => {
     weighEveryone();
     plan = withPlan();
     await mount();
-    fireEvent.change(screen.getByLabelText("Grass height, inches"), { target: { value: "8" } });
-    fireEvent.change(screen.getByLabelText("Graze it down to, inches"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Entry height, inches"), { target: { value: "8" } });
+    fireEvent.change(screen.getByLabelText("Target residual, inches"), { target: { value: "2" } });
     fireEvent.click(screen.getByText("Log the move"));
 
     await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
@@ -666,12 +666,46 @@ describe("what they actually ate it down to", () => {
 
   it("asks only when there is a strip behind them to have eaten", async () => {
     await mount();
-    expect(screen.queryByLabelText("They ate it down to, inches")).toBeNull();
+    expect(screen.queryByLabelText("Residual, inches")).toBeNull();
 
     cleanup();
     inP3();
     await mount();
-    expect(screen.getByLabelText("They ate it down to, inches")).toBeTruthy();
+    expect(screen.getByLabelText("Residual, inches")).toBeTruthy();
+  });
+
+  it("keeps the three heights together, in the order they're read in the field", async () => {
+    inP3();
+    await mount();
+    const row = screen.getByLabelText("Residual, inches").closest(".mv-heights__row")!;
+    // One row holds all three, and nothing else has a height box.
+    expect([...row.querySelectorAll("input")].map((i) => i.getAttribute("aria-label"))).toEqual([
+      "Residual, inches",
+      "Entry height, inches",
+      "Target residual, inches",
+    ]);
+    expect([...row.querySelectorAll(".eyebrow")].map((e) => e.textContent)).toEqual([
+      "Residual",
+      "Entry height",
+      "Target residual",
+    ]);
+    // Inside the two-column area with the map, not above it on its own.
+    expect(row.closest(".mv-layout")).not.toBeNull();
+    expect(document.querySelectorAll(".mv-heights__row")).toHaveLength(1);
+  });
+
+  it("says which paddock each height is about, and that it's in inches", async () => {
+    inP3();
+    await mount();
+    const field = (label: string) => screen.getByLabelText(label).closest<HTMLElement>(".mv-field")!;
+    const where = (label: string) => field(label).querySelector(".mv-field__where")!.textContent;
+    // The strip behind them is in the paddock they're standing in...
+    expect(where("Residual, inches")).toBe("Paddock 3");
+    // ...and the two ahead are about wherever the wire is going.
+    expect(where("Entry height, inches")).toBe(where("Target residual, inches"));
+    expect(where("Entry height, inches")).not.toBe("");
+    for (const l of ["Residual, inches", "Entry height, inches", "Target residual, inches"])
+      expect(field(l).querySelector(".mv-field__unit")!.textContent).toBe("in");
   });
 
   it("records it against the strip they are leaving", async () => {
@@ -679,7 +713,7 @@ describe("what they actually ate it down to", () => {
     weighEveryone();
     plan = withPlan();
     await mount();
-    fireEvent.change(screen.getByLabelText("They ate it down to, inches"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("Residual, inches"), { target: { value: "3" } });
     fireEvent.click(screen.getByText("Log the move"));
 
     await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
@@ -696,8 +730,8 @@ describe("what they actually ate it down to", () => {
     plan = withPlan();
     await mount();
     // A different height ahead of them must not contaminate the strip behind.
-    fireEvent.change(screen.getByLabelText("Grass height, inches"), { target: { value: "4" } });
-    fireEvent.change(screen.getByLabelText("They ate it down to, inches"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Entry height, inches"), { target: { value: "4" } });
+    fireEvent.change(screen.getByLabelText("Residual, inches"), { target: { value: "5" } });
     fireEvent.click(screen.getByText("Log the move"));
 
     await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
@@ -709,7 +743,7 @@ describe("what they actually ate it down to", () => {
     weighEveryone();
     plan = withPlan();
     await mount();
-    fireEvent.change(screen.getByLabelText("They ate it down to, inches"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("Residual, inches"), { target: { value: "3" } });
     // Said on the page before it is said in the record.
     expect(screen.getByText(/nothing to work a share of the sward out from/)).toBeTruthy();
     fireEvent.click(screen.getByText("Log the move"));
@@ -725,7 +759,7 @@ describe("what they actually ate it down to", () => {
     weighEveryone();
     plan = withPlan();
     await mount();
-    fireEvent.change(screen.getByLabelText("They ate it down to, inches"), { target: { value: "7" } });
+    fireEvent.change(screen.getByLabelText("Residual, inches"), { target: { value: "7" } });
     fireEvent.click(screen.getByText("Log the move"));
 
     await waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
@@ -737,7 +771,7 @@ describe("what they actually ate it down to", () => {
   it("shows its working before anything is logged", async () => {
     wentInAt(8);
     await mount();
-    fireEvent.change(screen.getByLabelText("They ate it down to, inches"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Residual, inches"), { target: { value: "2" } });
     expect(screen.getByText(/75% of the 8″ they went in on/)).toBeTruthy();
     expect(screen.getByText(/recorded against that strip, not this one/)).toBeTruthy();
   });

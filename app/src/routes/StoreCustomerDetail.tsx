@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { OpsShell, PageHeader } from "../components/shell/OpsShell";
-import { Pill, Button, StatTile, GridRow, Callout, SaveToast } from "../components/ui";
+import { Pill, Button, StatTile, GridRow, Callout, InfoTip, SaveToast } from "../components/ui";
 import { fetchCustomers, fetchOrders, customerName, type Customer, type RealOrder } from "../lib/orders";
 import { deleteCustomer, hasLogin, isArchived, setArchived, updateCustomer, validateCustomer } from "../lib/customers";
 import { groupByDate, outstanding, type CustomerOrder } from "../lib/customer";
@@ -147,10 +147,8 @@ export default function StoreCustomerDetail() {
         ? `Took home ${order.quantity} ${productUnit(order.product_id)} of ${productName(order.product_id).toLowerCase()}`
         : "Took jars home";
     }
-    if (line.kind === "return") {
-      return line.enteredBy === id ? "Returned — entered by them in the shop" : "Returned — entered at the farm";
-    }
-    return "Count set at the farm";
+    if (line.kind === "return") return "Returned";
+    return "Count set";
   };
 
   const handleJars = async (change: () => Promise<number>, said: (left: number) => string) => {
@@ -372,8 +370,16 @@ export default function StoreCustomerDetail() {
           {/* ── the farm's jars ── */}
           {showJars && businessId !== null && (
             <section className="customer-jars" aria-label="Jars">
-              <div className="serif" style={{ fontSize: 21, margin: "32px 0 4px" }}>
-                Jars
+              <div className="customer-jars__head">
+                <span className="serif" style={{ fontSize: 21 }}>
+                  Jars
+                </span>
+                <InfoTip label="How the jar count works">
+                  A pickup adds a jar for every half gallon of milk, unless it's a weekly pickup in their own jars.
+                  Record a return when jars come back. Set the count when the number itself is wrong — a starting
+                  count for jars they already had, or a miscount. Customers see their count in the shop but can't
+                  change it.
+                </InfoTip>
               </div>
               <p className="customer-jars__count">
                 {jarsHeld > 0 ? (
@@ -449,11 +455,6 @@ export default function StoreCustomerDetail() {
                   {jarsBack.trim() !== "" && jarsBackProblem ? jarsBackProblem : jarCountProblem}
                 </p>
               ) : null}
-              <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 8, maxWidth: "70ch" }}>
-                A pickup adds a jar for every half gallon of milk, unless it's a weekly pickup in their own jars.
-                Record a return when jars come back and they haven't entered it in the shop. Set the count when the
-                number itself is wrong — a starting count for jars they already had, or a miscount.
-              </p>
 
               {jarLines.length > 0 && (
                 <div style={{ marginTop: 12 }}>

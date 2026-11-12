@@ -215,19 +215,17 @@
   text-wrap: pretty;
 }
 
-/* The farm's jars: how many are with this customer, and handing them back.
-   Above the pickups, tinted, so it reads as a standing note rather than as
-   one more thing to collect. */
+/* The farm's jars: how many are with this customer. Above the pickups,
+   tinted, so it reads as a standing note rather than as one more thing to
+   collect. One line: the count, and an (i) for the rule behind it. */
 .shop-jars {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 16px 16px 0;
-  padding: 14px 16px;
+  padding: 12px 16px;
   background: var(--paper-tint);
   border: 1px solid var(--hairline);
-}
-
-.shop-jars .shop-product__actions {
-  margin-top: 12px;
-  margin-bottom: 8px;
 }
 
 /* "I'll bring my own jars". A whole-row tap target: the box itself is too

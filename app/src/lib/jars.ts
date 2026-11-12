@@ -9,8 +9,9 @@ import { supabase } from "./supabase";
  *
  * The count is a ledger in the database (migration 078), not something worked
  * out here: a pickup adds jars by a trigger, whoever marks it collected; a
- * return takes them off, said by the customer in the shop or entered by the
- * farmer; and the farmer can set the count outright. What this file works out
+ * return takes them off, entered by the farmer; and the farmer can set the
+ * count outright. A customer sees their count and cannot change it (079) —
+ * it is the farm's record of where its jars are. What this file works out
  * for itself is only what a form says before it is sent.
  */
 
@@ -23,7 +24,7 @@ export interface JarLine {
   change: number;
   at: string;
   orderId: number | null;
-  /** Who wrote the line — the customer themselves, or someone at the farm. */
+  /** Who wrote the line: whoever marked the pickup collected, or the farmer. */
   enteredBy: string | null;
 }
 
@@ -126,14 +127,7 @@ export async function fetchJarLines(businessId: number, customerId: string): Pro
 
 // ─── writes ────────────────────────────────────────────────────────────
 
-/** The customer saying they've brought jars back. Returns what they have left. */
-export async function returnJars(businessId: number, quantity: number): Promise<number> {
-  const { data, error } = await supabase.rpc("return_jars", { p_business_id: businessId, p_quantity: quantity });
-  if (error) throw new Error(error.message);
-  return Number(data);
-}
-
-/** The farmer entering a return the customer didn't. Returns what's left. */
+/** The farmer entering jars that came back. Returns what's left. */
 export async function recordJarReturn(businessId: number, customerId: string, quantity: number): Promise<number> {
   const { data, error } = await supabase.rpc("record_jar_return", {
     p_business_id: businessId,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CustomerShell, type CustomerTab } from "../components/shell/CustomerShell";
 import { CustomerAuth } from "../components/auth/CustomerAuth";
-import { Button, Callout, Pill } from "../components/ui";
+import { Button, Callout, InfoTip, Pill } from "../components/ui";
 import { useAuth, signOut } from "../lib/auth";
 import { useOptionalWorkspace } from "../lib/workspace";
 import {
@@ -44,7 +44,7 @@ import {
   type PaymentMethodOption,
 } from "../lib/payment-methods";
 import { maxOffer, quantityLabel, quantityOptions, stepFor } from "../lib/quantities";
-import { fetchMyJars, jarRule, jarsFor, jarWords, returnJars, validateJarReturn } from "../lib/jars";
+import { fetchMyJars, jarRule, jarsFor, jarWords } from "../lib/jars";
 import "./customer-store.css";
 
 type Fetch =
@@ -112,9 +112,6 @@ export default function CustomerStore() {
   const [subDay, setSubDay] = useState<string>("Thursday");
   const [subQty, setSubQty] = useState("");
   const [subOwnJars, setSubOwnJars] = useState(false);
-  // How many of the farm's jars are being handed back, as typed.
-  const [jarReturn, setJarReturn] = useState("");
-  const [jarBusy, setJarBusy] = useState(false);
   // What the farm expects to have free on each weekday, for the product
   // whose panel is open. Fetched per product rather than for all of them:
   // most visits never open the panel at all.
@@ -145,7 +142,6 @@ export default function CustomerStore() {
     setFarmChoice(id);
     setSubscribing(null);
     setCollecting(null);
-    setJarReturn("");
     setNotice(null);
     setActionError(null);
     try {
@@ -311,27 +307,6 @@ export default function CustomerStore() {
     }
   };
 
-  const handleReturnJars = async (businessId: number, held: number) => {
-    if (validateJarReturn(jarReturn, held)) return;
-    const n = Number(jarReturn);
-    setJarBusy(true);
-    setActionError(null);
-    setNotice(null);
-    try {
-      const left = await returnJars(businessId, n);
-      await load();
-      setJarReturn("");
-      setNotice(
-        `Thanks — ${jarWords(n)} returned. ` +
-          (left > 0 ? `You have ${jarWords(left)} of ours left.` : "You have none of ours now."),
-      );
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setJarBusy(false);
-    }
-  };
-
   const handleReserve = async (product: ShopProduct) => {
     if (!userId) return;
     const raw = qty[product.id];
@@ -418,7 +393,6 @@ export default function CustomerStore() {
   const jarsHere = result.state === "ok" && farmId !== null ? result.jars.get(farmId) : undefined;
   const jarred = shelf.find((p) => p.jars_per_unit != null) ?? null;
   const jarsPerUnit = (id: number) => products.find((p) => p.id === id)?.jars_per_unit ?? null;
-  const jarReturnProblem = jarsHere !== undefined && jarReturn.trim() !== "" ? validateJarReturn(jarReturn, jarsHere) : null;
 
   const productName = (id: number) => products.find((p) => p.id === id)?.name ?? "Item";
   const productUnit = (id: number) => products.find((p) => p.id === id)?.unit ?? "";
@@ -701,46 +675,21 @@ export default function CustomerStore() {
         </div>
       )}
 
-      {jarsHere !== undefined && farmId !== null && (
+      {/* How many of the farm's jars are with them. Read-only: the count is
+          the farm's record of where its jars are, so only the farm changes
+          it. The rule behind the number is one tap away rather than on the
+          page. */}
+      {jarsHere !== undefined && (
         <div className="shop-jars" role="group" aria-label="Our jars">
-          <div className="serif shop-product__name">
+          <span className="serif shop-product__name">
             {jarsHere > 0 ? `You have ${jarWords(jarsHere)} of ours` : "You have none of our jars"}
-          </div>
-          <div className="mono shop-product__price">
+          </span>
+          <InfoTip label="About our jars">
             {jarred && jarred.jars_per_unit != null
-              ? `${jarRule(jarred.jars_per_unit, jarred.unit)} of ${jarred.name.toLowerCase()} you take home in our jars`
-              : "Counted from what you've taken home in our jars"}
-          </div>
-          {jarsHere > 0 ? (
-            <>
-              <div className="shop-product__actions">
-                <input
-                  className="shop-qty-field"
-                  type="number"
-                  min="1"
-                  max={jarsHere}
-                  step="1"
-                  inputMode="numeric"
-                  placeholder="Jars"
-                  value={jarReturn}
-                  onChange={(e) => setJarReturn(e.target.value)}
-                  aria-label="Jars you are returning"
-                />
-                <button
-                  className="shop-reserve-btn"
-                  onClick={() => void handleReturnJars(farmId, jarsHere)}
-                  disabled={jarBusy || validateJarReturn(jarReturn, jarsHere) !== null}
-                >
-                  {jarBusy ? "Saving…" : "Return jars"}
-                </button>
-              </div>
-              <p className="shop-subscribe__note" style={jarReturnProblem ? { color: "var(--red)" } : undefined}>
-                {jarReturnProblem ?? "Bringing some back? Say how many, so we know they're home."}
-              </p>
-            </>
-          ) : (
-            <p className="shop-subscribe__note">All returned — thank you.</p>
-          )}
+              ? `We count ${jarRule(jarred.jars_per_unit, jarred.unit)} of ${jarred.name.toLowerCase()} you take home in our jars.`
+              : "We count the jars you take home."}{" "}
+            Please bring them back on your next visit — we take them off your count once they're back at the farm.
+          </InfoTip>
         </div>
       )}
 

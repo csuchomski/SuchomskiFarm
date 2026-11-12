@@ -192,11 +192,6 @@ const fulfilPickup = vi.fn(async (_input: FulfilInput) => 99);
 /** How many of each farm's jars this customer has, by business id. Empty by
  *  default: someone who has never taken a jar home is told nothing of jars. */
 let myJars = new Map<number, number>();
-const returnJars = vi.fn(async (businessId: number, quantity: number) => {
-  const left = (myJars.get(businessId) ?? 0) - quantity;
-  myJars = new Map(myJars).set(businessId, left);
-  return left;
-});
 const setOwnJars = vi.fn(async (_id: number, _own: boolean) => dueToday);
 /** The standing orders on file. Reassigned by the tests that need one in the
  *  customer's own jars. */
@@ -205,7 +200,6 @@ let mySchedules = [dueToday, notDueYet];
 vi.mock("../lib/jars", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/jars")>()),
   fetchMyJars: vi.fn(async () => myJars),
-  returnJars: (businessId: number, quantity: number) => returnJars(businessId, quantity),
 }));
 
 vi.mock("../lib/schedules", async (importOriginal) => ({
@@ -258,7 +252,6 @@ afterEach(() => {
   fetchScheduleCapacity.mockClear();
   myJars = new Map();
   mySchedules = [dueToday, notDueYet];
-  returnJars.mockClear();
   setOwnJars.mockClear();
 });
 
@@ -679,8 +672,6 @@ describe("The farm's jars", () => {
     fireEvent.click(screen.getByRole("button", { name: /Pickup/ }));
   };
   const jarsCard = () => screen.getByRole("group", { name: "Our jars" });
-  const returning = () => screen.getByLabelText("Jars you are returning") as HTMLInputElement;
-  const returnButton = () => screen.getByRole("button", { name: "Return jars" }) as HTMLButtonElement;
 
   it("says nothing about jars to someone who has never taken one home", async () => {
     await openPickup();
@@ -689,13 +680,21 @@ describe("The farm's jars", () => {
     expect(screen.queryByText("Our jars")).toBeNull();
   });
 
-  it("shows how many they have, and the rule the count comes from", async () => {
+  it("shows how many they have", async () => {
     myJars = new Map([[5, 4]]);
     await openPickup();
     expect(within(jarsCard()).getByText("You have 4 jars of ours")).toBeTruthy();
-    expect(within(jarsCard()).getByText(/1 jar for every half gallon of milk/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Account/ }));
     expect(screen.getByText("4 jars with you")).toBeTruthy();
+  });
+
+  it("keeps the rule behind the count out of sight until it's asked for", async () => {
+    myJars = new Map([[5, 4]]);
+    await openPickup();
+    expect(screen.queryByText(/1 jar for every half gallon of milk/)).toBeNull();
+    fireEvent.click(within(jarsCard()).getByRole("button", { name: "About our jars" }));
+    expect(screen.getByText(/1 jar for every half gallon of milk/)).toBeTruthy();
+    expect(screen.getByText(/we take them off your count once they're back at the farm/)).toBeTruthy();
   });
 
   it("counts this farm's jars, not another farm's", async () => {
@@ -704,40 +703,22 @@ describe("The farm's jars", () => {
     expect(screen.queryByRole("group", { name: "Our jars" })).toBeNull();
   });
 
-  it("records the number returned and shows what's left", async () => {
+  it("gives the customer nothing to change the count with — that's the farm's", async () => {
     myJars = new Map([[5, 4]]);
     await openPickup();
-    expect(returnButton().disabled).toBe(true);
-    fireEvent.change(returning(), { target: { value: "3" } });
-    fireEvent.click(returnButton());
-
-    await waitFor(() => expect(returnJars).toHaveBeenCalledTimes(1));
-    expect(returnJars).toHaveBeenCalledWith(5, 3);
-    expect(await screen.findByText("Thanks — 3 jars returned. You have 1 jar of ours left.")).toBeTruthy();
-    expect(within(jarsCard()).getByText("You have 1 jar of ours")).toBeTruthy();
-    expect(returning().value).toBe("");
+    // The only control on the card is the (i).
+    expect(within(jarsCard()).queryAllByRole("spinbutton")).toHaveLength(0);
+    expect(within(jarsCard()).queryAllByRole("textbox")).toHaveLength(0);
+    expect(within(jarsCard()).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
+      "About our jars",
+    ]);
+    expect(screen.queryByRole("button", { name: /return/i })).toBeNull();
   });
 
-  it("won't take back more than they have, or part of a jar", async () => {
-    myJars = new Map([[5, 2]]);
-    await openPickup();
-    fireEvent.change(returning(), { target: { value: "3" } });
-    expect(returnButton().disabled).toBe(true);
-    expect(within(jarsCard()).getByText("That's more than the 2 jars on record.")).toBeTruthy();
-    fireEvent.change(returning(), { target: { value: "1.5" } });
-    expect(returnButton().disabled).toBe(true);
-    fireEvent.change(returning(), { target: { value: "0" } });
-    expect(returnButton().disabled).toBe(true);
-    fireEvent.change(returning(), { target: { value: "2" } });
-    expect(returnButton().disabled).toBe(false);
-    expect(returnJars).not.toHaveBeenCalled();
-  });
-
-  it("thanks them, with nothing to fill in, once every jar is back", async () => {
+  it("says so plainly once every jar is back", async () => {
     myJars = new Map([[5, 0]]);
     await openPickup();
     expect(within(jarsCard()).getByText("You have none of our jars")).toBeTruthy();
-    expect(screen.queryByLabelText("Jars you are returning")).toBeNull();
   });
 
   it("says how many jars a pickup goes home in, before it's confirmed", async () => {

@@ -38,6 +38,13 @@
 
 /* The farm's jars: how many they have, and the two ways to change that. */
 
+.customer-jars__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 32px 0 4px;
+}
+
 .customer-jars__count {
   font-size: 15px;
   margin: 4px 0 12px;
@@ -56,11 +63,13 @@
   gap: 8px;
 }
 
-/* The box is as wide as its label, so the button sits the same distance
-   from both. */
+/* Both boxes the same width — the longer label's — so the two forms match. */
+.customer-jars__form label {
+  width: 160px;
+}
+
 .customer-jars__form .order-select {
   width: 100%;
-  min-width: 110px;
 }
 
 /* Archiving and deleting. Set apart by a rule rather than by colour — a

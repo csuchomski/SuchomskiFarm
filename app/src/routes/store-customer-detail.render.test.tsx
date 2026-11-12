@@ -68,7 +68,7 @@ vi.mock("../lib/store-data", async (importOriginal) => ({
 /** The farm's jars: what each customer has, and the lines behind it. */
 let jarBalances = new Map<string, number>([["cust-1", 4]]);
 let jarLines: import("../lib/jars").JarLine[] = [
-  { id: 3, kind: "return", change: -1, at: "2026-06-30T17:00:00Z", orderId: null, enteredBy: "cust-1" },
+  { id: 3, kind: "return", change: -1, at: "2026-06-30T17:00:00Z", orderId: null, enteredBy: "u1" },
   { id: 2, kind: "pickup", change: 4, at: "2026-06-24T20:00:00Z", orderId: 8, enteredBy: "cust-1" },
   { id: 1, kind: "correction", change: 1, at: "2026-06-20T12:00:00Z", orderId: null, enteredBy: "u1" },
 ];
@@ -266,16 +266,24 @@ describe("Customer detail · jars", () => {
     await waitFor(() => expect(jars().textContent).toContain("has 7 jars of yours."));
   });
 
-  it("says what each line on the record was, and who entered a return", async () => {
+  it("says what each line on the record was", async () => {
     await mount("cust-1");
     const rows = [...jars().querySelectorAll(".grid-row--body")].map((r) => r.textContent ?? "");
     expect(rows).toHaveLength(3);
-    expect(rows[0]).toContain("Returned — entered by them in the shop");
+    expect(rows[0]).toContain("Returned");
     expect(rows[0]).toContain("-1");
     // The pickup names the order it came from.
     expect(rows[1]).toContain("Took home 2 gallon of milk");
     expect(rows[1]).toContain("+4");
-    expect(rows[2]).toContain("Count set at the farm");
+    expect(rows[2]).toContain("Count set");
+  });
+
+  it("keeps the explanation behind an (i), not on the page", async () => {
+    await mount("cust-1");
+    expect(screen.queryByText(/A pickup adds a jar for every half gallon/)).toBeNull();
+    fireEvent.click(within(jars()).getByRole("button", { name: "How the jar count works" }));
+    expect(screen.getByText(/A pickup adds a jar for every half gallon/)).toBeTruthy();
+    expect(screen.getByText(/Customers see their count in the shop but can't change it/)).toBeTruthy();
   });
 
   it("starts someone with no jars at none, with a count that can still be set", async () => {

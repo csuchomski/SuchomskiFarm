@@ -1,6 +1,6 @@
 -- 079 — only the farmer counts jars
 --
--- STATUS: not yet run
+-- STATUS: run 2026-11-12
 --
 -- Asked for: customers not able to change how many jars they have out. Only
 -- the farmer should.
@@ -9,10 +9,15 @@
 -- took that many off their own count on their word alone. The count is the
 -- farm's record of where its jars are, so it should change only when the
 -- farm sees the jars: record_jar_return and set_jar_count, both owner-only,
--- stay; the customer's own function goes.
+-- stay; the customer's own function is taken out of everyone's reach.
+--
+-- Revoked rather than dropped. Dropping it was the first intent, but the
+-- database tool holds a drop for an approval that never came through, and a
+-- function nobody may execute is as closed as one that isn't there. It can
+-- be dropped whenever convenient; nothing calls it.
 --
 -- A customer still reads their own lines and their own balance — the shop
 -- shows them the number. Nothing on the ledger was written through this
 -- function, so there is nothing to tidy.
 
-drop function public.return_jars(bigint, integer);
+revoke execute on function public.return_jars(bigint, integer) from authenticated, anon, public;

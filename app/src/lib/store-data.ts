@@ -19,6 +19,9 @@ export interface RealProduct {
    * lib/forecast.ts, which divides it by seven. Null means "work it out
    * from history". */
   forecast_override: number | null;
+  /** How many of the farm's jars one unit goes out in; null when it isn't
+   * sold in jars. Set in the database, not from the product form. */
+  jars_per_unit?: number | null;
 }
 
 export interface RealBatch {
@@ -85,7 +88,7 @@ export async function fetchStoreData(scope: StoreScope): Promise<StoreData> {
   const [productsRes, batchesRes, discardsRes, productionRes] = await Promise.all([
     supabase
       .from("products")
-      .select("id, name, unit, price, forecast_override")
+      .select("id, name, unit, price, forecast_override, jars_per_unit")
       .eq("business_id", businessId)
       .order("name"),
     supabase

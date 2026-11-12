@@ -14,6 +14,7 @@ import {
   isHeld,
   nextPickup,
   resumeSchedule,
+  setOwnJars,
   skipWeek,
   untilLabel,
   validateSchedule,
@@ -59,6 +60,8 @@ export default function StoreSchedules() {
   const [quantity, setQuantity] = useState("");
   const [day, setDay] = useState<string>("Thursday");
   const [startDate, setStartDate] = useState("");
+  // The customer fills their own jars, so none of the farm's go out.
+  const [ownJars, setOwnJarsDraft] = useState(false);
 
   const refresh = useCallback(async () => {
     if (businessId === null) {
@@ -91,6 +94,9 @@ export default function StoreSchedules() {
   const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const today = todayIso();
+  // Whether a product goes home in jars at all — the own-jars choice is only
+  // offered where there are jars to be counted.
+  const inJars = (pid: number | string) => (productById.get(Number(pid))?.jars_per_unit ?? null) !== null;
 
   const active = schedules.filter(isActive);
   const cancelledCount = schedules.length - active.length;
@@ -125,9 +131,11 @@ export default function StoreSchedules() {
         quantity: Number(quantity),
         day: day as Weekday,
         startDate: startDate || null,
+        ownJars: inJars(productId) && ownJars,
       });
       setAdding(false);
       setQuantity("");
+      setOwnJarsDraft(false);
     }, "Standing order created.");
 
   return (
@@ -232,6 +240,12 @@ export default function StoreSchedules() {
                   />
                 </label>
               </div>
+              {productId !== "" && inJars(productId) && (
+                <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 14, marginTop: 12 }}>
+                  <input type="checkbox" checked={ownJars} onChange={(e) => setOwnJarsDraft(e.target.checked)} />
+                  They bring their own jars
+                </label>
+              )}
               <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
                 <Button variant="filled" size="sm" disabled={busy || problem !== null} onClick={() => void handleCreate()}>
                   {busy ? "Saving…" : "Create"}
@@ -293,6 +307,7 @@ export default function StoreSchedules() {
                         {p?.name ?? `Product ${s.product_id}`}
                         {s.fulfilled_dates.length > 0 && ` · ${s.fulfilled_dates.length} collected`}
                         {s.skipped_dates.length > 0 && ` · ${s.skipped_dates.length} skipped`}
+                        {inJars(s.product_id) && (s.own_jars ? " · their own jars" : " · your jars")}
                       </span>
                     </span>
                     <span className="hide-sm" style={{ fontSize: 13 }}>
@@ -351,6 +366,24 @@ export default function StoreSchedules() {
                           >
                             skip
                           </button>
+                          {inJars(s.product_id) && (
+                            <button
+                              type="button"
+                              className="link-button mono"
+                              disabled={busy}
+                              aria-label={`${s.own_jars ? "Use your jars" : "Use their own jars"} for ${customerName(c)}'s ${s.day} pickup`}
+                              onClick={() =>
+                                void act(
+                                  () => setOwnJars(s.id, !s.own_jars),
+                                  s.own_jars
+                                    ? `From the next pickup, ${customerName(c)} takes your jars.`
+                                    : `From the next pickup, ${customerName(c)} brings their own jars.`,
+                                )
+                              }
+                            >
+                              {s.own_jars ? "your jars" : "own jars"}
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="link-button mono"
@@ -369,7 +402,9 @@ export default function StoreSchedules() {
               <p style={{ fontSize: 13, color: "var(--ink-muted)", paddingTop: 16 }}>
                 "Collected" consumes stock and writes a completed order, the same as any pickup — see{" "}
                 <Link to="/store/orders">Orders</Link>. "Skip" moves only that week. Cancelling keeps the history, so
-                a resumed standing order still knows what it has collected.
+                a resumed standing order still knows what it has collected. "Own jars" and "your jars" switch whose
+                jars a pickup goes home in, from the next one on — a pickup in their own jars adds nothing to the
+                jars they have of yours.
               </p>
             </>
           )}

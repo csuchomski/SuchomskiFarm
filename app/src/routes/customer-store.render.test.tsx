@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -16,8 +16,9 @@ vi.mock("../lib/auth", () => ({
 }));
 
 const products = [
-  { id: 1, name: "Milk", unit: "gallon", price: 10, business_id: 5, available: 4, type_code: "milk" },
-  { id: 3, name: "Eggs", unit: "dozen", price: 7, business_id: 5, available: 0, type_code: "eggs" },
+  // Milk goes home in the farm's jars, two to the gallon; eggs don't.
+  { id: 1, name: "Milk", unit: "gallon", price: 10, business_id: 5, available: 4, type_code: "milk", jars_per_unit: 2 as number | null },
+  { id: 3, name: "Eggs", unit: "dozen", price: 7, business_id: 5, available: 0, type_code: "eggs", jars_per_unit: null as number | null },
 ];
 
 /**
@@ -179,6 +180,7 @@ const scheduleBase = {
   cancelled_at: null,
   business_id: 5,
   note: "",
+  own_jars: false,
 };
 
 const dueToday = { ...scheduleBase, id: 1, quantity: 4, day: WEEKDAY_NAMES[todayIndex] };
@@ -187,9 +189,29 @@ const notDueYet = { ...scheduleBase, id: 2, quantity: 3, day: WEEKDAY_NAMES[(tod
 type FulfilInput = Parameters<typeof import("../lib/schedules").fulfilPickup>[0];
 const fulfilPickup = vi.fn(async (_input: FulfilInput) => 99);
 
+/** How many of each farm's jars this customer has, by business id. Empty by
+ *  default: someone who has never taken a jar home is told nothing of jars. */
+let myJars = new Map<number, number>();
+const returnJars = vi.fn(async (businessId: number, quantity: number) => {
+  const left = (myJars.get(businessId) ?? 0) - quantity;
+  myJars = new Map(myJars).set(businessId, left);
+  return left;
+});
+const setOwnJars = vi.fn(async (_id: number, _own: boolean) => dueToday);
+/** The standing orders on file. Reassigned by the tests that need one in the
+ *  customer's own jars. */
+let mySchedules = [dueToday, notDueYet];
+
+vi.mock("../lib/jars", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/jars")>()),
+  fetchMyJars: vi.fn(async () => myJars),
+  returnJars: (businessId: number, quantity: number) => returnJars(businessId, quantity),
+}));
+
 vi.mock("../lib/schedules", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/schedules")>()),
-  fetchMySchedules: vi.fn(async () => [dueToday, notDueYet]),
+  fetchMySchedules: vi.fn(async () => mySchedules),
+  setOwnJars: (id: number, own: boolean) => setOwnJars(id, own),
   fulfilPickup: (input: FulfilInput) => fulfilPickup(input),
   fetchScheduleCapacity: (productId: number) => fetchScheduleCapacity(productId),
   createSchedule: (input: CreateInput) => createSchedule(input),
@@ -234,6 +256,10 @@ afterEach(() => {
   fulfilPickup.mockClear();
   createSchedule.mockClear();
   fetchScheduleCapacity.mockClear();
+  myJars = new Map();
+  mySchedules = [dueToday, notDueYet];
+  returnJars.mockClear();
+  setOwnJars.mockClear();
 });
 
 const mount = async () => {
@@ -559,8 +585,8 @@ describe("Starting a weekly pickup", () => {
 });
 
 describe("One farm at a time", () => {
-  const beef = { id: 41, name: "Ground beef", unit: "pound", price: 8, business_id: 31, available: 12, type_code: "meat" };
-  const honey = { id: 51, name: "Honey", unit: "jar", price: 12, business_id: 13, available: 6, type_code: "honey" };
+  const beef = { id: 41, name: "Ground beef", unit: "pound", price: 8, business_id: 31, available: 12, type_code: "meat", jars_per_unit: null };
+  const honey = { id: 51, name: "Honey", unit: "jar", price: 12, business_id: 13, available: 6, type_code: "honey", jars_per_unit: null };
 
   it("names the farm, and offers no choice, when there is only one", async () => {
     await mount();
@@ -647,3 +673,138 @@ describe("One farm at a time", () => {
   });
 });
 
+describe("The farm's jars", () => {
+  const openPickup = async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: /Pickup/ }));
+  };
+  const jarsCard = () => screen.getByRole("group", { name: "Our jars" });
+  const returning = () => screen.getByLabelText("Jars you are returning") as HTMLInputElement;
+  const returnButton = () => screen.getByRole("button", { name: "Return jars" }) as HTMLButtonElement;
+
+  it("says nothing about jars to someone who has never taken one home", async () => {
+    await openPickup();
+    expect(screen.queryByRole("group", { name: "Our jars" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Account/ }));
+    expect(screen.queryByText("Our jars")).toBeNull();
+  });
+
+  it("shows how many they have, and the rule the count comes from", async () => {
+    myJars = new Map([[5, 4]]);
+    await openPickup();
+    expect(within(jarsCard()).getByText("You have 4 jars of ours")).toBeTruthy();
+    expect(within(jarsCard()).getByText(/1 jar for every half gallon of milk/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Account/ }));
+    expect(screen.getByText("4 jars with you")).toBeTruthy();
+  });
+
+  it("counts this farm's jars, not another farm's", async () => {
+    myJars = new Map([[31, 6]]);
+    await openPickup();
+    expect(screen.queryByRole("group", { name: "Our jars" })).toBeNull();
+  });
+
+  it("records the number returned and shows what's left", async () => {
+    myJars = new Map([[5, 4]]);
+    await openPickup();
+    expect(returnButton().disabled).toBe(true);
+    fireEvent.change(returning(), { target: { value: "3" } });
+    fireEvent.click(returnButton());
+
+    await waitFor(() => expect(returnJars).toHaveBeenCalledTimes(1));
+    expect(returnJars).toHaveBeenCalledWith(5, 3);
+    expect(await screen.findByText("Thanks — 3 jars returned. You have 1 jar of ours left.")).toBeTruthy();
+    expect(within(jarsCard()).getByText("You have 1 jar of ours")).toBeTruthy();
+    expect(returning().value).toBe("");
+  });
+
+  it("won't take back more than they have, or part of a jar", async () => {
+    myJars = new Map([[5, 2]]);
+    await openPickup();
+    fireEvent.change(returning(), { target: { value: "3" } });
+    expect(returnButton().disabled).toBe(true);
+    expect(within(jarsCard()).getByText("That's more than the 2 jars on record.")).toBeTruthy();
+    fireEvent.change(returning(), { target: { value: "1.5" } });
+    expect(returnButton().disabled).toBe(true);
+    fireEvent.change(returning(), { target: { value: "0" } });
+    expect(returnButton().disabled).toBe(true);
+    fireEvent.change(returning(), { target: { value: "2" } });
+    expect(returnButton().disabled).toBe(false);
+    expect(returnJars).not.toHaveBeenCalled();
+  });
+
+  it("thanks them, with nothing to fill in, once every jar is back", async () => {
+    myJars = new Map([[5, 0]]);
+    await openPickup();
+    expect(within(jarsCard()).getByText("You have none of our jars")).toBeTruthy();
+    expect(screen.queryByLabelText("Jars you are returning")).toBeNull();
+  });
+
+  it("says how many jars a pickup goes home in, before it's confirmed", async () => {
+    await openPickup();
+    // The weekly 4 gallons, due today: eight half-gallon jars.
+    fireEvent.click(screen.getAllByRole("button", { name: "I've picked this up" })[0]);
+    expect(screen.getByText("Goes home in 8 jars of ours. Please bring them back.")).toBeTruthy();
+    // Taking less takes fewer — three quarters of a gallon still needs two.
+    fireEvent.change(screen.getByLabelText("Quantity of Milk picked up"), { target: { value: "0.75" } });
+    expect(screen.getByText("Goes home in 2 jars of ours. Please bring them back.")).toBeTruthy();
+  });
+});
+
+describe("Bringing your own jars", () => {
+  const openPanel = async (product: string) => {
+    await mount();
+    const card = [...document.querySelectorAll(".shop-product")].find((c) => c.textContent?.includes(product))!;
+    fireEvent.click(card.querySelector(".shop-subscribe-link")!);
+    await waitFor(() => expect(fetchScheduleCapacity).toHaveBeenCalled());
+  };
+  const start = async () => {
+    fireEvent.change(screen.getByLabelText("Pickup day"), { target: { value: "Monday" } });
+    fireEvent.change(screen.getByLabelText(/^Weekly quantity of/), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start weekly pickup" }));
+    await waitFor(() => expect(createSchedule).toHaveBeenCalledTimes(1));
+    return createSchedule.mock.calls[0][0];
+  };
+
+  it("is offered when starting a weekly pickup of milk, and sent when ticked", async () => {
+    await openPanel("Milk");
+    const box = screen.getByLabelText("I'll bring my own jars") as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    fireEvent.click(box);
+    expect(await start()).toMatchObject({ productId: 1, ownJars: true });
+  });
+
+  it("is the farm's jars unless they say otherwise", async () => {
+    await openPanel("Milk");
+    expect(await start()).toMatchObject({ productId: 1, ownJars: false });
+  });
+
+  it("isn't asked about something that doesn't go home in jars", async () => {
+    await openPanel("Eggs");
+    expect(screen.queryByLabelText("I'll bring my own jars")).toBeNull();
+    expect(await start()).toMatchObject({ productId: 3, ownJars: false });
+  });
+
+  it("can be changed on a weekly pickup that's already running", async () => {
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: /Pickup/ }));
+    const boxes = screen.getAllByLabelText(/^I bring my own jars for the /) as HTMLInputElement[];
+    expect(boxes).toHaveLength(2);
+    expect(boxes[0].checked).toBe(false);
+    fireEvent.click(boxes[0]);
+    await waitFor(() => expect(setOwnJars).toHaveBeenCalledTimes(1));
+    expect(setOwnJars).toHaveBeenCalledWith(1, true);
+    expect(await screen.findByText(/from your next pickup this goes home in your own jars/)).toBeTruthy();
+  });
+
+  it("shows which pickups are in their own jars, and counts none of the farm's for them", async () => {
+    mySchedules = [{ ...dueToday, own_jars: true }, notDueYet];
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: /Pickup/ }));
+    const boxes = screen.getAllByLabelText(/^I bring my own jars for the /) as HTMLInputElement[];
+    expect(boxes.map((b) => b.checked)).toEqual([true, false]);
+    fireEvent.click(screen.getAllByRole("button", { name: "I've picked this up" })[0]);
+    expect(screen.getByText("In your own jars — none of ours go home with you.")).toBeTruthy();
+    expect(screen.queryByText(/Goes home in/)).toBeNull();
+  });
+});

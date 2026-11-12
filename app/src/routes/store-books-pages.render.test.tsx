@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { within, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
@@ -110,6 +110,13 @@ vi.mock("../lib/payment-methods", async (importOriginal) => ({
   ]),
 }));
 
+/** How many of the farm's jars each customer has. cust-2 has had jars and
+ *  brought them all back, which is not worth a mark on the list. */
+vi.mock("../lib/jars", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/jars")>()),
+  fetchJarBalances: vi.fn(async () => new Map([["cust-1", 3], ["cust-2", 0]])),
+}));
+
 vi.mock("../lib/store-data", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/store-data")>()),
   fetchStoreData: vi.fn(async () => ({
@@ -211,6 +218,17 @@ describe("Customers page", () => {
     const { default: StoreCustomers } = await import("./StoreCustomers");
     await mount(StoreCustomers, "Customers");
     expect(screen.getAllByText("never").length).toBeGreaterThan(0);
+  });
+
+  it("marks who has the farm's jars, and how many are out in all", async () => {
+    const { default: StoreCustomers } = await import("./StoreCustomers");
+    await mount(StoreCustomers, "Customers");
+    // On Meghan's row, and nobody else's — a count of zero isn't a mark.
+    const row = screen.getByText("Meghan Suchomski").closest<HTMLElement>(".grid-row")!;
+    expect(within(row).getByText("has 3 jars")).toBeTruthy();
+    expect(screen.getAllByText(/^has \d+ jars?$/)).toHaveLength(1);
+    const tile = screen.getByText("Jars out").closest<HTMLElement>(".stat-tile")!;
+    expect(tile.textContent).toContain("3");
   });
 });
 

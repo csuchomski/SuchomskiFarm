@@ -215,6 +215,40 @@
   text-wrap: pretty;
 }
 
+/* The farm's jars: how many are with this customer, and handing them back.
+   Above the pickups, tinted, so it reads as a standing note rather than as
+   one more thing to collect. */
+.shop-jars {
+  margin: 16px 16px 0;
+  padding: 14px 16px;
+  background: var(--paper-tint);
+  border: 1px solid var(--hairline);
+}
+
+.shop-jars .shop-product__actions {
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
+/* "I'll bring my own jars". A whole-row tap target: the box itself is too
+   small for a thumb. */
+.shop-own-jars {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  margin: 4px 0 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.shop-own-jars input {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  accent-color: var(--herd-green);
+}
+
 /* The Account tab: who you are and what you've collected. */
 
 .shop-account {

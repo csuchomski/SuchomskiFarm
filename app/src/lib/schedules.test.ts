@@ -24,6 +24,7 @@ const sched = (over: Partial<Schedule> = {}): Schedule => ({
   cancelled_at: over.cancelled_at ?? null,
   business_id: over.business_id ?? 5,
   note: over.note ?? "",
+  own_jars: false,
 });
 
 describe("nextPickup", () => {

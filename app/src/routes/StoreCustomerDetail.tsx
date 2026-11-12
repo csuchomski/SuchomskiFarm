@@ -6,6 +6,16 @@ import { fetchCustomers, fetchOrders, customerName, type Customer, type RealOrde
 import { deleteCustomer, hasLogin, isArchived, setArchived, updateCustomer, validateCustomer } from "../lib/customers";
 import { groupByDate, outstanding, type CustomerOrder } from "../lib/customer";
 import { fetchStoreData, type ProductWithInventory } from "../lib/store-data";
+import {
+  fetchJarBalances,
+  fetchJarLines,
+  jarWords,
+  recordJarReturn,
+  setJarCount,
+  validateJarCount,
+  validateJarReturn,
+  type JarLine,
+} from "../lib/jars";
 import { useWorkspace } from "../lib/workspace";
 import "./store-orders.css";
 import "./store-customer.css";
@@ -37,7 +47,15 @@ const dayLabel = (isoDay: string): string => {
 type Load =
   | { state: "loading" }
   | { state: "error"; message: string }
-  | { state: "ok"; customer: Customer | null; orders: RealOrder[]; products: ProductWithInventory[] };
+  | {
+      state: "ok";
+      customer: Customer | null;
+      orders: RealOrder[];
+      products: ProductWithInventory[];
+      /** How many of the farm's jars they have, and the lines behind it. */
+      jarsHeld: number;
+      jarLines: JarLine[];
+    };
 
 export default function StoreCustomerDetail() {
   const { id = "" } = useParams();
@@ -53,22 +71,29 @@ export default function StoreCustomerDetail() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ first_name: "", last_name: "", email: "", phone: "" });
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Jars: a return the customer didn't enter, or the count put right.
+  const [jarsBack, setJarsBack] = useState("");
+  const [jarCount, setJarCountDraft] = useState("");
 
   const refresh = useCallback(async () => {
     if (businessId === null) {
-      setLoad({ state: "ok", customer: null, orders: [], products: [] });
+      setLoad({ state: "ok", customer: null, orders: [], products: [], jarsHeld: 0, jarLines: [] });
       return;
     }
-    const [customers, orders, store] = await Promise.all([
+    const [customers, orders, store, balances, jarLines] = await Promise.all([
       fetchCustomers(businessId),
       fetchOrders(businessId),
       fetchStoreData({ businessId, farmId }),
+      fetchJarBalances(businessId),
+      fetchJarLines(businessId, id),
     ]);
     setLoad({
       state: "ok",
       customer: customers.find((c) => c.id === id) ?? null,
       orders: orders.filter((o) => o.customer_id === id),
       products: store.products,
+      jarsHeld: balances.get(id) ?? 0,
+      jarLines,
     });
   }, [businessId, farmId, id]);
 
@@ -105,6 +130,45 @@ export default function StoreCustomerDetail() {
 
   const past = orders.filter((o) => o.picked_up_date || o.cancelled_date);
   const days = useMemo(() => groupByDate(past as CustomerOrder[]), [past]);
+
+  const jarsHeld = load.state === "ok" ? load.jarsHeld : 0;
+  const jarLines = load.state === "ok" ? load.jarLines : EMPTY_LINES;
+  // Shown on a farm that sells anything in jars, and for anyone with jars on
+  // record whatever the shelf holds today.
+  const showJars = jarLines.length > 0 || products.some((p) => (p.jars_per_unit ?? null) !== null);
+  const jarsBackProblem = validateJarReturn(jarsBack, jarsHeld);
+  const jarCountProblem = validateJarCount(jarCount);
+
+  /** What a line on the jar record was, in words. */
+  const jarLineWords = (line: JarLine): string => {
+    if (line.kind === "pickup") {
+      const order = line.orderId === null ? undefined : orders.find((o) => o.id === line.orderId);
+      return order
+        ? `Took home ${order.quantity} ${productUnit(order.product_id)} of ${productName(order.product_id).toLowerCase()}`
+        : "Took jars home";
+    }
+    if (line.kind === "return") {
+      return line.enteredBy === id ? "Returned — entered by them in the shop" : "Returned — entered at the farm";
+    }
+    return "Count set at the farm";
+  };
+
+  const handleJars = async (change: () => Promise<number>, said: (left: number) => string) => {
+    if (!customer || businessId === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const left = await change();
+      await refresh();
+      setJarsBack("");
+      setJarCountDraft("");
+      setNote(said(left));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const startEdit = (c: Customer) => {
     setForm({
@@ -221,6 +285,7 @@ export default function StoreCustomerDetail() {
             <StatTile value={billed ? money(billed) : "—"} label="Lifetime purchases" />
             <StatTile value={paid ? money(paid) : "—"} label="Actually paid" />
             <StatTile value={owed ? money(owed) : "—"} label="Still owed" />
+            {showJars && <StatTile value={jarsHeld || "—"} label="Jars out" />}
           </div>
 
           {/* ── who they are ── */}
@@ -302,6 +367,118 @@ export default function StoreCustomerDetail() {
               />
               <Fact label="Open orders" value={open.length === 0 ? "none" : String(open.length)} />
             </div>
+          )}
+
+          {/* ── the farm's jars ── */}
+          {showJars && businessId !== null && (
+            <section className="customer-jars" aria-label="Jars">
+              <div className="serif" style={{ fontSize: 21, margin: "32px 0 4px" }}>
+                Jars
+              </div>
+              <p className="customer-jars__count">
+                {jarsHeld > 0 ? (
+                  <>
+                    {customerName(customer)} has <strong>{jarWords(jarsHeld)}</strong> of yours.
+                  </>
+                ) : (
+                  <>{customerName(customer)} has none of your jars.</>
+                )}
+              </p>
+
+              <div className="customer-jars__forms">
+                <div className="customer-jars__form">
+                  <label style={{ fontSize: 13 }}>
+                    <div className="eyebrow">Jars returned</div>
+                    <input
+                      className="order-select"
+                      type="number"
+                      min="1"
+                      max={jarsHeld}
+                      step="1"
+                      inputMode="numeric"
+                      value={jarsBack}
+                      disabled={jarsHeld === 0}
+                      onChange={(e) => setJarsBack(e.target.value)}
+                      aria-label="Jars returned"
+                    />
+                  </label>
+                  <Button
+                    variant="filled"
+                    size="sm"
+                    disabled={busy || jarsBackProblem !== null}
+                    onClick={() =>
+                      void handleJars(
+                        () => recordJarReturn(businessId, customer.id, Number(jarsBack)),
+                        (left) => `${jarWords(Number(jarsBack))} recorded as returned — ${left} still out.`,
+                      )
+                    }
+                  >
+                    Record return
+                  </Button>
+                </div>
+                <div className="customer-jars__form">
+                  <label style={{ fontSize: 13 }}>
+                    <div className="eyebrow">Or set the count to</div>
+                    <input
+                      className="order-select"
+                      type="number"
+                      min="0"
+                      step="1"
+                      inputMode="numeric"
+                      value={jarCount}
+                      onChange={(e) => setJarCountDraft(e.target.value)}
+                      aria-label="Set the jar count to"
+                    />
+                  </label>
+                  <Button
+                    size="sm"
+                    disabled={busy || jarCountProblem !== null || Number(jarCount) === jarsHeld}
+                    onClick={() =>
+                      void handleJars(
+                        () => setJarCount(businessId, customer.id, Number(jarCount)),
+                        (left) => `Count set — ${customerName(customer)} has ${jarWords(left)} of yours.`,
+                      )
+                    }
+                  >
+                    Set count
+                  </Button>
+                </div>
+              </div>
+              {(jarsBack.trim() !== "" && jarsBackProblem) || (jarCount.trim() !== "" && jarCountProblem) ? (
+                <p style={{ fontSize: 13, color: "var(--red)", marginTop: 8 }}>
+                  {jarsBack.trim() !== "" && jarsBackProblem ? jarsBackProblem : jarCountProblem}
+                </p>
+              ) : null}
+              <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 8, maxWidth: "70ch" }}>
+                A pickup adds a jar for every half gallon of milk, unless it's a weekly pickup in their own jars.
+                Record a return when jars come back and they haven't entered it in the shop. Set the count when the
+                number itself is wrong — a starting count for jars they already had, or a miscount.
+              </p>
+
+              {jarLines.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <GridRow cols={JAR_COLS} mobileCols={JAR_COLS_SM} as="header">
+                    <span>What happened</span>
+                    <span className="hide-sm">When</span>
+                    <span className="text-right">Jars</span>
+                  </GridRow>
+                  {jarLines.map((line) => (
+                    <GridRow key={line.id} cols={JAR_COLS} mobileCols={JAR_COLS_SM} as="body">
+                      <span style={{ minWidth: 0 }}>
+                        {jarLineWords(line)}
+                        <span className="show-sm" style={{ fontSize: 12, color: "var(--ink-muted)" }}>
+                          {new Date(line.at).toLocaleDateString()}
+                        </span>
+                      </span>
+                      <span className="hide-sm mono" style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+                        {new Date(line.at).toLocaleDateString()}
+                      </span>
+                      <span className="mono text-right">{line.change > 0 ? `+${line.change}` : line.change}</span>
+                    </GridRow>
+                  ))}
+                </div>
+              )}
+            </section>
           )}
 
           {/* ── what they've bought ── */}
@@ -418,5 +595,9 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const HIST_COLS = "1fr 110px 110px 120px";
 const HIST_COLS_SM = "1fr 84px 84px";
 
+const JAR_COLS = "1fr 120px 70px";
+const JAR_COLS_SM = "1fr 56px";
+
 const EMPTY_ORDERS: RealOrder[] = [];
 const EMPTY_PRODUCTS: ProductWithInventory[] = [];
+const EMPTY_LINES: JarLine[] = [];

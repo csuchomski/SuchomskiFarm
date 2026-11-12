@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CustomerShell, type CustomerTab } from "../components/shell/CustomerShell";
 import { CustomerAuth } from "../components/auth/CustomerAuth";
-import { Button, Callout, InfoTip, Pill } from "../components/ui";
+import { Button, InfoTip, Pill } from "../components/ui";
 import { useAuth, signOut } from "../lib/auth";
 import { useOptionalWorkspace } from "../lib/workspace";
 import {
@@ -954,9 +954,6 @@ export default function CustomerStore() {
       )}
 
       <div className="shop-note">
-        <Callout>
-          Nothing from an animal under treatment ever reaches a bottle.
-        </Callout>
         <button
           onClick={() => void signOut()}
           style={{
@@ -964,7 +961,6 @@ export default function CustomerStore() {
             border: "none",
             color: "var(--herd-green)",
             fontSize: 13,
-            marginTop: 16,
             padding: 0,
           }}
         >

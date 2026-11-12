@@ -11,6 +11,7 @@ import {
   type RealOrder,
 } from "../lib/orders";
 import { addCustomer, hasLogin, isArchived, validateCustomer } from "../lib/customers";
+import { fetchJarBalances, jarWords } from "../lib/jars";
 import { useWorkspace } from "../lib/workspace";
 import "./store-orders.css";
 import "./store-customer.css";
@@ -28,7 +29,7 @@ const money = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDi
 type Load =
   | { state: "loading" }
   | { state: "error"; message: string }
-  | { state: "ok"; orders: RealOrder[]; customers: Customer[] };
+  | { state: "ok"; orders: RealOrder[]; customers: Customer[]; jars: Map<string, number> };
 
 const COLS = "1fr 110px 90px 110px 110px";
 const COLS_SM = "1fr 84px 84px";
@@ -53,11 +54,15 @@ export default function StoreCustomers() {
 
   const refresh = useCallback(async () => {
     if (businessId === null) {
-      setLoad({ state: "ok", orders: [], customers: [] });
+      setLoad({ state: "ok", orders: [], customers: [], jars: new Map() });
       return;
     }
-    const [orders, customers] = await Promise.all([fetchOrders(businessId), fetchCustomers(businessId)]);
-    setLoad({ state: "ok", orders, customers });
+    const [orders, customers, jars] = await Promise.all([
+      fetchOrders(businessId),
+      fetchCustomers(businessId),
+      fetchJarBalances(businessId),
+    ]);
+    setLoad({ state: "ok", orders, customers, jars });
   }, [businessId]);
 
   useEffect(() => {
@@ -73,6 +78,10 @@ export default function StoreCustomers() {
 
   const orders = load.state === "ok" ? load.orders : EMPTY_ORDERS;
   const customers = load.state === "ok" ? load.customers : EMPTY_CUSTOMERS;
+  // How many of the farm's jars each customer has. Only counts above zero
+  // are shown: the point of the list is who to ask.
+  const jars = load.state === "ok" ? load.jars : EMPTY_JARS;
+  const jarsOut = [...jars.values()].reduce((s, n) => s + Math.max(0, n), 0);
 
   const summaries = useMemo(() => byCustomer(orders), [orders]);
   const byId = useMemo(() => new Map(summaries.map((s) => [s.customerId, s])), [summaries]);
@@ -131,6 +140,7 @@ export default function StoreCustomers() {
             <StatTile value={buyers || "—"} label="Have ordered" />
             <StatTile value={spending ? money(Math.round(spending * 100) / 100) : "—"} label="Lifetime takings" />
             <StatTile value={summaries.reduce((s, r) => s + r.openOrders, 0) || "—"} label="Open orders" />
+            <StatTile value={jarsOut || "—"} label="Jars out" />
           </div>
 
           {error && <p style={{ fontSize: 13, color: "var(--red)", padding: "12px 0" }}>{error}</p>}
@@ -256,6 +266,12 @@ export default function StoreCustomers() {
                           <Pill variant="outline">no login</Pill>
                         </>
                       )}
+                      {(jars.get(c.id) ?? 0) > 0 && (
+                        <>
+                          {" "}
+                          <Pill variant="outline-ochre">has {jarWords(jars.get(c.id)!)}</Pill>
+                        </>
+                      )}
                       <br />
                       <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
                         {contact || `${c.role} · no other contact details`}
@@ -293,3 +309,4 @@ export default function StoreCustomers() {
 
 const EMPTY_ORDERS: RealOrder[] = [];
 const EMPTY_CUSTOMERS: Customer[] = [];
+const EMPTY_JARS = new Map<string, number>();

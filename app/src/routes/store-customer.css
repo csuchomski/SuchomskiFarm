@@ -36,6 +36,57 @@
   color: var(--ink-muted);
 }
 
+/* The farm's jars: how many they have, and the two ways to change that. */
+
+.customer-jars__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 32px 0 4px;
+}
+
+.customer-jars__count {
+  font-size: 15px;
+  margin: 4px 0 12px;
+}
+
+.customer-jars__forms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+}
+
+/* A box and its button on one line, the button on the box's baseline. */
+.customer-jars__form {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* "Show history" — quiet, under the forms. */
+.customer-jars__more {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--herd-green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* Both boxes the same width — the longer label's — so the two forms match. */
+.customer-jars__form label {
+  width: 160px;
+}
+
+.customer-jars__form .order-select {
+  width: 100%;
+}
+
 /* Archiving and deleting. Set apart by a rule rather than by colour — a
    destructive action shouldn't be the loudest thing on a page you opened to
    read someone's phone number. */

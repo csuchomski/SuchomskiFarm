@@ -40,10 +40,13 @@ export interface Schedule {
   cancelled_at: string | null;
   business_id: number | null;
   note: string;
+  /** The customer brings their own jars, so a pickup puts none of the farm's
+   * against them. Read by the database at each pickup — see lib/jars.ts. */
+  own_jars: boolean;
 }
 
 const COLUMNS =
-  "id, customer_id, product_id, quantity, day, start_date, skipped_dates, fulfilled_dates, cancelled_at, business_id, note";
+  "id, customer_id, product_id, quantity, day, start_date, skipped_dates, fulfilled_dates, cancelled_at, business_id, note, own_jars";
 
 // ─── dates ─────────────────────────────────────────────────────────────
 
@@ -229,6 +232,7 @@ function normalise(data: unknown): Schedule[] {
     skipped_dates: Array.isArray(s.skipped_dates) ? s.skipped_dates : [],
     fulfilled_dates: Array.isArray(s.fulfilled_dates) ? s.fulfilled_dates : [],
     note: s.note ?? "",
+    own_jars: s.own_jars === true,
   }));
 }
 
@@ -242,6 +246,7 @@ export async function createSchedule(input: {
   day: Weekday;
   startDate: string | null;
   note?: string;
+  ownJars?: boolean;
 }): Promise<Schedule> {
   const { data, error } = await supabase
     .from("schedules")
@@ -253,6 +258,7 @@ export async function createSchedule(input: {
       day: input.day,
       start_date: input.startDate,
       note: input.note?.trim() ?? "",
+      own_jars: input.ownJars === true,
     })
     .select(COLUMNS)
     .single();
@@ -309,6 +315,21 @@ export async function resumeSchedule(id: number): Promise<Schedule> {
   const { data, error } = await supabase
     .from("schedules")
     .update({ cancelled_at: null })
+    .eq("id", id)
+    .select(COLUMNS)
+    .single();
+  if (error) throw new Error(error.message);
+  return normalise([data])[0];
+}
+
+/**
+ * Whose jars a standing order goes home in. Applies from the next pickup:
+ * jars already out stay on the customer's count until they come back.
+ */
+export async function setOwnJars(id: number, ownJars: boolean): Promise<Schedule> {
+  const { data, error } = await supabase
+    .from("schedules")
+    .update({ own_jars: ownJars })
     .eq("id", id)
     .select(COLUMNS)
     .single();

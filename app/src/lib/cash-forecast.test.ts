@@ -54,6 +54,7 @@ const schedule = (over: Partial<Schedule> = {}): Schedule => ({
   cancelled_at: null,
   business_id: 5,
   note: "",
+  own_jars: false,
   ...over,
 });
 

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
@@ -57,10 +57,37 @@ vi.mock("../lib/orders", async (importOriginal) => ({
 vi.mock("../lib/store-data", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/store-data")>()),
   fetchStoreData: vi.fn(async () => ({
-    products: [{ id: 1, name: "Milk", unit: "gallon", price: 10, onHand: 6, claimed: 2, openToShop: 4, batches: [] }],
+    products: [
+      { id: 1, name: "Milk", unit: "gallon", price: 10, jars_per_unit: 2, onHand: 6, claimed: 2, openToShop: 4, batches: [] },
+    ],
     discards: [],
     production: [],
   })),
+}));
+
+/** The farm's jars: what each customer has, and the lines behind it. */
+let jarBalances = new Map<string, number>([["cust-1", 4]]);
+let jarLines: import("../lib/jars").JarLine[] = [
+  { id: 3, kind: "return", change: -1, at: "2026-06-30T17:00:00Z", orderId: null, enteredBy: "u1" },
+  { id: 2, kind: "pickup", change: 4, at: "2026-06-24T20:00:00Z", orderId: 8, enteredBy: "cust-1" },
+  { id: 1, kind: "correction", change: 1, at: "2026-06-20T12:00:00Z", orderId: null, enteredBy: "u1" },
+];
+const recordJarReturn = vi.fn(async (_b: number, customerId: string, n: number) => {
+  const left = (jarBalances.get(customerId) ?? 0) - n;
+  jarBalances = new Map(jarBalances).set(customerId, left);
+  return left;
+});
+const setJarCount = vi.fn(async (_b: number, customerId: string, n: number) => {
+  jarBalances = new Map(jarBalances).set(customerId, n);
+  return n;
+});
+
+vi.mock("../lib/jars", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/jars")>()),
+  fetchJarBalances: vi.fn(async () => jarBalances),
+  fetchJarLines: vi.fn(async (_b: number, customerId: string) => (customerId === "cust-1" ? jarLines : [])),
+  recordJarReturn: (b: number, c: string, n: number) => recordJarReturn(b, c, n),
+  setJarCount: (b: number, c: string, n: number) => setJarCount(b, c, n),
 }));
 
 type Patch = Parameters<typeof import("../lib/customers").updateCustomer>[1];
@@ -80,6 +107,9 @@ afterEach(() => {
   updateCustomer.mockClear();
   setArchived.mockClear();
   deleteCustomer.mockClear();
+  recordJarReturn.mockClear();
+  setJarCount.mockClear();
+  jarBalances = new Map([["cust-1", 4]]);
 });
 
 const mount = async (id: string) => {
@@ -184,5 +214,117 @@ describe("Customer detail", () => {
       </MemoryRouter>,
     );
     expect(await screen.findByText(/No customer with that id/)).toBeTruthy();
+  });
+});
+
+describe("Customer detail · jars", () => {
+  const jars = () => screen.getByRole("region", { name: "Jars" });
+  const back = () => screen.getByLabelText("Jars returned") as HTMLInputElement;
+  const count = () => screen.getByLabelText("Set the jar count to") as HTMLInputElement;
+  const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
+
+  it("says how many of the farm's jars they have", async () => {
+    await mount("cust-1");
+    expect(within(jars()).getByText("4 jars")).toBeTruthy();
+    expect(jars().textContent).toContain("Meghan Suchomski has 4 jars of yours.");
+    const tile = screen.getByText("Jars out").closest<HTMLElement>(".stat-tile")!;
+    expect(tile.textContent).toContain("4");
+  });
+
+  it("records jars that came back without the customer saying so", async () => {
+    await mount("cust-1");
+    expect(button("Record return").disabled).toBe(true);
+    fireEvent.change(back(), { target: { value: "3" } });
+    fireEvent.click(button("Record return"));
+
+    await waitFor(() => expect(recordJarReturn).toHaveBeenCalledTimes(1));
+    expect(recordJarReturn).toHaveBeenCalledWith(5, "cust-1", 3);
+    await waitFor(() => expect(jars().textContent).toContain("has 1 jar of yours."));
+    expect(back().value).toBe("");
+  });
+
+  it("won't record more coming back than they have", async () => {
+    await mount("cust-1");
+    fireEvent.change(back(), { target: { value: "5" } });
+    expect(button("Record return").disabled).toBe(true);
+    expect(within(jars()).getByText("That's more than the 4 jars on record.")).toBeTruthy();
+    expect(recordJarReturn).not.toHaveBeenCalled();
+  });
+
+  it("lets the count be set outright, up or down", async () => {
+    await mount("cust-1");
+    // The same number is no change, so there's nothing to press.
+    fireEvent.change(count(), { target: { value: "4" } });
+    expect(button("Set count").disabled).toBe(true);
+    fireEvent.change(count(), { target: { value: "-1" } });
+    expect(button("Set count").disabled).toBe(true);
+
+    fireEvent.change(count(), { target: { value: "7" } });
+    fireEvent.click(button("Set count"));
+    await waitFor(() => expect(setJarCount).toHaveBeenCalledTimes(1));
+    expect(setJarCount).toHaveBeenCalledWith(5, "cust-1", 7);
+    await waitFor(() => expect(jars().textContent).toContain("has 7 jars of yours."));
+  });
+
+  it("keeps the history folded away until it's asked for", async () => {
+    await mount("cust-1");
+    expect(screen.queryByRole("group", { name: "Jar history" })).toBeNull();
+    expect(jars().querySelectorAll(".grid-row--body")).toHaveLength(0);
+    // The count and the two forms are still there without it.
+    expect(jars().textContent).toContain("has 4 jars of yours.");
+    expect(back()).toBeTruthy();
+
+    const toggle = button("Show history (3)");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    expect(screen.getByRole("group", { name: "Jar history" })).toBeTruthy();
+    expect(jars().querySelectorAll(".grid-row--body")).toHaveLength(3);
+
+    fireEvent.click(button("Hide history"));
+    expect(screen.queryByRole("group", { name: "Jar history" })).toBeNull();
+  });
+
+  it("stays open while a return is recorded, and shows nothing to open with no history", async () => {
+    await mount("cust-1");
+    fireEvent.click(button("Show history (3)"));
+    fireEvent.change(back(), { target: { value: "1" } });
+    fireEvent.click(button("Record return"));
+    await waitFor(() => expect(recordJarReturn).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(jars().textContent).toContain("has 3 jars of yours."));
+    expect(screen.getByRole("group", { name: "Jar history" })).toBeTruthy();
+
+    cleanup();
+    await mount("cust-2");
+    expect(screen.queryByRole("button", { name: /history/i })).toBeNull();
+  });
+
+  it("says what each line on the record was", async () => {
+    await mount("cust-1");
+    fireEvent.click(button("Show history (3)"));
+    const rows = [...jars().querySelectorAll(".grid-row--body")].map((r) => r.textContent ?? "");
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toContain("Returned");
+    expect(rows[0]).toContain("-1");
+    // The pickup names the order it came from.
+    expect(rows[1]).toContain("Took home 2 gallon of milk");
+    expect(rows[1]).toContain("+4");
+    expect(rows[2]).toContain("Count set");
+  });
+
+  it("keeps the explanation behind an (i), not on the page", async () => {
+    await mount("cust-1");
+    expect(screen.queryByText(/A pickup adds a jar for every half gallon/)).toBeNull();
+    fireEvent.click(within(jars()).getByRole("button", { name: "How the jar count works" }));
+    expect(screen.getByText(/A pickup adds a jar for every half gallon/)).toBeTruthy();
+    expect(screen.getByText(/Customers see their count in the shop but can't change it/)).toBeTruthy();
+  });
+
+  it("starts someone with no jars at none, with a count that can still be set", async () => {
+    await mount("cust-2");
+    expect(jars().textContent).toContain("quiet@example.com has none of your jars.");
+    expect(back().disabled).toBe(true);
+    fireEvent.change(count(), { target: { value: "2" } });
+    fireEvent.click(button("Set count"));
+    await waitFor(() => expect(setJarCount).toHaveBeenCalledWith(5, "cust-2", 2));
   });
 });

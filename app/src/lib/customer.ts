@@ -28,6 +28,9 @@ export interface ShopProduct {
    * pickup: schedules are business-scoped since migration 019, the same way
    * orders have been since 010. */
   business_id: number;
+  /** How many of the farm's jars one unit goes home in — 2 for milk by the
+   * gallon. Null for anything not sold in jars. See lib/jars.ts. */
+  jars_per_unit: number | null;
   /** Batch quantity minus what's already reserved. */
   available: number;
 }
@@ -138,7 +141,7 @@ export async function fetchProfile(userId: string): Promise<CustomerProfile | nu
 
 export async function fetchShop(): Promise<ShopProduct[]> {
   const [productsRes, batchesRes] = await Promise.all([
-    supabase.from("products").select("id, name, unit, price, business_id, type_code").order("name"),
+    supabase.from("products").select("id, name, unit, price, business_id, type_code, jars_per_unit").order("name"),
     supabase.from("inventory_batches").select("product_id, quantity, reserved"),
   ]);
   if (productsRes.error) throw new Error(`products: ${productsRes.error.message}`);
@@ -149,7 +152,11 @@ export async function fetchShop(): Promise<ShopProduct[]> {
   return ((productsRes.data ?? []) as Omit<ShopProduct, "available">[]).map((p) => {
     const mine = batches.filter((b) => b.product_id === p.id);
     const available = mine.reduce((s, b) => s + (Number(b.quantity) - Number(b.reserved)), 0);
-    return { ...p, available: Math.round(available * 1000) / 1000 };
+    return {
+      ...p,
+      jars_per_unit: p.jars_per_unit == null ? null : Number(p.jars_per_unit),
+      available: Math.round(available * 1000) / 1000,
+    };
   });
 }
 

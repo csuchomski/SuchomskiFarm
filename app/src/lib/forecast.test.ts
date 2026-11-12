@@ -17,6 +17,7 @@ const sched = (over: Partial<Schedule> = {}): Schedule => ({
   cancelled_at: over.cancelled_at ?? null,
   business_id: 5,
   note: "",
+  own_jars: false,
 });
 
 /** `days` days of history at `perDay` each, ending yesterday. */

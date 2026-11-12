@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CustomerShell, type CustomerTab } from "../components/shell/CustomerShell";
 import { CustomerAuth } from "../components/auth/CustomerAuth";
-import { Button, Callout, Pill } from "../components/ui";
+import { Button, Callout, InfoTip, Pill } from "../components/ui";
 import { useAuth, signOut } from "../lib/auth";
 import { useOptionalWorkspace } from "../lib/workspace";
 import {
@@ -28,6 +28,7 @@ import {
   fulfilPickup,
   isHeld,
   nextPickup,
+  setOwnJars,
   skipWeek,
   untilLabel,
   WEEKDAYS,
@@ -43,6 +44,7 @@ import {
   type PaymentMethodOption,
 } from "../lib/payment-methods";
 import { maxOffer, quantityLabel, quantityOptions, stepFor } from "../lib/quantities";
+import { fetchMyJars, jarRule, jarsFor, jarWords } from "../lib/jars";
 import "./customer-store.css";
 
 type Fetch =
@@ -57,6 +59,9 @@ type Fetch =
       schedules: Schedule[];
       profile: CustomerProfile | null;
       methods: PaymentMethodOption[];
+      /** How many of each farm's jars this customer has, by business id. A
+       * farm is here only once a jar of theirs has gone home with them. */
+      jars: Map<number, number>;
     };
 
 /** Which thing on the Pickup tab is being handed over right now. Orders and
@@ -106,6 +111,7 @@ export default function CustomerStore() {
   const [subscribing, setSubscribing] = useState<number | null>(null);
   const [subDay, setSubDay] = useState<string>("Thursday");
   const [subQty, setSubQty] = useState("");
+  const [subOwnJars, setSubOwnJars] = useState(false);
   // What the farm expects to have free on each weekday, for the product
   // whose panel is open. Fetched per product rather than for all of them:
   // most visits never open the panel at all.
@@ -147,7 +153,7 @@ export default function CustomerStore() {
 
   const load = useCallback(async () => {
     if (!userId) return;
-    const [products, orders, schedules, profile, methods] = await Promise.all([
+    const [products, orders, schedules, profile, methods, jars] = await Promise.all([
       fetchShop(),
       fetchMyOrders(userId),
       fetchMySchedules(userId),
@@ -155,9 +161,11 @@ export default function CustomerStore() {
       // error — the row is created by a trigger and may lag a fresh signup.
       fetchProfile(userId).catch(() => null),
       fetchShopPaymentMethods(),
+      // The jar count is a courtesy line; the shop still sells without it.
+      fetchMyJars(userId).catch(() => new Map<number, number>()),
     ]);
     const farmNames = await fetchShopFarmNames([...new Set(products.map((p) => p.business_id))]);
-    setResult({ state: "ok", products, farmNames, orders, schedules, profile, methods });
+    setResult({ state: "ok", products, farmNames, orders, schedules, profile, methods, jars });
   }, [userId]);
 
   useEffect(() => {
@@ -191,6 +199,7 @@ export default function CustomerStore() {
   const openSubscribe = async (product: ShopProduct) => {
     setSubscribing(product.id);
     setSubQty("");
+    setSubOwnJars(false);
     setActionError(null);
     setCapacity(null);
     setCapacityLoading(true);
@@ -235,11 +244,15 @@ export default function CustomerStore() {
         quantity,
         day: subDay as Weekday,
         startDate: null,
+        ownJars: product.jars_per_unit != null && subOwnJars,
       });
       await load();
       setSubscribing(null);
       setSubQty("");
-      setNotice(`Every ${subDay}: ${quantity} ${product.unit} of ${product.name.toLowerCase()}.`);
+      setNotice(
+        `Every ${subDay}: ${quantity} ${product.unit} of ${product.name.toLowerCase()}` +
+          (product.jars_per_unit != null && subOwnJars ? ", in your own jars." : "."),
+      );
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -268,6 +281,25 @@ export default function CustomerStore() {
       await cancelSchedule(schedule.id);
       await load();
       setNotice("Weekly pickup stopped.");
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  /** Whose jars a weekly pickup goes home in, changed after it was started. */
+  const handleOwnJars = async (schedule: Schedule, own: boolean) => {
+    setBusyId(schedule.id);
+    setActionError(null);
+    try {
+      await setOwnJars(schedule.id, own);
+      await load();
+      setNotice(
+        own
+          ? "Noted — from your next pickup this goes home in your own jars."
+          : "Noted — from your next pickup this goes home in our jars.",
+      );
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -355,6 +387,12 @@ export default function CustomerStore() {
    */
   const productBusiness = (id: number) => products.find((p) => p.id === id)?.business_id ?? null;
   const methodsHere = (productId: number) => methodsFor(methods, productBusiness(productId));
+
+  // This farm's jars. Undefined until one has gone home with them, so someone
+  // who only buys eggs is never told about jars.
+  const jarsHere = result.state === "ok" && farmId !== null ? result.jars.get(farmId) : undefined;
+  const jarred = shelf.find((p) => p.jars_per_unit != null) ?? null;
+  const jarsPerUnit = (id: number) => products.find((p) => p.id === id)?.jars_per_unit ?? null;
 
   const productName = (id: number) => products.find((p) => p.id === id)?.name ?? "Item";
   const productUnit = (id: number) => products.find((p) => p.id === id)?.unit ?? "";
@@ -581,6 +619,16 @@ export default function CustomerStore() {
                       ))}
                     </select>
                   </div>
+                  {p.jars_per_unit != null && (
+                    <label className="shop-own-jars">
+                      <input
+                        type="checkbox"
+                        checked={subOwnJars}
+                        onChange={(e) => setSubOwnJars(e.target.checked)}
+                      />
+                      <span>I'll bring my own jars</span>
+                    </label>
+                  )}
                   <div className="shop-subscribe__row">
                     <button
                       className="shop-reserve-btn"
@@ -627,6 +675,24 @@ export default function CustomerStore() {
         </div>
       )}
 
+      {/* How many of the farm's jars are with them. Read-only: the count is
+          the farm's record of where its jars are, so only the farm changes
+          it. The rule behind the number is one tap away rather than on the
+          page. */}
+      {jarsHere !== undefined && (
+        <div className="shop-jars" role="group" aria-label="Our jars">
+          <span className="serif shop-product__name">
+            {jarsHere > 0 ? `You have ${jarWords(jarsHere)} of ours` : "You have none of our jars"}
+          </span>
+          <InfoTip label="About our jars">
+            {jarred && jarred.jars_per_unit != null
+              ? `We count ${jarRule(jarred.jars_per_unit, jarred.unit)} of ${jarred.name.toLowerCase()} you take home in our jars.`
+              : "We count the jars you take home."}{" "}
+            Please bring them back on your next visit — we take them off your count once they're back at the farm.
+          </InfoTip>
+        </div>
+      )}
+
       {open.length === 0 && activeSchedules.length === 0 && (
         <div className="shop-empty">
           <div className="serif" style={{ fontSize: 21, marginBottom: 6 }}>
@@ -666,6 +732,8 @@ export default function CustomerStore() {
                     name={productName(sch.product_id)}
                     unit={productUnit(sch.product_id)}
                     ordered={sch.quantity}
+                    jarsPerUnit={jarsPerUnit(sch.product_id)}
+                    ownJars={sch.own_jars}
                     price={productPrice(sch.product_id)}
                     methods={methodsHere(sch.product_id)}
                     quantity={collectQty}
@@ -711,6 +779,18 @@ export default function CustomerStore() {
                         Stop
                       </Button>
                     </div>
+                    {jarsPerUnit(sch.product_id) !== null && (
+                      <label className="shop-own-jars">
+                        <input
+                          type="checkbox"
+                          checked={sch.own_jars}
+                          disabled={busyId === sch.id}
+                          onChange={(e) => void handleOwnJars(sch, e.target.checked)}
+                          aria-label={`I bring my own jars for the ${sch.day} ${productName(sch.product_id).toLowerCase()}`}
+                        />
+                        <span>I bring my own jars</span>
+                      </label>
+                    )}
                   </>
                 )}
               </div>
@@ -748,6 +828,7 @@ export default function CustomerStore() {
                 name={productName(o.product_id)}
                 unit={productUnit(o.product_id)}
                 ordered={o.quantity}
+                jarsPerUnit={jarsPerUnit(o.product_id)}
                 price={productPrice(o.product_id)}
                 methods={methodsHere(o.product_id)}
                 quantity={collectQty}
@@ -802,6 +883,12 @@ export default function CustomerStore() {
             <div className="shop-account__row">
               <span className="eyebrow">Phone</span>
               <span>{profile.phone}</span>
+            </div>
+          )}
+          {jarsHere !== undefined && (
+            <div className="shop-account__row">
+              <span className="eyebrow">Our jars</span>
+              <span>{jarsHere > 0 ? `${jarWords(jarsHere)} with you` : "none with you"}</span>
             </div>
           )}
           <div className="shop-account__row">
@@ -904,6 +991,8 @@ function CollectForm({
   name,
   unit,
   ordered,
+  jarsPerUnit = null,
+  ownJars = false,
   price,
   methods,
   quantity,
@@ -918,6 +1007,10 @@ function CollectForm({
   name: string;
   unit: string;
   ordered: number;
+  /** Set when this goes home in jars; null for eggs and the like. */
+  jarsPerUnit?: number | null;
+  /** A weekly pickup the customer fills their own jars for. */
+  ownJars?: boolean;
   price: number | null;
   methods: PaymentMethodOption[];
   quantity: string;
@@ -932,6 +1025,7 @@ function CollectForm({
   const typed = Number(quantity);
   const due = Number.isFinite(typed) && typed > 0 ? amountDue(price, typed) : null;
   const short = Number.isFinite(typed) && typed > 0 && typed < ordered;
+  const jars = Number.isFinite(typed) ? jarsFor(typed, jarsPerUnit) : null;
 
   return (
     <div className="shop-collect">
@@ -981,6 +1075,15 @@ function CollectForm({
         {due === null ? "No price set — the farm will sort this out." : `That's $${due.toFixed(2)}.`}
         {short && ` ${Math.round((ordered - typed) * 1000) / 1000} ${unit} goes back on the shelf.`}
       </div>
+
+      {/* What this pickup does to their jar count, said before it happens. */}
+      {jarsPerUnit !== null && (ownJars || (jars !== null && jars > 0)) && (
+        <div className="shop-collect__due mono">
+          {ownJars
+            ? "In your own jars — none of ours go home with you."
+            : `Goes home in ${jarWords(jars ?? 0)} of ours. Please bring ${jars === 1 ? "it" : "them"} back.`}
+        </div>
+      )}
 
       <div className="shop-subscribe__row">
         <button className="shop-reserve-btn" onClick={onConfirm} disabled={busy || problem !== null}>

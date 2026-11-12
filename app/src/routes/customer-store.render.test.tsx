@@ -302,6 +302,15 @@ describe("Shop tabs", () => {
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
   });
 
+  it("ends the Account tab at Sign out, with no notice about animals under treatment", async () => {
+    await mount();
+    for (const tab of [/Store/, /Pickup/, /Account/]) {
+      fireEvent.click(screen.getByRole("button", { name: tab }));
+      expect(screen.queryByText(/under treatment/)).toBeNull();
+    }
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+  });
+
   it("puts what each past order cost on the history row", async () => {
     await mount();
     fireEvent.click(screen.getByRole("button", { name: /Account/ }));

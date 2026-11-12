@@ -266,8 +266,41 @@ describe("Customer detail · jars", () => {
     await waitFor(() => expect(jars().textContent).toContain("has 7 jars of yours."));
   });
 
+  it("keeps the history folded away until it's asked for", async () => {
+    await mount("cust-1");
+    expect(screen.queryByRole("group", { name: "Jar history" })).toBeNull();
+    expect(jars().querySelectorAll(".grid-row--body")).toHaveLength(0);
+    // The count and the two forms are still there without it.
+    expect(jars().textContent).toContain("has 4 jars of yours.");
+    expect(back()).toBeTruthy();
+
+    const toggle = button("Show history (3)");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    expect(screen.getByRole("group", { name: "Jar history" })).toBeTruthy();
+    expect(jars().querySelectorAll(".grid-row--body")).toHaveLength(3);
+
+    fireEvent.click(button("Hide history"));
+    expect(screen.queryByRole("group", { name: "Jar history" })).toBeNull();
+  });
+
+  it("stays open while a return is recorded, and shows nothing to open with no history", async () => {
+    await mount("cust-1");
+    fireEvent.click(button("Show history (3)"));
+    fireEvent.change(back(), { target: { value: "1" } });
+    fireEvent.click(button("Record return"));
+    await waitFor(() => expect(recordJarReturn).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(jars().textContent).toContain("has 3 jars of yours."));
+    expect(screen.getByRole("group", { name: "Jar history" })).toBeTruthy();
+
+    cleanup();
+    await mount("cust-2");
+    expect(screen.queryByRole("button", { name: /history/i })).toBeNull();
+  });
+
   it("says what each line on the record was", async () => {
     await mount("cust-1");
+    fireEvent.click(button("Show history (3)"));
     const rows = [...jars().querySelectorAll(".grid-row--body")].map((r) => r.textContent ?? "");
     expect(rows).toHaveLength(3);
     expect(rows[0]).toContain("Returned");

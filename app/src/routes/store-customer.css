@@ -63,6 +63,21 @@
   gap: 8px;
 }
 
+/* "Show history" — quiet, under the forms. */
+.customer-jars__more {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--herd-green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 /* Both boxes the same width — the longer label's — so the two forms match. */
 .customer-jars__form label {
   width: 160px;

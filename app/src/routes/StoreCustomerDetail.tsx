@@ -74,6 +74,9 @@ export default function StoreCustomerDetail() {
   // Jars: a return the customer didn't enter, or the count put right.
   const [jarsBack, setJarsBack] = useState("");
   const [jarCount, setJarCountDraft] = useState("");
+  // The lines behind the count. Folded away: the number is what the page is
+  // opened for, and the history is for when the number looks wrong.
+  const [showJarHistory, setShowJarHistory] = useState(false);
 
   const refresh = useCallback(async () => {
     if (businessId === null) {
@@ -457,7 +460,17 @@ export default function StoreCustomerDetail() {
               ) : null}
 
               {jarLines.length > 0 && (
-                <div style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="link-button customer-jars__more"
+                  aria-expanded={showJarHistory}
+                  onClick={() => setShowJarHistory((v) => !v)}
+                >
+                  {showJarHistory ? "Hide history" : `Show history (${jarLines.length})`}
+                </button>
+              )}
+              {jarLines.length > 0 && showJarHistory && (
+                <div style={{ marginTop: 8 }} role="group" aria-label="Jar history">
                   <GridRow cols={JAR_COLS} mobileCols={JAR_COLS_SM} as="header">
                     <span>What happened</span>
                     <span className="hide-sm">When</span>
